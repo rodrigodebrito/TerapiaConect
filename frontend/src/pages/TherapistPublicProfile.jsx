@@ -124,9 +124,9 @@ function TherapistPublicProfile() {
         setLoading(false);
       }
     };
-    
+
     if (id) {
-      fetchTherapistData();
+    fetchTherapistData();
     }
   }, [id, retryCount]);
 
@@ -194,11 +194,35 @@ function TherapistPublicProfile() {
   const navigateToScheduling = (timeSlot = null, toolId = null) => {
     if (!timeSlot || !toolId) return;
     
-    const selectedToolInfo = therapist.tools?.find(tool => tool.id === toolId) || {
-      id: 'default',
-      name: 'Terapia Individual',
-      price: therapist.price || 150
-    };
+    let selectedToolInfo;
+    
+    if (toolId === 'default') {
+      // Usar a sessão padrão
+      selectedToolInfo = {
+        id: 'default',
+        name: 'Terapia Individual',
+        price: therapist.baseSessionPrice || 150,
+        duration: therapist.sessionDuration || 50
+      };
+    } else {
+      // Buscar a ferramenta específica
+      const foundTool = therapist.tools?.find(tool => tool.id === toolId);
+      if (foundTool) {
+        selectedToolInfo = {
+          ...foundTool,
+          // Garantir que temos duração mesmo se não estiver definida na ferramenta
+          duration: foundTool.duration || therapist.sessionDuration || 50
+        };
+      } else {
+        // Fallback se a ferramenta não for encontrada
+        selectedToolInfo = {
+          id: toolId,
+          name: 'Sessão Terapêutica',
+          price: therapist.baseSessionPrice || 150,
+          duration: therapist.sessionDuration || 50
+        };
+      }
+    }
     
     // Navegar para o agendamento com o horário e ferramenta selecionados
     navigate(`/schedule/${id}`, { 
@@ -231,7 +255,70 @@ function TherapistPublicProfile() {
     }
   };
   
-  // Lidar com a seleção de horário
+  // Função para verificar se há tempo disponível para a sessão
+  const checkSessionTimeAvailability = (time, date, duration) => {
+    // Duração da sessão em minutos (padrão: duração da ferramenta ou 50 minutos)
+    const sessionDuration = duration || therapist.sessionDuration || 50;
+    const dateKey = getISOFormattedDate(date);
+    
+    // Converter horário no formato "HH:MM" para minutos desde meia-noite
+    const timeToMinutes = (timeStr) => {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+    
+    // Converter minutos desde meia-noite para formato "HH:MM"
+    const minutesToTime = (mins) => {
+      const hours = Math.floor(mins / 60);
+      const minutes = mins % 60;
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    };
+    
+    // Obter lista de todos os horários disponíveis para o dia
+    const availableSlots = availabilityMap[dateKey] || [];
+    if (availableSlots.length === 0) return false;
+    
+    // Ordenar os horários disponíveis
+    const sortedSlots = [...availableSlots].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+    
+    // Converter o horário selecionado para minutos
+    const selectedTimeInMinutes = timeToMinutes(time);
+    
+    // Calcular o horário de término da sessão
+    const endTimeInMinutes = selectedTimeInMinutes + sessionDuration;
+    
+    // Verificar se o horário de término excede o último horário disponível do dia
+    // ou se entra em conflito com outro horário marcado
+    
+    // Encontrar o próximo horário marcado após o selecionado
+    const nextBookedTimeIndex = sortedSlots.findIndex(slot => timeToMinutes(slot) > selectedTimeInMinutes);
+    
+    // Se não houver próximo horário marcado, verificar se a sessão termina antes do fim do dia (assumindo que o dia termina às 22:00)
+    if (nextBookedTimeIndex === -1) {
+      const endOfDayInMinutes = timeToMinutes("22:00"); // Fim do dia de trabalho (ajuste conforme necessário)
+      return endTimeInMinutes <= endOfDayInMinutes;
+    }
+    
+    // Se houver próximo horário marcado, verificar se a sessão termina antes desse horário
+    const nextBookedTimeInMinutes = timeToMinutes(sortedSlots[nextBookedTimeIndex]);
+    return endTimeInMinutes <= nextBookedTimeInMinutes;
+  };
+
+  // Função que retorna as durações disponíveis para um horário específico
+  const getAvailableDurations = (time, date) => {
+    // Duração padrão da sessão do terapeuta
+    const defaultDuration = therapist.sessionDuration || 50;
+    
+    // Lista de possíveis durações (adicione ou remova conforme necessário)
+    const possibleDurations = [30, 50, 60, 90, 120];
+    
+    // Filtrar apenas durações que cabem no horário disponível
+    return possibleDurations.filter(duration => 
+      checkSessionTimeAvailability(time, date, duration)
+    );
+  };
+
+  // Atualizar a função de seleção de horário para considerar a duração
   const handleTimeSlotSelect = (time, date) => {
     if (!time || !date) {
       console.log('Erro: time ou date indefinidos');
@@ -247,17 +334,64 @@ function TherapistPublicProfile() {
       return;
     }
     
+    // Verificar se há durações disponíveis para este horário
+    const availableDurations = getAvailableDurations(time, date);
+    if (availableDurations.length === 0) {
+      toast.error('Não há tempo suficiente disponível para uma sessão neste horário.');
+      return;
+    }
+    
     const formattedDate = getFormattedDate(date);
     console.log('Selecionando horário:', time, 'data formatada:', formattedDate);
     
-    setSelectedTimeSlot({ time, date: formattedDate });
+    setSelectedTimeSlot({ 
+      time, 
+      date: formattedDate,
+      availableDurations
+    });
+    
+    // Limpar a seleção de ferramenta anterior
+    setSelectedTool(null);
     
     // Mostra toast confirmando a seleção
     toast.info(`Horário selecionado: ${time} em ${formattedDate}`);
   };
-  
-  // Manipular a seleção de ferramenta terapêutica
+
+  // Função para verificar se uma ferramenta pode ser selecionada com base na duração
+  const canSelectTool = (toolId) => {
+    if (!selectedTimeSlot) return false;
+    
+    let toolDuration;
+    
+    if (toolId === 'default') {
+      toolDuration = therapist.sessionDuration || 50;
+    } else {
+      const tool = therapist.tools?.find(t => t.id === toolId);
+      toolDuration = tool?.duration || therapist.sessionDuration || 50;
+    }
+    
+    // Verificar se a duração da ferramenta está entre as durações disponíveis
+    return selectedTimeSlot.availableDurations.some(duration => 
+      duration >= toolDuration
+    );
+  };
+
+  // Atualizar a função de seleção de ferramenta para verificar a disponibilidade
   const handleToolSelect = (toolId) => {
+    if (!canSelectTool(toolId)) {
+      // Obter a duração da ferramenta
+      let toolDuration;
+      if (toolId === 'default') {
+        toolDuration = therapist.sessionDuration || 50;
+      } else {
+        const tool = therapist.tools?.find(t => t.id === toolId);
+        toolDuration = tool?.duration || therapist.sessionDuration || 50;
+      }
+      
+      toast.error(`Não há tempo suficiente disponível para uma sessão de ${toolDuration} minutos neste horário.`);
+      return;
+    }
+    
     setSelectedTool(toolId);
   };
   
@@ -294,8 +428,16 @@ function TherapistPublicProfile() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    if (prevWeek >= today) {
+    // Permitir visualizar a semana atual, mesmo que inclua dias passados
+    const currentMonday = getCurrentWeekStartDate();
+    
+    if (prevWeek >= currentMonday || prevWeek.toDateString() === currentMonday.toDateString()) {
+      console.log('Navegando para a semana anterior:', format(prevWeek, 'dd/MM/yyyy'));
       setCurrentWeek(prevWeek);
+      // Limpar seleções ao mudar de semana
+      setSelectedDay(null);
+      setSelectedTimeSlot(null);
+      setSelectedTool(null);
     } else {
       // Limitar a semanas a partir de hoje
       toast.info('Não é possível visualizar semanas passadas.');
@@ -306,12 +448,32 @@ function TherapistPublicProfile() {
   const goToNextWeek = () => {
     const nextWeek = new Date(currentWeek);
     nextWeek.setDate(nextWeek.getDate() + 7);
-    setCurrentWeek(nextWeek);
+    
+    // Limitar a visualização a 3 meses no futuro
+    const maxFutureDate = new Date();
+    maxFutureDate.setMonth(maxFutureDate.getMonth() + 3);
+    
+    if (nextWeek <= maxFutureDate) {
+      console.log('Navegando para a próxima semana:', format(nextWeek, 'dd/MM/yyyy'));
+      setCurrentWeek(nextWeek);
+      // Limpar seleções ao mudar de semana
+      setSelectedDay(null);
+      setSelectedTimeSlot(null);
+      setSelectedTool(null);
+    } else {
+      toast.info('Não é possível agendar sessões com mais de 3 meses de antecedência.');
+    }
   };
   
   // Criar um mapa de disponibilidade a partir dos dados reais recebidos da API
   const createAvailabilityMapFromData = (availabilityData) => {
     const map = {};
+    
+    // Se não tiver dados de disponibilidade, criar dados simulados para teste
+    if (!availabilityData || availabilityData.length === 0) {
+      console.log('Criando dados simulados de disponibilidade para teste');
+      return createMockAvailabilityData(getCurrentWeekStartDate());
+    }
     
     availabilityData.forEach(slot => {
       // Assegurar que a data está no formato ISO YYYY-MM-DD
@@ -327,6 +489,49 @@ function TherapistPublicProfile() {
     });
     
     return map;
+  };
+  
+  // Função para criar dados simulados de disponibilidade
+  const createMockAvailabilityData = (startDate) => {
+    const mockData = {};
+    
+    // Criar horários para cada dia da semana
+    for (let i = 0; i < 14; i++) {
+      const currentDate = new Date(startDate);
+      currentDate.setDate(currentDate.getDate() + i);
+      
+      // Pular dias aleatórios para simular dias sem disponibilidade
+      if (Math.random() > 0.7) continue;
+      
+      const dateKey = getISOFormattedDate(currentDate);
+      mockData[dateKey] = [];
+      
+      // Horários da manhã
+      if (Math.random() > 0.3) {
+        mockData[dateKey].push('08:00');
+        mockData[dateKey].push('09:00');
+        mockData[dateKey].push('10:00');
+        mockData[dateKey].push('11:00');
+      }
+      
+      // Horários da tarde
+      if (Math.random() > 0.3) {
+        mockData[dateKey].push('14:00');
+        mockData[dateKey].push('15:00');
+        mockData[dateKey].push('16:00');
+        mockData[dateKey].push('17:00');
+      }
+      
+      // Horários da noite
+      if (Math.random() > 0.5) {
+        mockData[dateKey].push('18:00');
+        mockData[dateKey].push('19:00');
+        mockData[dateKey].push('20:00');
+      }
+    }
+    
+    console.log('Dados simulados criados:', mockData);
+    return mockData;
   };
   
   // Função para gerar os dias da semana
@@ -465,7 +670,7 @@ function TherapistPublicProfile() {
       </div>
     );
   }
-
+  
   // Dias da semana para a visualização de disponibilidade
   const weekDays = generateWeekDays();
   
@@ -477,47 +682,47 @@ function TherapistPublicProfile() {
         {/* Cabeçalho do perfil */}
         <div className="profile-header card">
           <div className="profile-image-container">
-            {therapist.profilePicture ? (
-              <img 
-                src={getFullImageUrl(therapist.profilePicture)} 
+              {therapist.profilePicture ? (
+                <img 
+                  src={getFullImageUrl(therapist.profilePicture)}
                 alt={`${therapist.name}`} 
-                className="profile-image"
-                onError={(e) => {
-                  e.target.onerror = null;
+                  className="profile-image" 
+                  onError={(e) => {
+                    e.target.onerror = null;
                   e.target.src = 'https://via.placeholder.com/150?text=' + getInitials(therapist.name);
-                }}
-              />
-            ) : (
+                  }}
+                />
+              ) : (
               <div className="profile-avatar-placeholder">
                 {getInitials(therapist.name)}
-              </div>
-            )}
-          </div>
-          
+                </div>
+              )}
+            </div>
+            
           <div className="profile-info">
             <div className="profile-name-container">
               <h2 className="profile-name">{`${therapist.firstName || ''} ${therapist.lastName || ''}`}</h2>
-              <button 
-                className={`favorite-button ${isFavorite ? 'favorited' : ''}`}
-                onClick={toggleFavorite}
-                aria-label={isFavorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-              >
+                <button 
+                  className={`favorite-button ${isFavorite ? 'favorited' : ''}`}
+                  onClick={toggleFavorite}
+                  aria-label={isFavorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+                >
                 <i className={`fas fa-heart ${isFavorite ? 'fas' : 'far'}`}></i>
-              </button>
-            </div>
-            
+                </button>
+              </div>
+              
             <p className="profile-title">{therapist.title || 'Psicoterapeuta'}</p>
             
             <div className="tags-container">
               <span className="status-tag">
                 <i className="fas fa-circle"></i> {therapist.status === 'ACTIVE' ? 'Em verificação' : 'Verificado'}
-              </span>
+                </span>
               <span className="location-tag">
                 <i className="fas fa-map-marker-alt"></i> {therapist.city || 'Local não informado'}, {therapist.state || ''}
-              </span>
+                </span>
               <span className="session-tag">
                 <i className="fas fa-video"></i> Online e Presencial
-              </span>
+                  </span>
             </div>
             
             <div className="specialties-container">
@@ -531,10 +736,10 @@ function TherapistPublicProfile() {
               {therapist.niches && therapist.niches.length > 5 && (
                 <span className="specialty-tag more-tag">+{therapist.niches.length - 5}</span>
               )}
-            </div>
           </div>
         </div>
-        
+      </div>
+      
         {/* Navegação por abas */}
         <div className="profile-tabs">
           <button 
@@ -555,12 +760,12 @@ function TherapistPublicProfile() {
           >
             Agendar Sessão
           </button>
-          <button 
-            className={`tab-button ${activeTab === 'location' ? 'active' : ''}`}
-            onClick={() => setActiveTab('location')}
-          >
-            Localização
-          </button>
+            <button 
+              className={`tab-button ${activeTab === 'location' ? 'active' : ''}`}
+              onClick={() => setActiveTab('location')}
+            >
+              Localização
+            </button>
         </div>
         
         {/* Conteúdo da aba selecionada */}
@@ -578,8 +783,8 @@ function TherapistPublicProfile() {
                       <div className="bio">
                         {therapist.bio.split('\n').map((paragraph, idx) => (
                           <p key={idx}>{paragraph}</p>
-                        ))}
-                      </div>
+                    ))}
+                  </div>
                     ) : therapist.shortBio ? (
                       <div className="bio">
                         <p>{therapist.shortBio}</p>
@@ -600,8 +805,8 @@ function TherapistPublicProfile() {
                     <div className="experience">
                       {therapist.experience.split('\n').map((paragraph, idx) => (
                         <p key={idx}>{paragraph}</p>
-                      ))}
-                    </div>
+                    ))}
+                  </div>
                   ) : (
                     <div className="empty-content">
                       Este terapeuta ainda não adicionou informações sobre sua experiência profissional.
@@ -617,8 +822,8 @@ function TherapistPublicProfile() {
                     <div className="education">
                       {therapist.education.split('\n').map((paragraph, idx) => (
                         <p key={idx}>{paragraph}</p>
-                      ))}
-                    </div>
+                    ))}
+                  </div>
                   ) : (
                     <div className="empty-content">
                       Este terapeuta ainda não adicionou informações sobre sua formação.
@@ -647,15 +852,30 @@ function TherapistPublicProfile() {
                 <div className="loading-placeholder">Carregando serviços...</div>
               ) : (
                 <>
-                  <div className="services-list">
+                <div className="services-list">
+                    {/* Sessão Base */}
+                    <div className="service-item">
+                      <div className="service-header">
+                        <div className="service-name">Terapia Individual</div>
+                        <div className="service-price">
+                          R$ {therapist.baseSessionPrice || 0}
+                          <span className="price-duration">/{therapist.sessionDuration || 50} min</span>
+                        </div>
+                      </div>
+                      <div className="service-description">
+                        Sessão de terapia individual padrão, baseada na abordagem do terapeuta.
+                      </div>
+                    </div>
+                    
+                    {/* Ferramentas Terapêuticas */}
                     {therapist.tools && therapist.tools.length > 0 ? (
                       therapist.tools.map((tool, index) => (
-                        <div key={index} className="service-item" onClick={() => handleToolSelect(tool.id)}>
+                        <div key={index} className="service-item">
                           <div className="service-header">
                             <div className="service-name">{tool.name}</div>
                             <div className="service-price">
                               R$ {tool.price || therapist.baseSessionPrice || 0}
-                              <span className="price-duration">/{tool.duration || therapist.sessionDuration || 60} min</span>
+                              <span className="price-duration">/{tool.duration || therapist.sessionDuration || 50} min</span>
                             </div>
                           </div>
                           {tool.description && (
@@ -665,7 +885,7 @@ function TherapistPublicProfile() {
                       ))
                     ) : (
                       <div className="empty-content">
-                        Este terapeuta ainda não adicionou informações sobre seus serviços.
+                        Este terapeuta ainda não adicionou ferramentas terapêuticas específicas.
                       </div>
                     )}
                   </div>
@@ -689,8 +909,8 @@ function TherapistPublicProfile() {
                           <h5>Modalidade de Atendimento</h5>
                           <p>{translateAttendanceMode(therapist.attendanceMode)}</p>
                         </div>
-                      </div>
-                      
+                  </div>
+
                       {therapist.city && therapist.state && (
                         <div className="info-item">
                           <div className="info-icon">📍</div>
@@ -708,13 +928,13 @@ function TherapistPublicProfile() {
                           <p>{therapist.sessionDuration || 60} minutos</p>
                         </div>
                       </div>
-                    </div>
+                </div>
                   </div>
                 </>
-              )}
+                )}
             </div>
           )}
-
+          
           {/* Agendar Sessão */}
           {activeTab === 'booking' && (
             <div className="booking-tab">
@@ -723,35 +943,55 @@ function TherapistPublicProfile() {
               
               <div className="booking-content">
                 <div className="week-navigation">
-                  <button className="nav-button prev" onClick={goToPreviousWeek}>
-                    <i className="fas fa-chevron-left"></i>
+                  <button 
+                    className="nav-button prev"
+                    onClick={goToPreviousWeek}
+                    aria-label="Semana Anterior"
+                  >
+                    <i className="fas fa-chevron-left"></i> Semana Anterior
                   </button>
-                  <span className="current-week">{formatCurrentWeek()}</span>
-                  <button className="nav-button next" onClick={goToNextWeek}>
-                    <i className="fas fa-chevron-right"></i>
+                
+                  <span className="current-week">
+                    {formatCurrentWeek()}
+                  </span>
+                
+                  <button 
+                    className="nav-button next"
+                    onClick={goToNextWeek}
+                    aria-label="Próxima Semana"
+                  >
+                    Próxima Semana <i className="fas fa-chevron-right"></i>
                   </button>
                 </div>
                 
                 <div className="calendar-days">
-                  {weekDays.map((day, index) => (
-                    <div 
-                      key={index} 
-                      className={`calendar-day ${day.isToday ? 'today' : ''} ${day.isPast ? 'past' : ''} ${selectedDay && day.full.toDateString() === selectedDay.full.toDateString() ? 'selected' : ''}`}
-                      onClick={() => handleDaySelect(day)}
-                    >
-                      <div className="day-name">{day.name}</div>
-                      <div className="day-number">{day.date}</div>
+                      {weekDays.map((day, index) => (
+                        <div 
+                          key={index} 
+                          className={`calendar-day 
+                            ${day.isToday ? 'today' : ''} 
+                            ${day.isPast ? 'past' : ''} 
+                            ${selectedDay && selectedDay.full.toDateString() === day.full.toDateString() ? 'selected' : ''}`}
+                          onClick={() => handleDaySelect(day)}
+                        >
+                          <div className="day-name">{day.name}</div>
+                          <div className="day-number">{day.date}</div>
+                          {availabilityMap[getISOFormattedDate(day.full)]?.length > 0 && (
+                            <div className="availability-indicator">
+                              <span className="dot"></span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-                
+                    
                 {availabilityLoading ? (
                   <div className="loading-container small">
                     <div className="loading-spinner"></div>
                     <p>Carregando horários...</p>
                   </div>
                 ) : selectedDay ? (
-                  <div className="time-slots-container">
+                    <div className="time-slots-container">
                     {(() => {
                       const dateKey = getISOFormattedDate(selectedDay.full);
                       const timeSlotsForDay = availabilityMap[dateKey] || [];
@@ -775,15 +1015,15 @@ function TherapistPublicProfile() {
                                         const isSelected = selectedTimeSlot && selectedTimeSlot.time === time;
                                         
                                         return (
-                                          <button
-                                            key={timeIndex}
+                                <button 
+                                  key={timeIndex} 
                                             className={`time-slot-btn ${isSelected ? 'selected' : ''} ${isPastTime ? 'disabled' : ''}`}
                                             onClick={() => handleTimeSlotSelect(time, selectedDay.full)}
                                             disabled={isPastTime}
                                             type="button"
-                                          >
-                                            {time}
-                                          </button>
+                                >
+                                  {time}
+                                </button>
                                         );
                                       })}
                                     </div>
@@ -795,11 +1035,51 @@ function TherapistPublicProfile() {
                             {selectedTimeSlot && (
                               <div className="tools-selection fade-in">
                                 <h4>Selecione uma Ferramenta Terapêutica</h4>
+                                
+                                {/* Mostrar as durações disponíveis para este horário */}
+                                <div className="duration-info-box">
+                                  <div className="duration-info-icon">
+                                    <i className="fas fa-info-circle"></i>
+                                  </div>
+                                  <div className="duration-info-content">
+                                    <p>Durações disponíveis para este horário: 
+                                      {selectedTimeSlot.availableDurations?.sort((a, b) => a - b).map((duration, i, arr) => 
+                                        i === arr.length - 1 
+                                          ? ` ${duration} minutos` 
+                                          : ` ${duration},`
+                                      )}
+                                    </p>
+                                  </div>
+                                </div>
+                                
                                 <div className="tools-list">
+                                  {/* Sessão Base */}
+                                  <div 
+                                    className={`tool-card ${selectedTool === 'default' ? 'selected' : ''} ${!canSelectTool('default') ? 'disabled' : ''}`}
+                                    onClick={() => handleToolSelect('default')}
+                                    role="button"
+                                    tabIndex={0}
+                                  >
+                                    <div className="tool-info">
+                                      <h5>Terapia Individual</h5>
+                                      <p>Sessão de terapia individual padrão.</p>
+                                      <div className="tool-details">
+                                        <span className="tool-duration"><i className="far fa-clock"></i> {therapist.sessionDuration || 50} minutos</span>
+                                        <span className="tool-price">R$ {therapist.baseSessionPrice || 150}</span>
+                                      </div>
+                                    </div>
+                                    {!canSelectTool('default') && (
+                                      <div className="tool-unavailable-badge">
+                                        <i className="fas fa-exclamation-circle"></i> Duração não disponível
+                                      </div>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Ferramentas do terapeuta */}
                                   {therapist.tools && therapist.tools.map((tool, index) => (
                                     <div 
                                       key={index}
-                                      className={`tool-card ${selectedTool === tool.id ? 'selected' : ''}`}
+                                      className={`tool-card ${selectedTool === tool.id ? 'selected' : ''} ${!canSelectTool(tool.id) ? 'disabled' : ''}`}
                                       onClick={() => handleToolSelect(tool.id)}
                                       role="button"
                                       tabIndex={0}
@@ -808,30 +1088,17 @@ function TherapistPublicProfile() {
                                         <h5>{tool.name}</h5>
                                         <p>{tool.description || 'Sessão de terapia utilizando essa abordagem específica.'}</p>
                                         <div className="tool-details">
-                                          <span className="tool-duration"><i className="far fa-clock"></i> 50 minutos</span>
-                                          <span className="tool-price">R$ {tool.price || therapist.price || 150}</span>
+                                          <span className="tool-duration"><i className="far fa-clock"></i> {tool.duration || therapist.sessionDuration || 50} minutos</span>
+                                          <span className="tool-price">R$ {tool.price || therapist.baseSessionPrice || 150}</span>
                                         </div>
                                       </div>
+                                      {!canSelectTool(tool.id) && (
+                                        <div className="tool-unavailable-badge">
+                                          <i className="fas fa-exclamation-circle"></i> Duração não disponível
+                                        </div>
+                                      )}
                                     </div>
                                   ))}
-                                  
-                                  {(!therapist.tools || therapist.tools.length === 0) && (
-                                    <div 
-                                      className={`tool-card ${selectedTool === 'default' ? 'selected' : ''}`}
-                                      onClick={() => handleToolSelect('default')}
-                                      role="button"
-                                      tabIndex={0}
-                                    >
-                                      <div className="tool-info">
-                                        <h5>Terapia Individual</h5>
-                                        <p>Sessão de terapia individual padrão.</p>
-                                        <div className="tool-details">
-                                          <span className="tool-duration"><i className="far fa-clock"></i> 50 minutos</span>
-                                          <span className="tool-price">R$ {therapist.price || 150}</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
                                 </div>
                               </div>
                             )}
@@ -869,7 +1136,7 @@ function TherapistPublicProfile() {
                     <p>Selecione um dia para ver os horários disponíveis</p>
                   </div>
                 )}
-              </div>
+                </div>
             </div>
           )}
           
@@ -884,11 +1151,11 @@ function TherapistPublicProfile() {
                   {therapist.street}, {therapist.number} - {therapist.neighborhood}
                 </p>
                 <p>{therapist.city}, {therapist.state} - CEP {therapist.zipcode}</p>
-              </div>
-              
+                  </div>
+                  
               <div className="map-container">
                 <img src="/assets/map-placeholder.png" alt="Mapa do local" className="map-image" />
-              </div>
+                </div>
             </div>
           )}
         </div>
