@@ -280,7 +280,7 @@ const ConstellationView = () => {
       <div className="canvas-container" style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
         <Canvas 
           shadows 
-          camera={{ position: [0, 5, 7], fov: 35 }}
+          camera={{ position: [0, 8, 10], fov: 45 }}
           style={{ background: 'transparent' }}
         >
           <color attach="background" args={['#1a1a2e']} />
@@ -322,6 +322,10 @@ const CompassRose = () => {
     <group>
       {/* Círculos decorativos */}
       <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[5, 5.05, 64]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
+      </mesh>
+      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[4, 4.05, 64]} />
         <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
       </mesh>
@@ -330,7 +334,7 @@ const CompassRose = () => {
         <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
       </mesh>
       <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[2, 2.05, 64]} />
+        <ringGeometry args={[2, 2.05, 32]} />
         <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
       </mesh>
       <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -341,31 +345,31 @@ const CompassRose = () => {
       {/* Linhas direcionais primárias (N, S, L, O) */}
       <group rotation={[-Math.PI / 2, 0, 0]}>
         {/* Norte */}
-        <mesh position={[0, 2.5, 0.01]}>
-          <boxGeometry args={[0.05, 2.5, 0.01]} />
+        <mesh position={[0, 3, 0.01]}>
+          <boxGeometry args={[0.05, 3, 0.01]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
         </mesh>
         {/* Indicador Norte */}
-        <mesh position={[0, 4.5, 0.01]}>
+        <mesh position={[0, 5.5, 0.01]}>
           <boxGeometry args={[0.6, 0.15, 0.01]} />
           <meshBasicMaterial color="#4285F4" transparent opacity={0.8} />
         </mesh>
         
         {/* Sul */}
-        <mesh position={[0, -2.5, 0.01]}>
-          <boxGeometry args={[0.05, 2.5, 0.01]} />
+        <mesh position={[0, -3, 0.01]}>
+          <boxGeometry args={[0.05, 3, 0.01]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
         </mesh>
         
         {/* Leste */}
-        <mesh position={[2.5, 0, 0.01]}>
-          <boxGeometry args={[2.5, 0.05, 0.01]} />
+        <mesh position={[3, 0, 0.01]}>
+          <boxGeometry args={[3, 0.05, 0.01]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
         </mesh>
         
         {/* Oeste */}
-        <mesh position={[-2.5, 0, 0.01]}>
-          <boxGeometry args={[2.5, 0.05, 0.01]} />
+        <mesh position={[-3, 0, 0.01]}>
+          <boxGeometry args={[3, 0.05, 0.01]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
         </mesh>
       </group>
@@ -373,26 +377,26 @@ const CompassRose = () => {
       {/* Linhas diagonais secundárias (NE, NO, SE, SO) */}
       <group rotation={[-Math.PI / 2, 0, 0]}>
         {/* Nordeste */}
-        <mesh position={[1.77, 1.77, 0.01]} rotation={[0, 0, Math.PI / 4]}>
-          <boxGeometry args={[0.05, 3, 0.01]} />
+        <mesh position={[2.12, 2.12, 0.01]} rotation={[0, 0, Math.PI / 4]}>
+          <boxGeometry args={[0.05, 3.6, 0.01]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
         </mesh>
         
         {/* Noroeste */}
-        <mesh position={[-1.77, 1.77, 0.01]} rotation={[0, 0, -Math.PI / 4]}>
-          <boxGeometry args={[0.05, 3, 0.01]} />
+        <mesh position={[-2.12, 2.12, 0.01]} rotation={[0, 0, -Math.PI / 4]}>
+          <boxGeometry args={[0.05, 3.6, 0.01]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
         </mesh>
         
         {/* Sudeste */}
-        <mesh position={[1.77, -1.77, 0.01]} rotation={[0, 0, -Math.PI / 4]}>
-          <boxGeometry args={[0.05, 3, 0.01]} />
+        <mesh position={[2.12, -2.12, 0.01]} rotation={[0, 0, -Math.PI / 4]}>
+          <boxGeometry args={[0.05, 3.6, 0.01]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
         </mesh>
         
         {/* Sudoeste */}
-        <mesh position={[-1.77, -1.77, 0.01]} rotation={[0, 0, Math.PI / 4]}>
-          <boxGeometry args={[0.05, 3, 0.01]} />
+        <mesh position={[-2.12, -2.12, 0.01]} rotation={[0, 0, Math.PI / 4]}>
+          <boxGeometry args={[0.05, 3.6, 0.01]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
         </mesh>
       </group>
@@ -422,7 +426,7 @@ const Field = ({ viewMode }) => {
           handleRepresentativeSelect(null);
         }}
       >
-        <circleGeometry args={[5, 64]} />
+        <circleGeometry args={[6, 64]} />
         <meshStandardMaterial 
           map={circleTexture}
           color="#f0f0f0" 
@@ -703,8 +707,8 @@ const Representative = ({ representative, selected, onSelect, onContextMenu, vie
         const newX = dragInfo.current.startPosition.x + movementX;
         const newZ = dragInfo.current.startPosition.z + movementZ;
         
-        // Limitar à área do prato (círculo com raio 4.5)
-        const plateRadius = 4;
+        // Limitar à área do prato (círculo com raio 5.5)
+        const plateRadius = 5.5;
         const distance = Math.sqrt(newX * newX + newZ * newZ);
         
         let limitedX = newX;
