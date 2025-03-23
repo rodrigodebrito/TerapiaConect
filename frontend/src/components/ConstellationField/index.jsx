@@ -9,7 +9,8 @@ import ConstellationProvider, { ConstellationContext } from '../../contexts/Cons
 // Cores para os representantes
 const REPRESENTATIVE_COLORS = [
   '#4285F4', '#EA4335', '#FBBC05', '#34A853',
-  '#FF6D01', '#46BDC6', '#9C27B0', '#795548'
+  '#FF6D01', '#46BDC6', '#9C27B0', '#795548',
+  '#FFFFFF', '#000000'
 ];
 
 // Tipos de representantes
@@ -279,7 +280,7 @@ const ConstellationView = () => {
       <div className="canvas-container" style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
         <Canvas 
           shadows 
-          camera={{ position: [0, 10, 0], fov: 25 }}
+          camera={{ position: [0, 5, 7], fov: 35 }}
           style={{ background: 'transparent' }}
         >
           <color attach="background" args={['#1a1a2e']} />
@@ -454,7 +455,7 @@ const Field = ({ viewMode }) => {
 // Componente para um representante individual (modelo 3D)
 const Representative = ({ representative, selected, onSelect, onContextMenu, viewMode }) => {
   const { id, name, position, color, type } = representative;
-  const [localPosition, setLocalPosition] = useState([position[0], 0.5, position[2]]);
+  const [localPosition, setLocalPosition] = useState([position[0], 0, position[2]]);
   const [rotation, setRotation] = useState(0);
   const modelRef = useRef();
   const { camera } = useThree();
@@ -553,7 +554,7 @@ const Representative = ({ representative, selected, onSelect, onContextMenu, vie
   useEffect(() => {
     if (!dragInfo.current.isDragging) {
       // Mantém a altura Y fixa enquanto atualiza X e Z
-      setLocalPosition([position[0], 0.5, position[2]]);
+      setLocalPosition([position[0], 0, position[2]]);
     }
   }, [position]);
   
@@ -717,7 +718,7 @@ const Representative = ({ representative, selected, onSelect, onContextMenu, vie
         }
         
         // Atualizar posição (mantendo Y constante)
-        const newPosition = [limitedX, 0.5, limitedZ];
+        const newPosition = [limitedX, 0, limitedZ];
         
         setLocalPosition(newPosition);
         
@@ -744,34 +745,33 @@ const Representative = ({ representative, selected, onSelect, onContextMenu, vie
       onPointerDown={handleMouseDown}
       scale={[modelScale, modelScale, modelScale]}
     >
-      {model && <primitive object={model} />}
+      {model && <primitive object={model} position={[0, 1.0, 0]} />}
       
       {/* Rótulo com o nome do representante - só exibir se showNames for true */}
       {showNames && (
         <Html
-          position={[localPosition[0], localPosition[1] + 1.1, localPosition[2]]}
+          position={[0, 3.0, 0]}
           center
-          distanceFactor={80}
+          distanceFactor={15}
           transform
           sprite
         >
           <div style={{
             backgroundColor: 'rgba(0,0,0,0.5)',
             color: selected ? '#3498db' : 'white',
-            padding: '0px 2px',
+            padding: '1px 3px',
             borderRadius: '2px',
-            fontSize: '3px',
+            fontSize: '10px',
             fontWeight: selected ? 'bold' : 'normal',
             whiteSpace: 'nowrap',
             pointerEvents: 'none',
             userSelect: 'none',
             textAlign: 'center',
-            maxWidth: '30px',
+            maxWidth: '60px',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
-            opacity: 0.8,
-            lineHeight: '1',
-            transform: 'scale(0.35)'
+            opacity: 0.9,
+            lineHeight: '1.2'
           }}>
             {name}
           </div>
@@ -779,8 +779,8 @@ const Representative = ({ representative, selected, onSelect, onContextMenu, vie
       )}
       
       {selected && (
-        <mesh position={[localPosition[0], 0.05, localPosition[2]]} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[0.5, 0.55, 32]} />
+        <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.4, 0.45, 32]} />
           <meshBasicMaterial color="#3498db" transparent opacity={0.7} />
         </mesh>
       )}
