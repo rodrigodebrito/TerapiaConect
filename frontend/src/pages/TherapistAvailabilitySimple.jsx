@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSave, faArrowLeft, faPlus, faClock, faCalendarAlt, faListAlt, faCalendarDay, faCalendarWeek, faCalendar, faCheckCircle, faInfoCircle, faExclamationTriangle, faTimesCircle } from '@fortawesome/free-solid-svg-icons';
+import { faSave, faArrowLeft, faPlus, faClock, faCalendarAlt, faCalendarDay, faCalendarWeek, faCalendar, faCheckCircle, faInfoCircle, faExclamationTriangle, faTimesCircle } from '@fortawesome/free-solid-svg-icons';
 import api from '../services/api';
 import './TherapistAvailabilitySimple.css';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,6 +12,8 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import ptBrLocale from '@fullcalendar/core/locales/pt-br';
 import { v4 as uuidv4 } from 'uuid';
+import { addMonths, isBefore, startOfMonth, endOfMonth, format, parseISO, parse, set } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const TherapistAvailabilitySimple = () => {
   // Estados
@@ -23,8 +25,10 @@ const TherapistAvailabilitySimple = () => {
   const [endTime, setEndTime] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [therapistId, setTherapistId] = useState(null);
-  const [viewMode, setViewMode] = useState('table'); // 'table' ou 'calendar'
-  const [calendarView, setCalendarView] = useState('timeGridWeek');
+  const [viewMode, setViewMode] = useState('calendar'); // 'table' ou 'calendar'
+  const [calendarView, setCalendarView] = useState('timeGridWeek'); // timeGridDay, timeGridWeek, dayGridMonth
+  const [maxPlanningDate, setMaxPlanningDate] = useState(addMonths(new Date(), 3));
+  const [selectionEnabled, setSelectionEnabled] = useState(true);
   
   // Referência para o calendário
   const calendarRef = useRef(null);
@@ -40,12 +44,49 @@ const TherapistAvailabilitySimple = () => {
     navigate('/therapist/dashboard');
   };
   
+  // Efeito para atualizar a data máxima de planejamento no início de cada mês
+  useEffect(() => {
+    const today = new Date();
+    const maxPlanningDate = addMonths(today, 3);
+    setMaxPlanningDate(maxPlanningDate);
+    
+    // Atualizar o máximo no primeiro dia de cada mês
+    const checkForNewMonth = () => {
+      const now = new Date();
+      if (now.getDate() === 1) {
+        const newMaxPlanningDate = addMonths(now, 3);
+        setMaxPlanningDate(newMaxPlanningDate);
+      }
+    };
+    
+    // Verificar diariamente
+    const dailyCheck = setInterval(checkForNewMonth, 86400000); // 24 horas
+    
+    // Limpar intervalo
+    return () => clearInterval(dailyCheck);
+  }, []);
+  
   // Função para adicionar horário
   const handleAddTimeSlot = () => {
     try {
       // Validar entrada
       if (!selectedDate) {
         setError('Selecione uma data para adicionar horário');
+        return;
+      }
+      
+      // Verificar se a data está dentro do período permitido
+      const selDate = new Date(selectedDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (isBefore(selDate, today)) {
+        setError('Não é possível adicionar horários para datas passadas');
+        return;
+      }
+      
+      if (selDate > maxPlanningDate) {
+        setError(`Só é permitido adicionar horários até ${format(maxPlanningDate, 'dd/MM/yyyy', { locale: ptBR })}`);
         return;
       }
       
@@ -94,17 +135,10 @@ const TherapistAvailabilitySimple = () => {
       // Notificar usuário
       toast.success(`Horário adicionado para ${new Date(selectedDate).toLocaleDateString('pt-BR')}`);
       
-      // Forçar a mudança para a visualização de tabela e para a data selecionada
-      if (viewMode !== 'table') {
-        toggleViewMode('table');
-        // Um pequeno atraso para garantir que a transição ocorra após a mudança de modo
-        setTimeout(() => {
-          if (calendarRef.current) {
-            calendarRef.current.getApi().gotoDate(selectedDate);
-          }
-        }, 300);
+      // Forçar a mudança para a visualização de calendário e para a data selecionada
+      if (calendarRef.current) {
+        calendarRef.current.getApi().gotoDate(selectedDate);
       }
-      
     } catch (error) {
       console.error('Erro ao adicionar horário:', error);
       setError('Erro ao adicionar horário');
@@ -252,41 +286,22 @@ const TherapistAvailabilitySimple = () => {
           return;
         }
         
-        // Se o usuário for terapeuta e já tiver o ID
-        if (user.therapistId) {
-          setTherapistId(user.therapistId);
-          console.log(`ID do terapeuta obtido do usuário: ${user.therapistId}`);
-          return;
-        }
-        
-        // Tentar obter do localStorage
-        const storedProfile = localStorage.getItem('userProfile');
-        if (storedProfile) {
-          const profile = JSON.parse(storedProfile);
-          if (profile && profile.id) {
-            setTherapistId(profile.id);
-            console.log(`ID do terapeuta obtido do localStorage: ${profile.id}`);
-            return;
-          }
-        }
-        
-        // Se não encontrou, buscar da API
-        console.log(`Buscando terapeuta para o usuário ID: ${user.id}`);
+        // Verificar se temos um perfil de terapeuta
+        console.log('Buscando perfil de terapeuta para o usuário:', user.id);
         const response = await api.get(`/therapists/user/${user.id}`);
         
         if (response.data && response.data.id) {
+          console.log('Perfil de terapeuta encontrado:', response.data.id);
           setTherapistId(response.data.id);
-          console.log(`ID do terapeuta obtido da API: ${response.data.id}`);
-          
-          // Salvar no localStorage para uso futuro
-          localStorage.setItem('userProfile', JSON.stringify(response.data));
         } else {
-          throw new Error('Não foi possível encontrar o perfil de terapeuta');
+          console.error('Perfil de terapeuta não encontrado');
+          toast.error('Perfil de terapeuta não encontrado');
+          navigate('/therapist/dashboard');
         }
       } catch (error) {
-        console.error('Erro ao obter ID do terapeuta:', error);
-        setError('Erro ao obter perfil de terapeuta. Por favor, verifique se você está cadastrado como terapeuta.');
-        toast.error('Erro ao carregar perfil de terapeuta');
+        console.error('Erro ao buscar perfil de terapeuta:', error);
+        toast.error('Erro ao carregar dados do terapeuta');
+        navigate('/therapist/dashboard');
       }
     };
     
@@ -298,7 +313,7 @@ const TherapistAvailabilitySimple = () => {
     setViewMode(mode);
   };
   
-  // Função para mudar a visualização do calendário
+  // Função para alterar a visualização do calendário
   const changeCalendarView = (view) => {
     setCalendarView(view);
     if (calendarRef.current) {
@@ -306,443 +321,314 @@ const TherapistAvailabilitySimple = () => {
     }
   };
   
-  // Função para formatar eventos para o FullCalendar
+  // Formatar eventos para o calendário
   const formatEventsForCalendar = () => {
     return events.map(event => ({
       id: event.id,
-      title: `Disponível: ${event.startTime} - ${event.endTime}`,
+      title: event.title,
       start: `${event.date}T${event.startTime}`,
       end: `${event.date}T${event.endTime}`,
-      backgroundColor: '#4caf50',
-      borderColor: '#2e7d32',
-      textColor: '#ffffff',
-      extendedProps: {
-        ...event
-      }
+      backgroundColor: event.isHighlighted ? '#4caf50' : '#3788d8',
+      borderColor: event.isHighlighted ? '#2e7d32' : '#2c6fdb',
+      classNames: event.isHighlighted ? 'highlighted-event' : ''
     }));
   };
   
-  // Função para lidar com clique em evento no calendário
+  // Função para lidar com clique em evento
   const handleEventClick = (clickInfo) => {
     const eventId = clickInfo.event.id;
-    
-    if (window.confirm('Deseja remover este horário?')) {
-      setEvents(prevEvents => prevEvents.filter(event => event.id !== eventId));
-      toast.success('Horário removido com sucesso');
-    }
+    handleRemoveTimeSlot(eventId);
   };
   
-  // Função para lidar com clique em data no calendário
+  // Função para lidar com clique em data
   const handleCalendarDateClick = (info) => {
-    const clickedDate = info.dateStr.split('T')[0];
-    setSelectedDate(clickedDate);
+    const clickedDate = new Date(info.date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Verificar se a data está dentro do período permitido
+    if (isBefore(clickedDate, today)) {
+      toast.warning('Não é possível adicionar horários para datas passadas');
+      return;
+    }
+    
+    if (clickedDate > maxPlanningDate) {
+      toast.warning(`Só é permitido adicionar horários até ${format(maxPlanningDate, 'dd/MM/yyyy', { locale: ptBR })}`);
+      return;
+    }
+    
+    // Formatar a data no formato YYYY-MM-DD
+    const formattedDate = info.dateStr.split('T')[0];
+    setSelectedDate(formattedDate);
+    
+    // Abrir modal
     openModal();
   };
   
-  // Render
+  // Nova função para lidar com seleção por arrastar
+  const handleSelect = (selectInfo) => {
+    if (!selectionEnabled) return;
+    
+    try {
+      // Extrair os dados da seleção
+      const startDate = new Date(selectInfo.start);
+      const endDate = new Date(selectInfo.end);
+      
+      // Verificar se a data está dentro do período permitido
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (isBefore(startDate, today)) {
+        toast.warning('Não é possível adicionar horários para datas passadas');
+        return;
+      }
+      
+      if (startDate > maxPlanningDate) {
+        toast.warning(`Só é permitido adicionar horários até ${format(maxPlanningDate, 'dd/MM/yyyy', { locale: ptBR })}`);
+        return;
+      }
+      
+      // Formatar a data no formato YYYY-MM-DD
+      const formattedDate = startDate.toISOString().split('T')[0];
+      
+      // Extrair os horários
+      const formatTime = (date) => {
+        return date.toLocaleTimeString('pt-BR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+      };
+      
+      const startTimeStr = formatTime(startDate);
+      const endTimeStr = formatTime(endDate);
+      
+      // Criar ID único
+      const uniqueId = `specific-${formattedDate}-${startTimeStr}-${endTimeStr}-${Date.now()}`;
+      
+      // Criar evento
+      const newEvent = {
+        id: uniqueId,
+        title: `Disponível: ${startTimeStr} - ${endTimeStr}`,
+        date: formattedDate,
+        startTime: startTimeStr,
+        endTime: endTimeStr,
+        isHighlighted: true // Marcar como destacado para efeito visual
+      };
+      
+      // Adicionar ao estado
+      setEvents(prevEvents => {
+        // Remover destaque de todos os eventos
+        const resetEvents = prevEvents.map(event => ({
+          ...event,
+          isHighlighted: false
+        }));
+        return [...resetEvents, newEvent];
+      });
+      
+      // Notificar usuário
+      toast.success(`Horário adicionado para ${new Date(formattedDate).toLocaleDateString('pt-BR')}`);
+      
+    } catch (error) {
+      console.error('Erro ao adicionar horário por seleção:', error);
+      toast.error('Erro ao adicionar horário');
+    } finally {
+      // Limpar a seleção
+      if (calendarRef.current) {
+        calendarRef.current.getApi().unselect();
+      }
+    }
+  };
+  
+  // Nova função para lidar com seleção permitida
+  const handleSelectAllow = (selectInfo) => {
+    // Verificar se a data está dentro do período permitido
+    const start = new Date(selectInfo.start);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (isBefore(start, today)) {
+      return false;
+    }
+    
+    if (start > maxPlanningDate) {
+      return false;
+    }
+    
+    return true;
+  };
+  
+  // Renderizar informações de restrição de data
+  const renderDateRestrictionInfo = () => {
+    return (
+      <div className="date-restriction-info">
+        <FontAwesomeIcon icon={faInfoCircle} className="info-icon" />
+        <span>
+          Você pode programar sua disponibilidade até {format(maxPlanningDate, 'dd/MM/yyyy', { locale: ptBR })}. 
+          No início de cada mês, um novo mês é liberado para programação.
+        </span>
+      </div>
+    );
+  };
+  
   return (
-    <div className="container mt-4">
-      <div className="row">
-        <div className="col">
-          <div className="d-flex justify-content-between align-items-center mb-4">
-            <h2 className="d-flex align-items-center">
-              <div className="icon-bg bg-gradient-primary rounded-circle p-2 me-3 shadow-sm">
-                <FontAwesomeIcon icon={faClock} className="text-white" />
-              </div>
-              <span className="transition-all">Gerenciar Disponibilidade</span>
-            </h2>
-            <div>
-              <button 
-                className="btn btn-primary me-2 shadow btn-add" 
-                onClick={handleSaveAvailability}
-                disabled={isLoading}
-              >
-                <FontAwesomeIcon icon={faSave} className="me-2" />
-                Salvar
-                {isLoading && <span className="spinner-border spinner-border-sm ms-2" role="status" aria-hidden="true"></span>}
-              </button>
-              <button className="btn btn-secondary shadow btn-add" onClick={handleGoBack}>
-                <FontAwesomeIcon icon={faArrowLeft} className="me-2" />
-                Voltar
-              </button>
-            </div>
-          </div>
-          
-          {error && (
-            <div className="alert alert-danger shadow-sm">
-              <div className="d-flex align-items-center">
-                <FontAwesomeIcon icon={faExclamationTriangle} className="me-2 fa-lg" />
-                <span>{error}</span>
-              </div>
-            </div>
-          )}
-          
-          {/* Status Cards */}
-          <div className="row mb-4">
-            <div className="col-md-4">
-              <div className="card shadow-sm border-0 h-100">
-                <div className="card-body d-flex align-items-center">
-                  <div className="rounded-circle bg-gradient-success p-3 me-3">
-                    <FontAwesomeIcon icon={faCheckCircle} className="text-white fa-lg" />
-                  </div>
-                  <div>
-                    <h6 className="mb-1 fw-bold">Total de Horários</h6>
-                    <h3 className="mb-0">{events.length} <small className="text-muted fs-6">horários</small></h3>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-md-4">
-              <div className="card shadow-sm border-0 h-100">
-                <div className="card-body d-flex align-items-center">
-                  <div className="rounded-circle bg-gradient-primary p-3 me-3">
-                    <FontAwesomeIcon icon={faCalendarAlt} className="text-white fa-lg" />
-                  </div>
-                  <div>
-                    <h6 className="mb-1 fw-bold">Horários Hoje</h6>
-                    <h3 className="mb-0">
-                      {events.filter(event => event.date === new Date().toISOString().split('T')[0]).length} 
-                      <small className="text-muted fs-6">disponíveis</small>
-                    </h3>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-md-4">
-              <div className="card shadow-sm border-0 h-100">
-                <div className="card-body d-flex align-items-center">
-                  <div className="rounded-circle bg-gradient-info p-3 me-3">
-                    <FontAwesomeIcon icon={faInfoCircle} className="text-white fa-lg" />
-                  </div>
-                  <div>
-                    <h6 className="mb-1 fw-bold">Status</h6>
-                    <div className="d-flex align-items-center">
-                      <span className="status-indicator status-available"></span>
-                      <span className="fw-bold text-success">Dados Sincronizados</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Controles de visualização */}
-          <div className="card shadow mb-4 border-0">
-            <div className="card-header bg-gradient-primary text-white">
-              <div className="d-flex justify-content-between align-items-center">
-                <h5 className="mb-0 d-flex align-items-center">
-                  <FontAwesomeIcon icon={faCalendarAlt} className="me-2" />
-                  Modo de Visualização
-                </h5>
-                <div className="btn-group shadow-sm" role="group">
-                  <button 
-                    type="button" 
-                    className={`btn ${viewMode === 'table' ? 'btn-light' : 'btn-outline-light'}`}
-                    onClick={() => toggleViewMode('table')}
-                  >
-                    <FontAwesomeIcon icon={faListAlt} className="me-2" />
-                    Tabela
-                  </button>
-                  <button 
-                    type="button" 
-                    className={`btn ${viewMode === 'calendar' ? 'btn-light' : 'btn-outline-light'}`}
-                    onClick={() => toggleViewMode('calendar')}
-                  >
-                    <FontAwesomeIcon icon={faCalendarAlt} className="me-2" />
-                    Calendário
-                  </button>
-                </div>
-              </div>
-            </div>
-            
-            {viewMode === 'calendar' && (
-              <div className="card-body p-0">
-                <div className="btn-group w-100 shadow-sm">
-                  <button 
-                    className={`btn ${calendarView === 'timeGridDay' ? 'btn-primary' : 'btn-outline-primary'} btn-add`}
-                    onClick={() => changeCalendarView('timeGridDay')}
-                  >
-                    <FontAwesomeIcon icon={faCalendarDay} className="me-2" />
-                    Diário
-                  </button>
-                  <button 
-                    className={`btn ${calendarView === 'timeGridWeek' ? 'btn-primary' : 'btn-outline-primary'} btn-add`}
-                    onClick={() => changeCalendarView('timeGridWeek')}
-                  >
-                    <FontAwesomeIcon icon={faCalendarWeek} className="me-2" />
-                    Semanal
-                  </button>
-                  <button 
-                    className={`btn ${calendarView === 'dayGridMonth' ? 'btn-primary' : 'btn-outline-primary'} btn-add`}
-                    onClick={() => changeCalendarView('dayGridMonth')}
-                  >
-                    <FontAwesomeIcon icon={faCalendar} className="me-2" />
-                    Mensal
-                  </button>
-                </div>
-              </div>
-            )}
-            
-            {viewMode === 'table' && (
-              <div className="card-body">
-                <div className="row">
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label htmlFor="dateSelector" className="form-label fw-bold">Data</label>
-                      <div className="input-group shadow-sm">
-                        <span className="input-group-text bg-light">
-                          <FontAwesomeIcon icon={faCalendarAlt} />
-                        </span>
-                        <input 
-                          type="date" 
-                          className="form-control" 
-                          id="dateSelector"
-                          value={selectedDate}
-                          onChange={handleDateChange}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6 d-flex align-items-end">
-                    <button 
-                      className="btn btn-success mb-3 add-time-button shadow btn-add" 
-                      onClick={openModal}
-                    >
-                      <FontAwesomeIcon icon={faPlus} className="me-2" />
-                      Adicionar Horário
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          
-          {/* Visualização de Calendário */}
-          {viewMode === 'calendar' && (
-            <div className="card shadow mb-4 border-0">
-              <div className="card-body p-0">
-                {isLoading ? (
-                  <div className="loading-container">
-                    <div className="loading-spinner"></div>
-                  </div>
-                ) : (
-                  <FullCalendar
-                    ref={calendarRef}
-                    plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                    initialView={calendarView}
-                    locale={ptBrLocale}
-                    headerToolbar={false}
-                    events={formatEventsForCalendar()}
-                    eventClick={handleEventClick}
-                    dateClick={handleCalendarDateClick}
-                    height="auto"
-                    allDaySlot={false}
-                    slotMinTime="07:00:00"
-                    slotMaxTime="22:00:00"
-                    slotDuration="00:30:00"
-                    nowIndicator={true}
-                  />
-                )}
-                <div className="p-3 bg-light border-top d-flex justify-content-between align-items-center">
-                  <div className="date-display">
-                    <span className="badge bg-gradient-primary p-2 rounded-pill shadow-sm">
-                      <FontAwesomeIcon icon={faCalendarAlt} className="me-2" />
-                      {new Date(selectedDate).toLocaleDateString('pt-BR', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}
-                    </span>
-                  </div>
-                  <button 
-                    className="btn btn-success add-time-button shadow btn-add" 
-                    onClick={openModal}
-                  >
-                    <FontAwesomeIcon icon={faPlus} className="me-2" />
-                    Adicionar Horário
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Visualização em Tabela */}
-          {viewMode === 'table' && (
-            <div className="card shadow border-0">
-              <div className="card-header bg-gradient-success text-white">
-                <h5 className="mb-0 d-flex align-items-center">
-                  <FontAwesomeIcon icon={faClock} className="me-2" />
-                  Horários Disponíveis para {new Date(selectedDate).toLocaleDateString('pt-BR')}
-                </h5>
-              </div>
-              <div className="card-body">
-                {isLoading ? (
-                  <div className="loading-container">
-                    <div className="loading-spinner"></div>
-                  </div>
-                ) : events.filter(event => event.date === selectedDate).length === 0 ? (
-                  <div className="alert alert-info shadow-sm">
-                    <div className="d-flex align-items-center">
-                      <FontAwesomeIcon icon={faCalendarAlt} className="me-3 fa-2x text-primary" />
-                      <div>
-                        <h6 className="fw-bold mb-1">Nenhum horário disponível para esta data</h6>
-                        <p className="mb-0">Clique em "Adicionar Horário" para começar.</p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="table-container">
-                    <div className="table-responsive">
-                      <table className="table table-striped table-hover">
-                        <thead>
-                          <tr>
-                            <th>Data</th>
-                            <th>Horário de Início</th>
-                            <th>Horário de Fim</th>
-                            <th>Ações</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {events
-                            .filter(event => event.date === selectedDate)
-                            .map(event => (
-                              <tr 
-                                key={event.id} 
-                                className={`transition-all ${event.isHighlighted ? 'selected-event' : ''}`}
-                              >
-                                <td>{new Date(event.date).toLocaleDateString('pt-BR')}</td>
-                                <td>
-                                  <span className="badge bg-gradient-primary text-white rounded-pill">
-                                    {event.startTime}
-                                  </span>
-                                </td>
-                                <td>
-                                  <span className="badge bg-gradient-info text-white rounded-pill">
-                                    {event.endTime}
-                                  </span>
-                                </td>
-                                <td>
-                                  <button 
-                                    className="btn btn-sm btn-danger shadow-sm btn-add"
-                                    onClick={() => handleRemoveTimeSlot(event.id)}
-                                  >
-                                    <FontAwesomeIcon icon={faTimesCircle} className="me-1" />
-                                    Remover
-                                  </button>
-                                </td>
-                              </tr>
-                            ))
-                          }
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="mt-4 pt-3 border-top">
-                  <h6 className="fw-bold mb-3 text-primary">
-                    <FontAwesomeIcon icon={faCalendarAlt} className="me-2" />
-                    Todos os Horários Cadastrados:
-                  </h6>
-                  <div className="table-container">
-                    <div className="table-responsive shadow-sm rounded">
-                      <table className="table table-sm table-striped mb-0">
-                        <thead className="bg-light">
-                          <tr>
-                            <th>Data</th>
-                            <th>Horário</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {events.map(event => (
-                            <tr key={event.id} className="transition-all">
-                              <td>{new Date(event.date).toLocaleDateString('pt-BR')}</td>
-                              <td>
-                                <span className="badge bg-gradient-success text-white rounded-pill">
-                                  {event.startTime} - {event.endTime}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+    <div className="availability-container">
+      <div className="page-header">
+        <button className="back-button" onClick={handleGoBack}>
+          <FontAwesomeIcon icon={faArrowLeft} /> Voltar
+        </button>
+        <h1>Minha Disponibilidade</h1>
+      </div>
+      
+      {error && (
+        <div className="error-alert">
+          <FontAwesomeIcon icon={faExclamationTriangle} />
+          <span>{error}</span>
         </div>
+      )}
+      
+      <div className="help-section">
+        <h3>Como gerenciar sua disponibilidade</h3>
+        <p>
+          <FontAwesomeIcon icon={faInfoCircle} className="info-icon" />
+          Clique e arraste no calendário para adicionar rapidamente horários disponíveis. Você também pode clicar em uma data para adicionar um horário específico.
+        </p>
+        {renderDateRestrictionInfo()}
+        <div className="selection-tip">
+          <FontAwesomeIcon icon={faCheckCircle} className="tip-icon" />
+          <span>Dica: Para melhor precisão, use a visualização de dia ou semana ao adicionar horários.</span>
+        </div>
+      </div>
+      
+      <div className="view-toggle">
+        <button 
+          className={`view-btn ${calendarView === 'timeGridDay' ? 'active' : ''}`}
+          onClick={() => changeCalendarView('timeGridDay')}
+        >
+          <FontAwesomeIcon icon={faCalendarDay} /> Dia
+        </button>
+        <button 
+          className={`view-btn ${calendarView === 'timeGridWeek' ? 'active' : ''}`}
+          onClick={() => changeCalendarView('timeGridWeek')}
+        >
+          <FontAwesomeIcon icon={faCalendarWeek} /> Semana
+        </button>
+        <button 
+          className={`view-btn ${calendarView === 'dayGridMonth' ? 'active' : ''}`}
+          onClick={() => changeCalendarView('dayGridMonth')}
+        >
+          <FontAwesomeIcon icon={faCalendar} /> Mês
+        </button>
+      </div>
+      
+      <div className="calendar-container">
+        {isLoading ? (
+          <div className="loading">
+            <div className="spinner"></div>
+            <p>Carregando disponibilidade...</p>
+          </div>
+        ) : (
+          <FullCalendar
+            ref={calendarRef}
+            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+            initialView={calendarView}
+            headerToolbar={{
+              left: 'prev,next today',
+              center: 'title',
+              right: '' // removidos os botões de visualização, já que temos nossos próprios botões
+            }}
+            events={formatEventsForCalendar()}
+            eventClick={handleEventClick}
+            dateClick={handleCalendarDateClick}
+            selectable={true}
+            selectMirror={true}
+            select={handleSelect}
+            selectAllow={handleSelectAllow}
+            height="auto"
+            locale={ptBrLocale}
+            businessHours={{
+              daysOfWeek: [1, 2, 3, 4, 5], // Seg a Sex
+              startTime: '08:00',
+              endTime: '20:00',
+            }}
+            slotMinTime="06:00"
+            slotMaxTime="23:00"
+            slotDuration="00:30:00"
+            snapDuration="00:15:00"
+            allDaySlot={false}
+            nowIndicator={true}
+            eventTimeFormat={{
+              hour: '2-digit',
+              minute: '2-digit',
+              meridiem: false
+            }}
+            validRange={{
+              start: new Date().toISOString().split('T')[0],
+              end: format(addMonths(maxPlanningDate, 1), 'yyyy-MM-dd') // para mostrar o mês completo
+            }}
+          />
+        )}
+      </div>
+      
+      <div className="button-container">
+        <button 
+          className="save-button"
+          onClick={handleSaveAvailability}
+          disabled={isLoading || events.length === 0}
+        >
+          <FontAwesomeIcon icon={faSave} /> Salvar Disponibilidade
+        </button>
       </div>
       
       {/* Modal para adicionar horário */}
       {showModal && (
-        <div className="modal-backdrop show" style={{display: 'block'}}></div>
-      )}
-      
-      <div className={`modal fade ${showModal ? 'show' : ''}`} style={{display: showModal ? 'block' : 'none'}} tabIndex="-1">
-        <div className="modal-dialog modal-dialog-centered">
+        <div className="time-slot-modal">
           <div className="modal-content">
-            <div className="modal-header bg-gradient-primary text-white">
-              <h5 className="modal-title">
-                <FontAwesomeIcon icon={faCalendarAlt} className="me-2" />
-                Adicionar Horário para {new Date(selectedDate).toLocaleDateString('pt-BR')}
-              </h5>
-              <button type="button" className="btn-close btn-close-white" onClick={closeModal}></button>
-            </div>
-            <div className="modal-body">
-              {error && (
-                <div className="alert alert-danger shadow-sm">
-                  <FontAwesomeIcon icon={faExclamationTriangle} className="me-2" />
-                  {error}
-                </div>
-              )}
-              
-              <div className="mb-4">
-                <label htmlFor="startTime" className="form-label fw-bold">Horário de Início</label>
-                <div className="input-group shadow-sm">
-                  <span className="input-group-text bg-light">
-                    <FontAwesomeIcon icon={faClock} />
-                  </span>
-                  <input 
-                    type="time" 
-                    className="form-control" 
-                    id="startTime" 
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    required
-                  />
-                </div>
+            <h3>Adicionar Horário Disponível</h3>
+            <p>Data: {new Date(selectedDate).toLocaleDateString('pt-BR')}</p>
+            
+            {error && (
+              <div className="modal-error">
+                <FontAwesomeIcon icon={faExclamationTriangle} />
+                <span>{error}</span>
+              </div>
+            )}
+            
+            <div className="time-inputs">
+              <div className="input-group">
+                <label htmlFor="startTime">Horário de Início:</label>
+                <input
+                  type="time"
+                  id="startTime"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  required
+                />
               </div>
               
-              <div className="mb-3">
-                <label htmlFor="endTime" className="form-label fw-bold">Horário de Fim</label>
-                <div className="input-group shadow-sm">
-                  <span className="input-group-text bg-light">
-                    <FontAwesomeIcon icon={faClock} />
-                  </span>
-                  <input 
-                    type="time" 
-                    className="form-control" 
-                    id="endTime" 
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-              
-              <div className="alert alert-info shadow-sm mt-4">
-                <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
-                Defina os horários em que você estará disponível para atendimentos.
+              <div className="input-group">
+                <label htmlFor="endTime">Horário de Fim:</label>
+                <input
+                  type="time"
+                  id="endTime"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  required
+                />
               </div>
             </div>
-            <div className="modal-footer">
-              <button type="button" className="btn btn-secondary shadow-sm btn-add" onClick={closeModal}>Cancelar</button>
-              <button type="button" className="btn btn-primary shadow add-time-button btn-add" onClick={handleAddTimeSlot}>
-                <FontAwesomeIcon icon={faPlus} className="me-2" />
-                Adicionar
+            
+            <div className="modal-actions">
+              <button className="modal-cancel" onClick={closeModal}>
+                Cancelar
+              </button>
+              <button className="modal-save" onClick={handleAddTimeSlot}>
+                <FontAwesomeIcon icon={faPlus} /> Adicionar
               </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

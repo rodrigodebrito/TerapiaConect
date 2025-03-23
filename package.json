@@ -16,10 +16,14 @@
     "install:frontend": "cd frontend && npm install",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["terapia", "psicologia", "agendamento"],
+  "keywords": [
+    "terapia",
+    "psicologia",
+    "agendamento"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "concurrently": "^8.2.2"
   }
-} 
+}

@@ -19,6 +19,8 @@
     "@fullcalendar/interaction": "^6.1.15",
     "@fullcalendar/react": "^6.1.15",
     "@fullcalendar/timegrid": "^6.1.15",
+    "@react-three/drei": "^9.46.0",
+    "@react-three/fiber": "^8.9.1",
     "axios": "^1.6.8",
     "bootstrap": "^5.3.3",
     "moment": "^2.30.1",
@@ -27,6 +29,8 @@
     "react-image-crop": "^11.0.7",
     "react-router-dom": "^6.22.3",
     "react-toastify": "^11.0.5",
+    "socket.io-client": "^4.8.1",
+    "three": "^0.146.0",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

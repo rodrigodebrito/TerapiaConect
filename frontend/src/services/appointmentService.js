@@ -38,38 +38,58 @@ export const getTherapistAvailability = async (therapistId, month, year) => {
 // Obter horários disponíveis para uma data específica
 export const getAvailableTimeSlots = async (therapistId, date) => {
   try {
-    console.log('Buscando horários disponíveis:', { therapistId, date });
+    // Garantir que temos o formato correto para a requisição
+    console.log(`[API] Iniciando busca de slots para terapeuta ${therapistId} na data ${date}`);
     
-    // Buscar todos os horários disponíveis do terapeuta
-    const response = await api.get(`/therapists/${therapistId}/availability`);
-    console.log('Resposta da API (todos os horários):', response.data);
+    let year, month, day;
     
-    // Filtrar apenas os do dia específico
-    let timeSlots = [];
-    if (response.data && Array.isArray(response.data)) {
-      // Converter a data de entrada para formato ISO (YYYY-MM-DD)
-      let formattedDate = date;
-      if (!(date instanceof Date) && !date.includes('-')) {
-        // Se não for uma data ISO, tentar converter
-        const parts = date.split('/');
-        formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    // Normalizar o formato da data
+    if (date instanceof Date) {
+      year = date.getFullYear();
+      month = date.getMonth() + 1; // Mês é base 0 em JS
+      day = date.getDate();
+    } else if (typeof date === 'string') {
+      if (date.includes('-')) {
+        // Formato ISO (YYYY-MM-DD)
+        [year, month, day] = date.split('-').map(Number);
+      } else if (date.includes('/')) {
+        // Formato brasileiro (DD/MM/YYYY)
+        [day, month, year] = date.split('/').map(Number);
+      } else {
+        throw new Error(`Formato de data não reconhecido: ${date}`);
       }
-      
-      // Filtrar slots do dia específico
-      const daySlots = response.data.filter(slot => slot.date === formattedDate);
-      console.log(`Slots encontrados para ${formattedDate}:`, daySlots);
-      
-      // Transformar em array de horários
-      timeSlots = daySlots.map(slot => ({
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        available: true
-      }));
+    } else {
+      throw new Error(`Tipo de data não suportado: ${typeof date}`);
     }
     
-    return timeSlots;
+    // Formatar para uso na API
+    const formattedDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+    console.log(`[API] Data formatada para request: ${formattedDate}`);
+    
+    // Fazer a requisição
+    const response = await api.get(`/therapists/${therapistId}/availability`, {
+      params: { 
+        month, 
+        year,
+        // Adicionar day como parâmetro opcional, caso a API suporte filtro por dia específico
+        day
+      }
+    });
+    
+    // Log para debug
+    console.log(`[API] Resposta para disponibilidade de ${formattedDate}:`, response.data);
+    
+    // Filtrar apenas os slots para o dia específico
+    const slots = Array.isArray(response.data) 
+      ? response.data
+          .filter(slot => slot.date === formattedDate)
+          .map(slot => slot.startTime)
+      : [];
+    
+    console.log(`[API] ${slots.length} slots encontrados para ${formattedDate}:`, slots);
+    return slots;
   } catch (error) {
-    console.error('Erro ao buscar horários disponíveis:', error);
+    console.error(`[API] Erro ao buscar horários para ${date}:`, error);
     throw error;
   }
 };

@@ -1,3 +1,4 @@
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastContainer } from 'react-toastify';
@@ -21,6 +22,9 @@ import Appointments from './pages/Appointments';
 import ClientProfile from './pages/ClientProfile';
 import TherapistAvailabilitySimple from './pages/TherapistAvailabilitySimple';
 import './App.css';
+
+// Importar o componente de Constelação
+import ConstellationField from './components/ConstellationField';
 
 // Componente para rotas protegidas
 const ProtectedRoute = ({ element, allowedRoles }) => {
@@ -136,6 +140,13 @@ function App() {
             path="/admin/dashboard" 
             element={<ProtectedRoute element={<AdminDashboard />} allowedRoles={['ADMIN']} />} 
           />
+          
+          {/* Rota de teste para o Campo de Constelação */}
+          <Route path="/teste-constelacao" element={<ConstellationField 
+            fieldTexture="/assets/field-texture.svg"
+            isHost={true}
+            sessionId="teste-123"
+          />} />
           
           {/* Página 404 */}
           <Route path="*" element={<NotFound />} />
