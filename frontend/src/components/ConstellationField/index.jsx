@@ -277,11 +277,11 @@ const ConstellationView = () => {
         )}
       </div>
       
-      <div className="canvas-container" style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+      <div className="canvas-container" style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', padding: 0, margin: 0 }}>
         <Canvas 
           shadows 
           camera={{ position: [0, 8, 10], fov: 45 }}
-          style={{ background: 'transparent' }}
+          style={{ background: 'transparent', margin: 0, padding: 0, width: '100%', height: '100%' }}
         >
           <color attach="background" args={['#1a1a2e']} />
           <ambientLight intensity={1} />
