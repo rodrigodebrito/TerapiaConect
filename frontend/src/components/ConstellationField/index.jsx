@@ -103,6 +103,8 @@ const ConstellationView = () => {
     transferControl,
     saveConfiguration,
     setShowNames,
+    setEditName,
+    setEditColor,
     REPRESENTATIVE_COLORS,
     REPRESENTATIVE_TYPES
   } = useContext(ConstellationContext);
@@ -139,14 +141,38 @@ const ConstellationView = () => {
             </div>
             
             <div className="color-selection">
-              {REPRESENTATIVE_COLORS.map((color, index) => (
-                <div 
-                  key={index}
-                  className={`color-option ${selectedColor === color ? 'selected' : ''}`}
-                  style={{ backgroundColor: color }}
-                  onClick={() => setSelectedColor(color)}
-                />
-              ))}
+              {REPRESENTATIVE_COLORS.map((color, index) => {
+                // Adicionar bordas especiais para branco e preto
+                const isWhite = color === '#FFFFFF';
+                const isBlack = color === '#000000';
+                
+                // Estilos especiais para branco e preto
+                const specialStyle = {};
+                if (isWhite) {
+                  specialStyle.border = '2px solid #aaa';
+                  specialStyle.boxShadow = '0 0 4px rgba(0,0,0,0.2)';
+                } else if (isBlack) {
+                  specialStyle.border = '2px solid #666';
+                  specialStyle.boxShadow = '0 0 4px rgba(255,255,255,0.2)';
+                } else if (selectedColor === color) {
+                  specialStyle.border = '2px solid #333';
+                } else {
+                  specialStyle.border = '2px solid transparent';
+                }
+                
+                return (
+                  <div 
+                    key={index}
+                    className={`color-option ${selectedColor === color ? 'selected' : ''}`}
+                    style={{ 
+                      backgroundColor: color,
+                      ...specialStyle
+                    }}
+                    onClick={() => setSelectedColor(color)}
+                    title={isWhite ? 'Branco' : isBlack ? 'Preto' : color}
+                  />
+                );
+              })}
             </div>
             
             <button 
@@ -174,27 +200,56 @@ const ConstellationView = () => {
                     />
                     
                     <div className="edit-color-selection">
-                      {REPRESENTATIVE_COLORS.map((color, index) => (
-                        <div 
-                          key={index}
-                          className={`color-option mini ${editColor === color ? 'selected' : ''}`}
-                          style={{ backgroundColor: color }}
-                          onClick={() => setEditColor(color)}
-                        />
-                      ))}
+                      {REPRESENTATIVE_COLORS.map((color, index) => {
+                        const isWhite = color === '#FFFFFF';
+                        const isBlack = color === '#000000';
+                        
+                        // Estilos especiais para branco e preto
+                        const specialStyle = {};
+                        if (isWhite) {
+                          specialStyle.border = '2px solid #aaa';
+                          specialStyle.boxShadow = '0 0 4px rgba(0,0,0,0.2)';
+                        } else if (isBlack) {
+                          specialStyle.border = '2px solid #666';
+                          specialStyle.boxShadow = '0 0 4px rgba(255,255,255,0.2)';
+                        } else if (editColor === color) {
+                          specialStyle.border = '2px solid #333';
+                        } else {
+                          specialStyle.border = '2px solid transparent';
+                        }
+                        
+                        return (
+                          <div 
+                            key={index}
+                            className={`color-option mini ${editColor === color ? 'selected' : ''}`}
+                            style={{ 
+                              backgroundColor: color,
+                              ...specialStyle
+                            }}
+                            onClick={() => setEditColor(color)}
+                            title={isWhite ? 'Branco' : isBlack ? 'Preto' : color}
+                          />
+                        );
+                      })}
                     </div>
                     
                     <div className="edit-actions">
                       <button 
                         className="save-edit-btn"
-                        onClick={saveEditing}
+                        onClick={() => {
+                          console.log('Salvando edições:', editName, editColor);
+                          saveEditing();
+                        }}
                         title="Salvar alterações"
                       >
                         ✓
                       </button>
                       <button 
                         className="cancel-edit-btn"
-                        onClick={cancelEditing}
+                        onClick={() => {
+                          console.log('Cancelando edição');
+                          cancelEditing();
+                        }}
                         title="Cancelar edição"
                       >
                         ✕
@@ -243,21 +298,21 @@ const ConstellationView = () => {
               className="control-button"
               disabled={!hasControl}
             >
-              {hasControl ? 'Passar Controle' : 'Recuperar Controle'}
+              Passar
             </button>
             
             <button 
               onClick={saveConfiguration}
               className="control-button"
             >
-              Salvar Configuração
+              Salvar
             </button>
             
             <button 
               onClick={() => setShowNames(!showNames)}
               className="control-button view-toggle"
             >
-              {showNames ? 'Ocultar Nomes' : 'Mostrar Nomes'}
+              {showNames ? 'Ocultar' : 'Mostrar'}
             </button>
           </div>
         </div>
@@ -265,14 +320,14 @@ const ConstellationView = () => {
         {hasControl && (
           <div className="control-status">
             <div className="status-indicator"></div>
-            <span>Você tem o controle</span>
+            <span>Controle ativo</span>
           </div>
         )}
         
         {!hasControl && (
           <div className="control-status observer">
             <div className="status-indicator"></div>
-            <span>Você está como observador</span>
+            <span>Observador</span>
           </div>
         )}
       </div>
@@ -280,7 +335,7 @@ const ConstellationView = () => {
       <div className="canvas-container" style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', padding: 0, margin: 0 }}>
         <Canvas 
           shadows 
-          camera={{ position: [0, 8, 10], fov: 45 }}
+          camera={{ position: [0, 7.5, 7.5], fov: 55 }}
           style={{ background: 'transparent', margin: 0, padding: 0, width: '100%', height: '100%' }}
         >
           <color attach="background" args={['#1a1a2e']} />
@@ -302,6 +357,9 @@ const ConstellationView = () => {
           />
           <OrbitControls 
             enabled={!selectedRepresentative}
+            maxPolarAngle={Math.PI / 2.2}
+            minDistance={3}
+            maxDistance={18}
           />
         </Canvas>
         
@@ -322,6 +380,10 @@ const CompassRose = () => {
     <group>
       {/* Círculos decorativos */}
       <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[6, 6.05, 64]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
+      </mesh>
+      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[5, 5.05, 64]} />
         <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
       </mesh>
@@ -330,7 +392,7 @@ const CompassRose = () => {
         <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
       </mesh>
       <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[3, 3.05, 64]} />
+        <ringGeometry args={[3, 3.05, 32]} />
         <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
       </mesh>
       <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -345,31 +407,31 @@ const CompassRose = () => {
       {/* Linhas direcionais primárias (N, S, L, O) */}
       <group rotation={[-Math.PI / 2, 0, 0]}>
         {/* Norte */}
-        <mesh position={[0, 3, 0.01]}>
-          <boxGeometry args={[0.05, 3, 0.01]} />
+        <mesh position={[0, 4, 0.01]}>
+          <boxGeometry args={[0.05, 4, 0.01]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
         </mesh>
         {/* Indicador Norte */}
-        <mesh position={[0, 5.5, 0.01]}>
+        <mesh position={[0, 6.5, 0.01]}>
           <boxGeometry args={[0.6, 0.15, 0.01]} />
           <meshBasicMaterial color="#4285F4" transparent opacity={0.8} />
         </mesh>
         
         {/* Sul */}
-        <mesh position={[0, -3, 0.01]}>
-          <boxGeometry args={[0.05, 3, 0.01]} />
+        <mesh position={[0, -4, 0.01]}>
+          <boxGeometry args={[0.05, 4, 0.01]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
         </mesh>
         
         {/* Leste */}
-        <mesh position={[3, 0, 0.01]}>
-          <boxGeometry args={[3, 0.05, 0.01]} />
+        <mesh position={[4, 0, 0.01]}>
+          <boxGeometry args={[4, 0.05, 0.01]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
         </mesh>
         
         {/* Oeste */}
-        <mesh position={[-3, 0, 0.01]}>
-          <boxGeometry args={[3, 0.05, 0.01]} />
+        <mesh position={[-4, 0, 0.01]}>
+          <boxGeometry args={[4, 0.05, 0.01]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
         </mesh>
       </group>
@@ -377,26 +439,26 @@ const CompassRose = () => {
       {/* Linhas diagonais secundárias (NE, NO, SE, SO) */}
       <group rotation={[-Math.PI / 2, 0, 0]}>
         {/* Nordeste */}
-        <mesh position={[2.12, 2.12, 0.01]} rotation={[0, 0, Math.PI / 4]}>
-          <boxGeometry args={[0.05, 3.6, 0.01]} />
+        <mesh position={[2.83, 2.83, 0.01]} rotation={[0, 0, Math.PI / 4]}>
+          <boxGeometry args={[0.05, 4.8, 0.01]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
         </mesh>
         
         {/* Noroeste */}
-        <mesh position={[-2.12, 2.12, 0.01]} rotation={[0, 0, -Math.PI / 4]}>
-          <boxGeometry args={[0.05, 3.6, 0.01]} />
+        <mesh position={[-2.83, 2.83, 0.01]} rotation={[0, 0, -Math.PI / 4]}>
+          <boxGeometry args={[0.05, 4.8, 0.01]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
         </mesh>
         
         {/* Sudeste */}
-        <mesh position={[2.12, -2.12, 0.01]} rotation={[0, 0, -Math.PI / 4]}>
-          <boxGeometry args={[0.05, 3.6, 0.01]} />
+        <mesh position={[2.83, -2.83, 0.01]} rotation={[0, 0, -Math.PI / 4]}>
+          <boxGeometry args={[0.05, 4.8, 0.01]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
         </mesh>
         
         {/* Sudoeste */}
-        <mesh position={[-2.12, -2.12, 0.01]} rotation={[0, 0, Math.PI / 4]}>
-          <boxGeometry args={[0.05, 3.6, 0.01]} />
+        <mesh position={[-2.83, -2.83, 0.01]} rotation={[0, 0, Math.PI / 4]}>
+          <boxGeometry args={[0.05, 4.8, 0.01]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
         </mesh>
       </group>
@@ -426,7 +488,7 @@ const Field = ({ viewMode }) => {
           handleRepresentativeSelect(null);
         }}
       >
-        <circleGeometry args={[6, 64]} />
+        <circleGeometry args={[7, 64]} />
         <meshStandardMaterial 
           map={circleTexture}
           color="#f0f0f0" 
@@ -707,8 +769,8 @@ const Representative = ({ representative, selected, onSelect, onContextMenu, vie
         const newX = dragInfo.current.startPosition.x + movementX;
         const newZ = dragInfo.current.startPosition.z + movementZ;
         
-        // Limitar à área do prato (círculo com raio 5.5)
-        const plateRadius = 5.5;
+        // Limitar à área do prato (círculo com raio 6.5)
+        const plateRadius = 6.5;
         const distance = Math.sqrt(newX * newX + newZ * newZ);
         
         let limitedX = newX;
@@ -754,16 +816,16 @@ const Representative = ({ representative, selected, onSelect, onContextMenu, vie
       {/* Rótulo com o nome do representante - só exibir se showNames for true */}
       {showNames && (
         <Html
-          position={[0, 3.0, 0]}
+          position={[0, 2.8, 0]}
           center
           distanceFactor={15}
           transform
           sprite
         >
           <div style={{
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            color: selected ? '#3498db' : 'white',
-            padding: '1px 3px',
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            color: selected ? '#ff6d01' : 'white',
+            padding: '1px 4px',
             borderRadius: '2px',
             fontSize: '10px',
             fontWeight: selected ? 'bold' : 'normal',
@@ -771,11 +833,11 @@ const Representative = ({ representative, selected, onSelect, onContextMenu, vie
             pointerEvents: 'none',
             userSelect: 'none',
             textAlign: 'center',
-            maxWidth: '60px',
+            maxWidth: '70px',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
-            opacity: 0.9,
-            lineHeight: '1.2'
+            opacity: 1,
+            lineHeight: '1.1'
           }}>
             {name}
           </div>
@@ -783,9 +845,9 @@ const Representative = ({ representative, selected, onSelect, onContextMenu, vie
       )}
       
       {selected && (
-        <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[0.4, 0.45, 32]} />
-          <meshBasicMaterial color="#3498db" transparent opacity={0.7} />
+        <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.5, 0.55, 32]} />
+          <meshBasicMaterial color="#ff6d01" transparent opacity={0.8} />
         </mesh>
       )}
     </group>

@@ -4,7 +4,8 @@ import { io } from 'socket.io-client';
 // Cores para os representantes
 const REPRESENTATIVE_COLORS = [
   '#4285F4', '#EA4335', '#FBBC05', '#34A853',
-  '#FF6D01', '#46BDC6', '#9C27B0', '#795548'
+  '#FF6D01', '#46BDC6', '#9C27B0', '#795548',
+  '#FFFFFF', '#000000'
 ];
 
 // Tipos de representantes
@@ -208,6 +209,8 @@ export const ConstellationProvider = ({ children, isHost = true, sessionId = nul
   // Salvar a edição de um representante
   const saveEditing = () => {
     if (!editingId) return;
+    
+    console.log(`Salvando edição para representante ${editingId}:`, { nome: editName, cor: editColor });
     
     const updatedRepresentatives = representatives.map(rep => 
       rep.id === editingId ? { ...rep, name: editName, color: editColor } : rep

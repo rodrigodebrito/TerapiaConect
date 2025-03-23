@@ -12,15 +12,16 @@
 }
 
 .constellation-controls {
-  width: 250px;
-  min-width: 250px;
-  padding: 15px;
+  width: 160px;
+  min-width: 160px;
+  padding: 6px 5px;
   background-color: #f5f5f5;
   border-right: 1px solid #ddd;
   height: 100%;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
 }
 
 .canvas-container {
@@ -28,9 +29,12 @@
   position: relative;
   overflow: hidden;
   height: 100vh;
-  max-width: 100%;
+  max-width: calc(100% - 160px);
   margin: 0;
   padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .control-panel {
@@ -39,16 +43,17 @@
 
 .panel-title {
   margin-top: 0;
-  margin-bottom: 20px;
-  font-size: 18px;
+  margin-bottom: 8px;
+  font-size: 15px;
   color: #333;
-  padding-bottom: 10px;
+  padding-bottom: 4px;
   border-bottom: 1px solid #ddd;
+  text-align: center;
 }
 
 .add-representative {
-  margin-bottom: 20px;
-  padding: 15px;
+  margin-bottom: 10px;
+  padding: 5px;
   background-color: #fff;
   border-radius: 4px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
@@ -56,45 +61,54 @@
 
 .name-input {
   width: 100%;
-  padding: 8px;
-  margin-bottom: 10px;
+  padding: 5px;
+  margin-bottom: 6px;
   border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
+  border-radius: 3px;
+  font-size: 13px;
 }
 
 .type-selection {
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .type-dropdown {
   width: 100%;
-  padding: 8px;
+  padding: 5px;
   border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
+  border-radius: 3px;
+  font-size: 13px;
   background-color: white;
 }
 
 .color-selection {
-  display: flex;
-  flex-wrap: wrap;
-  margin-bottom: 15px;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: auto auto;
+  margin-bottom: 8px;
+  gap: 6px;
+  justify-content: center;
+  padding: 2px;
+  max-width: 100%;
 }
 
 .color-option {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   cursor: pointer;
-  border: 2px solid transparent;
   transition: transform 0.2s ease;
+  margin: 0 auto;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
 }
 
 .color-option.selected {
-  border-color: #333;
   transform: scale(1.1);
+  box-shadow: 0 0 5px rgba(0,0,0,0.3);
 }
 
 .color-option.mini {
@@ -104,13 +118,13 @@
 
 .add-btn {
   width: 100%;
-  padding: 10px;
+  padding: 6px;
   background-color: #4a90e2;
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   transition: background-color 0.3s;
 }
 
@@ -124,7 +138,7 @@
 }
 
 .representatives-list {
-  margin-bottom: 20px;
+  margin-bottom: 15px;
   max-height: 300px;
   overflow-y: auto;
 }
@@ -132,11 +146,12 @@
 .representative-item {
   display: flex;
   align-items: center;
-  padding: 10px;
-  margin-bottom: 5px;
+  padding: 5px;
+  margin-bottom: 4px;
   background-color: white;
   border-radius: 4px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  font-size: 12px;
 }
 
 .representative-item.selected {
@@ -144,52 +159,61 @@
 }
 
 .color-indicator {
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  margin-right: 10px;
+  margin-right: 3px;
+  flex-shrink: 0;
 }
 
 .name {
-  flex-grow: 1;
-  margin-right: 10px;
-  font-size: 14px;
+  flex: 1;
+  margin-left: 5px;
+  font-size: 12px;
+  color: #333;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60px;
+}
+
+.type-indicator {
+  color: #777;
+  font-size: 11px;
+  white-space: nowrap;
+  margin-left: 3px;
+  max-width: 60px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.type-indicator {
-  font-size: 12px;
-  color: #666;
-  margin-right: 10px;
-  white-space: nowrap;
-}
-
 .item-actions {
   display: flex;
-  gap: 5px;
+  margin-left: auto;
 }
 
 .edit-btn, .remove-btn, .save-edit-btn, .cancel-edit-btn {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border: none;
+  border-radius: 3px;
   background-color: transparent;
+  color: #555;
+  font-size: 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  transition: background-color 0.2s;
+  padding: 0;
+  margin-left: 2px;
 }
 
 .edit-btn:hover, .save-edit-btn:hover {
-  background-color: #e3f2fd;
+  color: #4a90e2;
 }
 
 .remove-btn:hover, .cancel-edit-btn:hover {
-  background-color: #ffebee;
+  color: #e74c3c;
 }
 
 .edit-mode {
@@ -200,42 +224,48 @@
 
 .edit-name-input {
   width: 100%;
-  padding: 6px;
-  margin-bottom: 8px;
+  padding: 4px;
+  margin-bottom: 5px;
   border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
+  border-radius: 3px;
+  font-size: 12px;
 }
 
 .edit-color-selection {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: auto auto;
   margin-bottom: 8px;
   gap: 5px;
+  justify-content: center;
+  padding: 3px;
 }
 
 .edit-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 5px;
+  margin-top: 4px;
 }
 
 .control-buttons {
   display: flex;
-  gap: 10px;
-  margin-top: 20px;
+  gap: 4px;
+  margin-top: 8px;
+  justify-content: space-between;
 }
 
 .control-button {
   flex: 1;
-  padding: 10px;
+  padding: 5px 8px;
   background-color: #4a90e2;
   color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 11px;
   transition: background-color 0.3s;
+  white-space: nowrap;
+  text-align: center;
 }
 
 .control-button:hover {
@@ -250,26 +280,32 @@
 .control-status {
   display: flex;
   align-items: center;
-  padding: 10px;
-  background-color: #e8f5e9;
+  color: #333;
+  margin-top: 5px;
+  padding: 5px;
   border-radius: 4px;
-  margin-top: 15px;
+  background-color: rgba(74, 144, 226, 0.1);
+  font-size: 12px;
 }
 
 .control-status.observer {
-  background-color: #f5f5f5;
+  background-color: rgba(180, 180, 180, 0.1);
 }
 
 .status-indicator {
-  width: 12px;
-  height: 12px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background-color: #4caf50;
-  margin-right: 10px;
+  background-color: #4a90e2;
+  margin-right: 5px;
 }
 
 .control-status.observer .status-indicator {
-  background-color: #9e9e9e;
+  background-color: #999;
+}
+
+.control-status span {
+  white-space: nowrap;
 }
 
 .drag-hint {
@@ -958,12 +994,10 @@ canvas {
 @media (min-width: 992px) {
   .constellation-field-container {
     padding: 0;
-    margin: 0;
-    width: 100vw;
   }
   
   .canvas-container {
-    width: calc(100vw - 250px);
+    width: calc(100vw - 160px);
   }
 }
 
