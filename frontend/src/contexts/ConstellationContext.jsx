@@ -12,32 +12,42 @@ const REPRESENTATIVE_TYPES = {
   MALE_ELDER: {
     id: 'male_elder',
     name: 'Idoso Masculino',
-    modelPath: '/Representante/idoso - azul.glb'
+    modelPath: '/src/representantes/06 - Representante Idoso Masculino.glb'
   },
   FEMALE_ELDER: {
     id: 'female_elder',
     name: 'Idoso Feminino',
-    modelPath: '/Representante/idoso - azul.glb' // Será substituído quando disponível
+    modelPath: '/src/representantes/05 - Representante Idoso Feminino.glb'
   },
   MALE_ADULT: {
     id: 'male_adult',
     name: 'Adulto Masculino',
-    modelPath: '/Representante/idoso - azul.glb' // Será substituído quando disponível
+    modelPath: '/src/representantes/01 - Representante Adulto Masculino.glb'
   },
   FEMALE_ADULT: {
     id: 'female_adult',
     name: 'Adulto Feminino',
-    modelPath: '/Representante/Representante Adulto Feminino.glb'
+    modelPath: '/src/representantes/02 - Representante Adulto Feminino.glb'
   },
   MALE_CHILD: {
     id: 'male_child',
     name: 'Criança Masculino',
-    modelPath: '/Representante/idoso - azul.glb' // Será substituído quando disponível
+    modelPath: '/src/representantes/04 - Representante Criança Masculino.glb'
   },
   FEMALE_CHILD: {
     id: 'female_child',
     name: 'Criança Feminino',
-    modelPath: '/Representante/idoso - azul.glb' // Será substituído quando disponível
+    modelPath: '/src/representantes/03 - Representante Criança Feminino.glb'
+  },
+  SUBJETIVO_LONGO: {
+    id: 'subjetivo_longo',
+    name: 'Subjetivo Longo',
+    modelPath: '/src/representantes/Subjetivo Longo.glb'
+  },
+  SUBJETIVO_CURTO: {
+    id: 'subjetivo_curto',
+    name: 'Subjetivo Curto',
+    modelPath: '/src/representantes/Subjetivo curto.glb'
   }
 };
 

@@ -17,32 +17,42 @@ const REPRESENTATIVE_TYPES = {
   MALE_ELDER: {
     id: 'male_elder',
     name: 'Idoso Masculino',
-    modelPath: '/Representante/idoso - azul.glb'
+    modelPath: '/src/representantes/06 - Representante Idoso Masculino.glb'
   },
   FEMALE_ELDER: {
     id: 'female_elder',
     name: 'Idoso Feminino',
-    modelPath: '/Representante/idoso - azul.glb' // Será substituído quando disponível
+    modelPath: '/src/representantes/05 - Representante Idoso Feminino.glb'
   },
   MALE_ADULT: {
     id: 'male_adult',
     name: 'Adulto Masculino',
-    modelPath: '/Representante/idoso - azul.glb' // Será substituído quando disponível
+    modelPath: '/src/representantes/01 - Representante Adulto Masculino.glb'
   },
   FEMALE_ADULT: {
     id: 'female_adult',
     name: 'Adulto Feminino',
-    modelPath: '/Representante/Representante Adulto Feminino.glb'
+    modelPath: '/src/representantes/02 - Representante Adulto Feminino.glb'
   },
   MALE_CHILD: {
     id: 'male_child',
     name: 'Criança Masculino',
-    modelPath: '/Representante/idoso - azul.glb' // Será substituído quando disponível
+    modelPath: '/src/representantes/04 - Representante Criança Masculino.glb'
   },
   FEMALE_CHILD: {
     id: 'female_child',
     name: 'Criança Feminino',
-    modelPath: '/Representante/idoso - azul.glb' // Será substituído quando disponível
+    modelPath: '/src/representantes/03 - Representante Criança Feminino.glb'
+  },
+  SUBJETIVO_LONGO: {
+    id: 'subjetivo_longo',
+    name: 'Subjetivo Longo',
+    modelPath: '/src/representantes/Subjetivo Longo.glb'
+  },
+  SUBJETIVO_CURTO: {
+    id: 'subjetivo_curto',
+    name: 'Subjetivo Curto',
+    modelPath: '/src/representantes/Subjetivo curto.glb'
   }
 };
 
@@ -54,6 +64,8 @@ useGLTF.preload(REPRESENTATIVE_TYPES.MALE_ADULT.modelPath);
 useGLTF.preload(REPRESENTATIVE_TYPES.FEMALE_ADULT.modelPath);
 useGLTF.preload(REPRESENTATIVE_TYPES.MALE_CHILD.modelPath);
 useGLTF.preload(REPRESENTATIVE_TYPES.FEMALE_CHILD.modelPath);
+useGLTF.preload(REPRESENTATIVE_TYPES.SUBJETIVO_LONGO.modelPath);
+useGLTF.preload(REPRESENTATIVE_TYPES.SUBJETIVO_CURTO.modelPath);
 
 // Componente para o campo de constelação
 const ConstellationField = ({ isHost = true, sessionId = null }) => {
@@ -469,6 +481,18 @@ const Representative = ({ representative, selected, onSelect, onContextMenu, vie
     return null;
   }, [originalModel]);
   
+  // Definir a escala baseada no tipo do representante
+  const modelScale = useMemo(() => {
+    if (type === 'male_child' || type === 'female_child') {
+      return 0.8; // Tamanho reduzido para crianças
+    } else if (type === 'subjetivo_longo') {
+      return 1.2; // Tamanho maior para subjetivo longo
+    } else if (type === 'subjetivo_curto') {
+      return 0.6; // Tamanho bem menor para subjetivo curto
+    }
+    return 1.0; // Tamanho normal para adultos e idosos
+  }, [type]);
+  
   // Limpar quando o componente for desmontado
   useEffect(() => {
     return () => {
@@ -537,7 +561,7 @@ const Representative = ({ representative, selected, onSelect, onContextMenu, vie
   useEffect(() => {
     if (modelRef.current) {
       // Aplicar escala padrão para todos os modelos
-      const scale = 0.5;
+      const scale = modelScale;
       
       // Ajuste específico para o modelo Adulto Feminino para garantir consistência
       if (type === REPRESENTATIVE_TYPES.FEMALE_ADULT.id) {
@@ -549,7 +573,7 @@ const Representative = ({ representative, selected, onSelect, onContextMenu, vie
       
       modelRef.current.rotation.y = rotation;
     }
-  }, [rotation, type]);
+  }, [rotation, type, modelScale]);
   
   // Atualizar rotação no frame
   useFrame(() => {
@@ -705,21 +729,22 @@ const Representative = ({ representative, selected, onSelect, onContextMenu, vie
 
   // Mostrar o modelo com uma cor de destaque se selecionado
   return (
-    <group>
-      <primitive 
-        ref={modelRef} 
-        object={model} 
-        position={localPosition}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSelect(representative);
-        }}
-        onContextMenu={(e) => {
-          e.stopPropagation();
-          onContextMenu && onContextMenu(representative, e);
-        }}
-        onPointerDown={handleMouseDown}
-      />
+    <group
+      ref={modelRef}
+      position={localPosition}
+      rotation={[0, rotation, 0]}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect(representative);
+      }}
+      onContextMenu={(e) => {
+        e.stopPropagation();
+        onContextMenu && onContextMenu(representative, e);
+      }}
+      onPointerDown={handleMouseDown}
+      scale={[modelScale, modelScale, modelScale]}
+    >
+      {model && <primitive object={model} />}
       
       {/* Rótulo com o nome do representante - só exibir se showNames for true */}
       {showNames && (
