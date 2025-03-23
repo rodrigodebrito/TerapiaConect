@@ -1,10 +1,10 @@
-import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback, useContext } from 'react';
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
 import { OrbitControls, Html, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { io } from 'socket.io-client';
 import { TextureLoader } from 'three';
 import './ConstellationField.css';
+import ConstellationProvider, { ConstellationContext } from '../../contexts/ConstellationContext';
 
 // Cores para os representantes
 const REPRESENTATIVE_COLORS = [
@@ -12,187 +12,248 @@ const REPRESENTATIVE_COLORS = [
   '#FF6D01', '#46BDC6', '#9C27B0', '#795548'
 ];
 
+// Tipos de representantes
+const REPRESENTATIVE_TYPES = {
+  MALE_ELDER: {
+    id: 'male_elder',
+    name: 'Idoso Masculino',
+    modelPath: '/Representante/idoso - azul.glb'
+  },
+  FEMALE_ELDER: {
+    id: 'female_elder',
+    name: 'Idoso Feminino',
+    modelPath: '/Representante/idoso - azul.glb' // Será substituído quando disponível
+  },
+  MALE_ADULT: {
+    id: 'male_adult',
+    name: 'Adulto Masculino',
+    modelPath: '/Representante/idoso - azul.glb' // Será substituído quando disponível
+  },
+  FEMALE_ADULT: {
+    id: 'female_adult',
+    name: 'Adulto Feminino',
+    modelPath: '/Representante/Representante Adulto Feminino.glb'
+  },
+  MALE_CHILD: {
+    id: 'male_child',
+    name: 'Criança Masculino',
+    modelPath: '/Representante/idoso - azul.glb' // Será substituído quando disponível
+  },
+  FEMALE_CHILD: {
+    id: 'female_child',
+    name: 'Criança Feminino',
+    modelPath: '/Representante/idoso - azul.glb' // Será substituído quando disponível
+  }
+};
+
+// Carregar todos os modelos antecipadamente
+// Preload dos modelos para garantir disponibilidade
+useGLTF.preload(REPRESENTATIVE_TYPES.MALE_ELDER.modelPath);
+useGLTF.preload(REPRESENTATIVE_TYPES.FEMALE_ELDER.modelPath);
+useGLTF.preload(REPRESENTATIVE_TYPES.MALE_ADULT.modelPath);
+useGLTF.preload(REPRESENTATIVE_TYPES.FEMALE_ADULT.modelPath);
+useGLTF.preload(REPRESENTATIVE_TYPES.MALE_CHILD.modelPath);
+useGLTF.preload(REPRESENTATIVE_TYPES.FEMALE_CHILD.modelPath);
+
 // Componente para o campo de constelação
-const ConstellationField = ({ isHost = true, sessionId = null, fieldTexture = '/assets/field-texture.svg' }) => {
-  const [representatives, setRepresentatives] = useState([]);
-  const [selectedRepresentative, setSelectedRepresentative] = useState(null);
-  const [representativeName, setRepresentativeName] = useState('');
-  const [hasControl, setHasControl] = useState(isHost);
-  const [isDraggingAny, setIsDraggingAny] = useState(false);
-  const [showDragHint, setShowDragHint] = useState(false);
-  
-  // Referência ao socket para comunicação em tempo real
-  const socketRef = useRef(null);
-  
-  // Inicializar a conexão socket quando o componente montar
-  useEffect(() => {
-    // Comentado até implementar backend
-    /*
-    if (sessionId) {
-      socketRef.current = io('http://localhost:3000', {
-        query: { sessionId }
-      });
-      
-      socketRef.current.on('connect', () => {
-        console.log('Conectado ao servidor');
-      });
-      
-      socketRef.current.on('representativesMoved', (updatedRepresentatives) => {
-        setRepresentatives(updatedRepresentatives);
-      });
-      
-      socketRef.current.on('controlTransferred', (newController) => {
-        setHasControl(newController === socketRef.current.id);
-      });
-      
-      return () => {
-        socketRef.current.disconnect();
-      };
-    }
-    */
-  }, [sessionId]);
-  
-  // Gerar uma cor baseada no índice
-  const getColorForIndex = (index) => {
-    return REPRESENTATIVE_COLORS[index % REPRESENTATIVE_COLORS.length];
-  };
-  
-  // Adicionar um novo representante
-  const addRepresentative = () => {
-    if (representativeName.trim() === '') return;
-    
-    const newRepresentative = {
-      id: `rep-${Date.now()}`,
-      name: representativeName,
-      position: [Math.random() * 4 - 2, 0, Math.random() * 4 - 2], // Área menor para posicionamento
-      color: getColorForIndex(representatives.length),
-      isControlled: false
-    };
-    
-    setRepresentatives(prev => [...prev, newRepresentative]);
-    setRepresentativeName('');
-    
-    // Emit via socket
-    // if (socketRef.current) {
-    //   socketRef.current.emit('representativeAdded', newRepresentative);
-    // }
-  };
-  
-  // Selecionar um representante para mover
-  const handleRepresentativeClick = (id) => {
-    console.log(`Selecionando representante: ${id}, hasControl: ${hasControl}`);
-    if (!hasControl) return;
-    
-    if (id === selectedRepresentative) {
-      setSelectedRepresentative(null);
-    } else {
-      setSelectedRepresentative(id);
-    }
-  };
-  
-  // Atualizar a posição de um representante
-  const setRepresentativePosition = (id, position) => {
-    if (!hasControl) return;
-    
-    console.log(`Atualizando posição do representante ${id} para:`, position);
-    
-    const updatedRepresentatives = representatives.map(rep => 
-      rep.id === id ? { ...rep, position } : rep
-    );
-    
-    setRepresentatives(updatedRepresentatives);
-    
-    // Emit via socket
-    // if (socketRef.current) {
-    //   socketRef.current.emit('representativesMoved', updatedRepresentatives);
-    // }
-  };
-  
-  // Atualizar o estado de arrastar
-  const setDraggingState = (isDragging) => {
-    setIsDraggingAny(isDragging);
-  };
-  
-  // Transferir o controle
-  const transferControl = () => {
-    setHasControl(false);
-    
-    // Emit via socket
-    // if (socketRef.current) {
-    //   socketRef.current.emit('transferControl', 'client');
-    // }
-  };
-  
-  // Salvar a configuração atual
-  const saveConfiguration = () => {
-    console.log('Configuração salva:', representatives);
-    // Implementar lógica para salvar no backend
-  };
-  
-  // Mostrar dica de arrastar quando selecionar um representante
-  useEffect(() => {
-    if (selectedRepresentative) {
-      setShowDragHint(true);
-      const timer = setTimeout(() => {
-        setShowDragHint(false);
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [selectedRepresentative]);
-  
+const ConstellationField = ({ isHost = true, sessionId = null }) => {
+  return (
+    <ConstellationProvider isHost={isHost} sessionId={sessionId}>
+      <ConstellationView />
+    </ConstellationProvider>
+  );
+};
+
+// Componente de visualização que usa o ConstellationContext
+const ConstellationView = () => {
+  const { 
+    representatives, 
+    selectedRepresentative, 
+    representativeName, 
+    selectedType,
+    selectedColor,
+    hasControl,
+    showDragHint,
+    editingId,
+    editName,
+    editColor,
+    isDraggingAny,
+    showNames,
+    setRepresentativeName,
+    setSelectedType,
+    setSelectedColor,
+    addRepresentative,
+    startEditing,
+    saveEditing,
+    cancelEditing,
+    removeRepresentative,
+    transferControl,
+    saveConfiguration,
+    setShowNames,
+    REPRESENTATIVE_COLORS,
+    REPRESENTATIVE_TYPES
+  } = useContext(ConstellationContext);
+
   return (
     <div className="constellation-field-container">
       <div className="constellation-controls">
-        {hasControl && (
-          <>
-            <div className="control-status">
-              <div className="status-indicator"></div>
-              <span>Você tem o controle</span>
-            </div>
+        {/* Painel lateral para opções */}
+        <div className="control-panel">
+          <h3 className="panel-title">Representantes</h3>
+          
+          {/* Adicionar um novo representante */}
+          <div className="add-representative">
+            <input
+              type="text"
+              value={representativeName}
+              onChange={(e) => setRepresentativeName(e.target.value)}
+              placeholder="Nome do representante"
+              className="name-input"
+            />
             
-            <button className="control-button" onClick={transferControl}>
-              Passar Controle ao Cliente
-            </button>
-            
-            <div className="add-representative-form">
-              <input
-                type="text"
-                value={representativeName}
-                onChange={(e) => setRepresentativeName(e.target.value)}
-                placeholder="Nome do representante"
-              />
-              <button onClick={addRepresentative}>
-                Adicionar
-              </button>
-            </div>
-            
-            <div className="representative-list">
-              <h4>Representantes</h4>
-              <ul>
-                {representatives.map((rep) => (
-                  <li 
-                    key={rep.id}
-                    className={selectedRepresentative === rep.id ? 'selected' : ''}
-                    onClick={() => handleRepresentativeClick(rep.id)}
-                  >
-                    <div 
-                      className="color-indicator" 
-                      style={{ backgroundColor: rep.color }}
-                    ></div>
-                    <span>{rep.name}</span>
-                  </li>
+            <div className="type-selection">
+              <select 
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
+                className="type-dropdown"
+              >
+                {Object.values(REPRESENTATIVE_TYPES).map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}
+                  </option>
                 ))}
-              </ul>
+              </select>
+            </div>
+            
+            <div className="color-selection">
+              {REPRESENTATIVE_COLORS.map((color, index) => (
+                <div 
+                  key={index}
+                  className={`color-option ${selectedColor === color ? 'selected' : ''}`}
+                  style={{ backgroundColor: color }}
+                  onClick={() => setSelectedColor(color)}
+                />
+              ))}
             </div>
             
             <button 
-              className="save-button"
-              onClick={saveConfiguration}
-              disabled={representatives.length === 0}
+              onClick={addRepresentative}
+              className="add-btn"
+              disabled={!hasControl || representativeName.trim() === ''}
             >
-              Salvar Constelação
+              + Adicionar
             </button>
-          </>
+          </div>
+          
+          {/* Lista de representantes */}
+          <div className="representatives-list">
+            {representatives.map((rep) => (
+              <div key={rep.id} className="representative-item">
+                {editingId === rep.id ? (
+                  // Modo de edição
+                  <div className="edit-mode">
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="edit-name-input"
+                      autoFocus
+                    />
+                    
+                    <div className="edit-color-selection">
+                      {REPRESENTATIVE_COLORS.map((color, index) => (
+                        <div 
+                          key={index}
+                          className={`color-option mini ${editColor === color ? 'selected' : ''}`}
+                          style={{ backgroundColor: color }}
+                          onClick={() => setEditColor(color)}
+                        />
+                      ))}
+                    </div>
+                    
+                    <div className="edit-actions">
+                      <button 
+                        className="save-edit-btn"
+                        onClick={saveEditing}
+                        title="Salvar alterações"
+                      >
+                        ✓
+                      </button>
+                      <button 
+                        className="cancel-edit-btn"
+                        onClick={cancelEditing}
+                        title="Cancelar edição"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  // Modo de visualização
+                  <>
+                    <div 
+                      className="color-indicator" 
+                      style={{ backgroundColor: rep.color }}
+                    />
+                    <div className="name">
+                      {rep.name}
+                    </div>
+                    <div className="type-indicator">
+                      {Object.values(REPRESENTATIVE_TYPES).find(t => t.id === rep.type)?.name.split(' ')[0]}
+                    </div>
+                    <div className="item-actions">
+                      <button 
+                        className="edit-btn"
+                        onClick={() => startEditing(rep)}
+                        title="Editar representante"
+                      >
+                        ✎
+                      </button>
+                      <button 
+                        className="remove-btn"
+                        onClick={() => removeRepresentative(rep.id)}
+                        title="Remover representante"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+          
+          {/* Botões de controle */}
+          <div className="control-buttons">
+            <button 
+              onClick={transferControl}
+              className="control-button"
+              disabled={!hasControl}
+            >
+              {hasControl ? 'Passar Controle' : 'Recuperar Controle'}
+            </button>
+            
+            <button 
+              onClick={saveConfiguration}
+              className="control-button"
+            >
+              Salvar Configuração
+            </button>
+            
+            <button 
+              onClick={() => setShowNames(!showNames)}
+              className="control-button view-toggle"
+            >
+              {showNames ? 'Ocultar Nomes' : 'Mostrar Nomes'}
+            </button>
+          </div>
+        </div>
+        
+        {hasControl && (
+          <div className="control-status">
+            <div className="status-indicator"></div>
+            <span>Você tem o controle</span>
+          </div>
         )}
         
         {!hasControl && (
@@ -206,55 +267,35 @@ const ConstellationField = ({ isHost = true, sessionId = null, fieldTexture = '/
       <div className="canvas-container" style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
         <Canvas 
           shadows 
-          camera={{ position: [0, 5, 8], fov: 45 }}
+          camera={{ position: [0, 10, 0], fov: 25 }}
           style={{ background: 'transparent' }}
         >
-          <color attach="background" args={['#ffffff']} />
-          <fog attach="fog" args={['#ffffff', 10, 20]} />
-          <ambientLight intensity={0.8} />
+          <color attach="background" args={['#1a1a2e']} />
+          <ambientLight intensity={1} />
           <directionalLight
-            position={[3, 5, 3]}
+            position={[5, 10, 5]}
             intensity={1}
-            castShadow
-            shadow-mapSize-width={1024}
-            shadow-mapSize-height={1024}
+            castShadow={false}
           />
-          <pointLight position={[-3, 5, -3]} intensity={0.6} />
+          <spotLight
+            position={[-5, 10, 5]}
+            intensity={0.8}
+            angle={0.5}
+            penumbra={0.5}
+            castShadow={false}
+          />
           <Field 
-            fieldTexture={fieldTexture} 
-            representatives={representatives}
-            selectedRepresentative={selectedRepresentative}
-            onSelectionChange={handleRepresentativeClick}
-            onPositionChange={setRepresentativePosition}
-            onDragChange={setDraggingState}
-            canMove={hasControl}
+            viewMode={hasControl ? "edit" : "readonly"}
           />
           <OrbitControls 
-            makeDefault
-            enablePan={false}
-            maxPolarAngle={Math.PI / 2.2}
-            minPolarAngle={Math.PI / 6}
-            enableRotate={!isDraggingAny}
-            maxDistance={15}
-            minDistance={3}
-            enabled={!isDraggingAny}  // Desabilita completamente durante arrasto
+            enabled={!selectedRepresentative}
           />
         </Canvas>
         
+        {/* Dica de arrastar quando selecionar um representante */}
         {showDragHint && (
-          <div className="drag-hint" style={{ 
-            position: 'absolute', 
-            bottom: '20px', 
-            left: '50%', 
-            transform: 'translateX(-50%)',
-            backgroundColor: 'rgba(0,0,0,0.7)', 
-            color: 'white',
-            padding: '8px 16px',
-            borderRadius: '4px',
-            zIndex: 10,
-            pointerEvents: 'none'
-          }}>
-            Clique e arraste o representante para movê-lo
+          <div className="drag-hint">
+            <p>Arraste para mover ou segure SHIFT para rotacionar o representante</p>
           </div>
         )}
       </div>
@@ -262,120 +303,229 @@ const ConstellationField = ({ isHost = true, sessionId = null, fieldTexture = '/
   );
 };
 
-// Componente para o campo (plano) com textura
-const Field = ({ 
-  fieldTexture, 
-  representatives, 
-  selectedRepresentative, 
-  onSelectionChange, 
-  onPositionChange,
-  onDragChange,
-  canMove 
-}) => {
-  // Carregar a textura
-  const texture = useLoader(TextureLoader, fieldTexture);
-  
-  // Referência ao plano
-  const planeRef = useRef();
-  
-  // Configuração da textura para ficar melhor
-  useEffect(() => {
-    if (texture) {
-      texture.wrapS = THREE.RepeatWrapping;
-      texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.set(1, 1);
-      texture.needsUpdate = true;
-    }
-  }, [texture]);
-  
+// Componente para os círculos decorativos e direções da rosa dos ventos
+const CompassRose = () => {
   return (
     <group>
-      {/* Plano com textura */}
+      {/* Círculos decorativos */}
+      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[4, 4.05, 64]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
+      </mesh>
+      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[3, 3.05, 64]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
+      </mesh>
+      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[2, 2.05, 64]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
+      </mesh>
+      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[1, 1.05, 32]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
+      </mesh>
+      
+      {/* Linhas direcionais primárias (N, S, L, O) */}
+      <group rotation={[-Math.PI / 2, 0, 0]}>
+        {/* Norte */}
+        <mesh position={[0, 2.5, 0.01]}>
+          <boxGeometry args={[0.05, 2.5, 0.01]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
+        </mesh>
+        {/* Indicador Norte */}
+        <mesh position={[0, 4.5, 0.01]}>
+          <boxGeometry args={[0.6, 0.15, 0.01]} />
+          <meshBasicMaterial color="#4285F4" transparent opacity={0.8} />
+        </mesh>
+        
+        {/* Sul */}
+        <mesh position={[0, -2.5, 0.01]}>
+          <boxGeometry args={[0.05, 2.5, 0.01]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
+        </mesh>
+        
+        {/* Leste */}
+        <mesh position={[2.5, 0, 0.01]}>
+          <boxGeometry args={[2.5, 0.05, 0.01]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
+        </mesh>
+        
+        {/* Oeste */}
+        <mesh position={[-2.5, 0, 0.01]}>
+          <boxGeometry args={[2.5, 0.05, 0.01]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
+        </mesh>
+      </group>
+      
+      {/* Linhas diagonais secundárias (NE, NO, SE, SO) */}
+      <group rotation={[-Math.PI / 2, 0, 0]}>
+        {/* Nordeste */}
+        <mesh position={[1.77, 1.77, 0.01]} rotation={[0, 0, Math.PI / 4]}>
+          <boxGeometry args={[0.05, 3, 0.01]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
+        </mesh>
+        
+        {/* Noroeste */}
+        <mesh position={[-1.77, 1.77, 0.01]} rotation={[0, 0, -Math.PI / 4]}>
+          <boxGeometry args={[0.05, 3, 0.01]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
+        </mesh>
+        
+        {/* Sudeste */}
+        <mesh position={[1.77, -1.77, 0.01]} rotation={[0, 0, -Math.PI / 4]}>
+          <boxGeometry args={[0.05, 3, 0.01]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
+        </mesh>
+        
+        {/* Sudoeste */}
+        <mesh position={[-1.77, -1.77, 0.01]} rotation={[0, 0, Math.PI / 4]}>
+          <boxGeometry args={[0.05, 3, 0.01]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
+        </mesh>
+      </group>
+    </group>
+  );
+};
+
+const Field = ({ viewMode }) => {
+  // Carregar a textura para o plano
+  const circleTexture = useMemo(() => {
+    const textureLoader = new THREE.TextureLoader();
+    return textureLoader.load('/white-circle.png');
+  }, []);
+
+  // Acessar os estados e funções do componente pai
+  const { representatives, selectedRepresentative, handleRepresentativeSelect, handleContextMenu } = useContext(ConstellationContext);
+
+  return (
+    <group>
+      {/* Plano circular branco */}
       <mesh 
+        position={[0, 0, 0]} 
         rotation={[-Math.PI / 2, 0, 0]} 
-        position={[0, -0.01, 0]} 
         receiveShadow
-        ref={planeRef}
         onClick={(e) => {
-          // Garantindo que cliques no plano não afetem os representantes
           e.stopPropagation();
-          onSelectionChange(null);
+          handleRepresentativeSelect(null);
         }}
       >
-        <planeGeometry args={[12, 12]} />
+        <circleGeometry args={[5, 64]} />
         <meshStandardMaterial 
-          map={texture} 
-          roughness={0.7}
-          metalness={0.2}
-          transparent={true}
-          opacity={1}
-          color="#f8f8f8"
+          map={circleTexture}
+          color="#f0f0f0" 
+          roughness={0.2}
+          metalness={0.3}
+          side={THREE.DoubleSide}
+          emissive="#ffffff"
+          emissiveIntensity={0.1}
         />
       </mesh>
       
+      {/* Componente decorativo */}
+      <CompassRose />
+
       {/* Renderizar os representantes */}
       {representatives.map((rep) => (
         <Representative
           key={rep.id}
-          position={rep.position}
-          color={rep.color}
-          name={rep.name}
-          isSelected={selectedRepresentative === rep.id}
-          onSelect={() => onSelectionChange(rep.id)}
-          isControlled={rep.isControlled}
-          onPositionChange={(newPosition) => onPositionChange(rep.id, newPosition)}
-          canMove={canMove}
-          onDragChange={onDragChange}
+          representative={rep}
+          selected={selectedRepresentative?.id === rep.id}
+          onSelect={handleRepresentativeSelect}
+          onContextMenu={handleContextMenu}
+          viewMode={viewMode}
         />
       ))}
     </group>
   );
 };
 
-// Componente do Representante
-const Representative = ({ position, color, name, isSelected, onSelect, isControlled, onPositionChange, canMove, onDragChange }) => {
-  const modelPath = '/Representante/idoso - azul.glb';
-  const { scene } = useGLTF(modelPath);
+// Componente para um representante individual (modelo 3D)
+const Representative = ({ representative, selected, onSelect, onContextMenu, viewMode }) => {
+  const { id, name, position, color, type } = representative;
+  const [localPosition, setLocalPosition] = useState([position[0], 0.5, position[2]]);
+  const [rotation, setRotation] = useState(0);
   const modelRef = useRef();
-  const [localPosition, setLocalPosition] = useState([position[0], 0.5, position[2]]); // Ajustando a altura Y para 0.5
-  const [rotation, setRotation] = useState(Math.PI); // Rotação inicial (de frente para a câmera)
+  const { camera } = useThree();
+  const tempRay = useMemo(() => new THREE.Raycaster(), []);
   
-  // Informações sobre o arrasto atual
+  // Obter funções e estados do contexto
+  const { setRepresentativePosition, setDraggingState, showNames } = useContext(ConstellationContext);
+  
+  // Carregar o modelo 3D apropriado para o tipo de representante com preload
+  const modelPath = useMemo(() => {
+    return REPRESENTATIVE_TYPES[Object.keys(REPRESENTATIVE_TYPES).find(key => 
+      REPRESENTATIVE_TYPES[key].id === type
+    )]?.modelPath || REPRESENTATIVE_TYPES.MALE_ELDER.modelPath;
+  }, [type]);
+  
+  // Usar diretamente useGLTF com clone para garantir que cada instância seja independente
+  const { scene: originalModel } = useGLTF(modelPath);
+  
+  // Clonar o modelo para evitar compartilhamento de instâncias
+  const model = useMemo(() => {
+    if (originalModel) {
+      return originalModel.clone(true);
+    }
+    return null;
+  }, [originalModel]);
+  
+  // Limpar quando o componente for desmontado
+  useEffect(() => {
+    return () => {
+      if (model) {
+        // Limpar memória do modelo e materiais
+        model.traverse((node) => {
+          if (node.isMesh) {
+            if (node.geometry) node.geometry.dispose();
+            if (node.material) {
+              if (Array.isArray(node.material)) {
+                node.material.forEach(material => material.dispose());
+              } else {
+                node.material.dispose();
+              }
+            }
+          }
+        });
+      }
+    };
+  }, [model]);
+  
+  // Aplicar a cor selecionada ao modelo
+  useEffect(() => {
+    if (model) {
+      model.traverse((node) => {
+        if (node.isMesh && node.material) {
+          // Clonar o material para não afetar outras instâncias do mesmo modelo
+          node.material = node.material.clone();
+          
+          // Aplicar a cor selecionada
+          node.material.color.set(color);
+          
+          // Adicionar efeito de emissão quando selecionado
+          if (selected) {
+            node.material.emissive = new THREE.Color(color);
+            node.material.emissiveIntensity = 0.3;
+          } else {
+            node.material.emissive = new THREE.Color('#000000');
+            node.material.emissiveIntensity = 0;
+          }
+        }
+      });
+    }
+  }, [model, color, selected]);
+  
+  // Informações de arrastar
   const dragInfo = useRef({
     isDragging: false,
     startX: 0,
     startY: 0,
-    startPositionX: 0,
-    startPositionZ: 0,
-    startRotation: Math.PI,
+    startPosition: new THREE.Vector3(),
+    startPoint: new THREE.Vector3(),
+    startRotation: 0,
     isRotating: false
   });
   
-  // Clone the model to avoid cross-contamination
-  const model = useMemo(() => {
-    return scene.clone();
-  }, [scene]);
-
-  // Apply color to the model
-  useEffect(() => {
-    model.traverse((node) => {
-      if (node.isMesh) {
-        node.material = node.material.clone();
-        node.material.color.set(color);
-        
-        // Apply emissive effect when selected
-        if (isSelected) {
-          node.material.emissive = new THREE.Color(color);
-          node.material.emissiveIntensity = 0.5;
-        } else {
-          node.material.emissive = new THREE.Color(0x000000);
-          node.material.emissiveIntensity = 0;
-        }
-      }
-    });
-  }, [model, color, isSelected]);
-
-  // Atualizar a posição quando mudar no parent
+  // Manter a posição do modela atualizada com a posição externa
   useEffect(() => {
     if (!dragInfo.current.isDragging) {
       // Mantém a altura Y fixa enquanto atualiza X e Z
@@ -383,13 +533,23 @@ const Representative = ({ position, color, name, isSelected, onSelect, isControl
     }
   }, [position]);
   
-  // Adjust model scale if needed
+  // Ajustar escala do modelo
   useEffect(() => {
     if (modelRef.current) {
-      modelRef.current.scale.set(0.5, 0.5, 0.5);
+      // Aplicar escala padrão para todos os modelos
+      const scale = 0.5;
+      
+      // Ajuste específico para o modelo Adulto Feminino para garantir consistência
+      if (type === REPRESENTATIVE_TYPES.FEMALE_ADULT.id) {
+        modelRef.current.scale.set(scale, scale, scale);
+      } else {
+        // Escala padrão para os outros modelos
+        modelRef.current.scale.set(scale, scale, scale);
+      }
+      
       modelRef.current.rotation.y = rotation;
     }
-  }, [rotation]);
+  }, [rotation, type]);
   
   // Atualizar rotação no frame
   useFrame(() => {
@@ -398,21 +558,48 @@ const Representative = ({ position, color, name, isSelected, onSelect, isControl
     }
   });
   
+  // Função para converter coordenadas de tela para coordenadas no plano horizontal
+  const screenToPlaneCoordinates = useCallback((screenX, screenY) => {
+    // Converter coordenadas da tela para normalized device coordinates (-1 a +1)
+    const x = (screenX / window.innerWidth) * 2 - 1;
+    const y = -(screenY / window.innerHeight) * 2 + 1;
+    
+    // Configurar o raycaster a partir da câmera
+    tempRay.setFromCamera({ x, y }, camera);
+    
+    // Verificar interseção com o plano horizontal
+    const planeHeight = 0; // Altura do plano onde o representante se move
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeHeight);
+    
+    // Calcular o ponto de interseção
+    const target = new THREE.Vector3();
+    if (tempRay.ray.intersectPlane(plane, target)) {
+      // Retornamos as coordenadas globais, independente da rotação da câmera
+      return target;
+    }
+    
+    return null;
+  }, [camera, tempRay]);
+  
+  // Manipulador de eventos para clique do mouse
   const handleMouseDown = useCallback((e) => {
-    if (!canMove) return;
+    if (viewMode === 'readonly') return;
     
     // Parar propagação para evitar que eventos de clique afetem outros objetos
     e.stopPropagation();
     
     // Selecionar este representante
-    onSelect();
+    onSelect(representative);
+    
+    // Calcular o ponto de início no plano
+    const startPoint = screenToPlaneCoordinates(e.clientX, e.clientY);
     
     // Indicar que o arrasto começou
     dragInfo.current.isDragging = true;
     dragInfo.current.startX = e.clientX;
     dragInfo.current.startY = e.clientY;
-    dragInfo.current.startPositionX = localPosition[0];
-    dragInfo.current.startPositionZ = localPosition[2];
+    dragInfo.current.startPosition.set(localPosition[0], localPosition[1], localPosition[2]);
+    dragInfo.current.startPoint = startPoint.clone();
     dragInfo.current.startRotation = rotation;
     dragInfo.current.isRotating = false;
     
@@ -422,13 +609,14 @@ const Representative = ({ position, color, name, isSelected, onSelect, isControl
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('keyup', handleKeyUp);
     
-    // Informar ao componente pai que o arrasto começou
-    onDragChange && onDragChange(true);
-    
     // Mudar cursor para indicar que o objeto está sendo arrastado
     document.body.style.cursor = 'grabbing';
-  }, [localPosition, rotation, canMove, onSelect, onDragChange]);
+    
+    // Informar ao contexto que começamos a arrastar
+    setDraggingState(true);
+  }, [localPosition, rotation, viewMode, representative, onSelect, screenToPlaneCoordinates, setDraggingState]);
   
+  // Manipulador para liberar o mouse
   const handleMouseUp = useCallback(() => {
     if (dragInfo.current.isDragging) {
       // Indicar que o arrasto terminou
@@ -441,14 +629,15 @@ const Representative = ({ position, color, name, isSelected, onSelect, isControl
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('keyup', handleKeyUp);
       
-      // Informar ao componente pai que o arrasto terminou
-      onDragChange && onDragChange(false);
-      
       // Restaurar o cursor padrão
       document.body.style.cursor = 'auto';
+      
+      // Informar ao contexto que paramos de arrastar
+      setDraggingState(false);
     }
-  }, [onDragChange]);
+  }, [setDraggingState]);
   
+  // Manipuladores para teclas (para ativar rotação)
   const handleKeyDown = useCallback((e) => {
     if (e.shiftKey && dragInfo.current.isDragging) {
       dragInfo.current.isRotating = true;
@@ -463,6 +652,7 @@ const Representative = ({ position, color, name, isSelected, onSelect, isControl
     }
   }, []);
   
+  // Manipulador para movimento do mouse
   const handleMouseMove = useCallback((e) => {
     if (!dragInfo.current.isDragging) return;
     
@@ -476,83 +666,101 @@ const Representative = ({ position, color, name, isSelected, onSelect, isControl
       const newRotation = dragInfo.current.startRotation + deltaX;
       setRotation(newRotation);
     } else {
-      // Modo normal de movimentação - ajustando direções para serem intuitivas
-      const deltaX = (e.clientX - dragInfo.current.startX) * 0.01; // Direção X positiva = direita
-      const deltaZ = (e.clientY - dragInfo.current.startY) * 0.01; // Direção Z positiva = para trás
+      // Para movimento normal, usar raycasting para mapear movimento do mouse para o plano
+      const currentPoint = screenToPlaneCoordinates(e.clientX, e.clientY);
       
-      // Calcular nova posição
-      const newX = dragInfo.current.startPositionX + deltaX;
-      const newZ = dragInfo.current.startPositionZ + deltaZ; 
-      
-      // Limitar à área do campo
-      const limitedX = Math.max(-5, Math.min(5, newX));
-      const limitedZ = Math.max(-5, Math.min(5, newZ));
-      
-      // Atualizar posição (mantendo Y constante)
-      const newPosition = [limitedX, 0.5, limitedZ];
-      
-      setLocalPosition(newPosition);
-      onPositionChange && onPositionChange([newPosition[0], 0, newPosition[2]]);
+      if (currentPoint) {
+        // Calcular o deslocamento no plano do mundo
+        const movementX = currentPoint.x - dragInfo.current.startPoint.x;
+        const movementZ = currentPoint.z - dragInfo.current.startPoint.z;
+        
+        // Calcular nova posição baseada no deslocamento
+        const newX = dragInfo.current.startPosition.x + movementX;
+        const newZ = dragInfo.current.startPosition.z + movementZ;
+        
+        // Limitar à área do prato (círculo com raio 4.5)
+        const plateRadius = 4;
+        const distance = Math.sqrt(newX * newX + newZ * newZ);
+        
+        let limitedX = newX;
+        let limitedZ = newZ;
+        
+        // Se a posição estiver fora do prato, ajustar para a borda
+        if (distance > plateRadius) {
+          const angle = Math.atan2(newZ, newX);
+          limitedX = Math.cos(angle) * plateRadius;
+          limitedZ = Math.sin(angle) * plateRadius;
+        }
+        
+        // Atualizar posição (mantendo Y constante)
+        const newPosition = [limitedX, 0.5, limitedZ];
+        
+        setLocalPosition(newPosition);
+        
+        // Atualizar a posição no contexto global
+        setRepresentativePosition && setRepresentativePosition(id, [limitedX, 0, limitedZ]);
+      }
     }
-  }, [localPosition, onPositionChange, rotation]);
+  }, [rotation, screenToPlaneCoordinates, id, setRepresentativePosition]);
 
+  // Mostrar o modelo com uma cor de destaque se selecionado
   return (
-    <primitive 
-      ref={modelRef} 
-      object={model} 
-      position={localPosition}
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelect();
-      }}
-      onPointerDown={handleMouseDown}
-    />
+    <group>
+      <primitive 
+        ref={modelRef} 
+        object={model} 
+        position={localPosition}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect(representative);
+        }}
+        onContextMenu={(e) => {
+          e.stopPropagation();
+          onContextMenu && onContextMenu(representative, e);
+        }}
+        onPointerDown={handleMouseDown}
+      />
+      
+      {/* Rótulo com o nome do representante - só exibir se showNames for true */}
+      {showNames && (
+        <Html
+          position={[localPosition[0], localPosition[1] + 1.1, localPosition[2]]}
+          center
+          distanceFactor={80}
+          transform
+          sprite
+        >
+          <div style={{
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            color: selected ? '#3498db' : 'white',
+            padding: '0px 2px',
+            borderRadius: '2px',
+            fontSize: '3px',
+            fontWeight: selected ? 'bold' : 'normal',
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+            userSelect: 'none',
+            textAlign: 'center',
+            maxWidth: '30px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            opacity: 0.8,
+            lineHeight: '1',
+            transform: 'scale(0.35)'
+          }}>
+            {name}
+          </div>
+        </Html>
+      )}
+      
+      {selected && (
+        <mesh position={[localPosition[0], 0.05, localPosition[2]]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.5, 0.55, 32]} />
+          <meshBasicMaterial color="#3498db" transparent opacity={0.7} />
+        </mesh>
+      )}
+    </group>
   );
-};
-
-// Text component for labels
-const Text = ({ children, position, color, fontSize, anchorX, anchorY, backgroundColor = null }) => {
-  const { camera } = useThree();
-  const textRef = useRef();
-
-  useFrame(() => {
-    if (textRef.current) {
-      textRef.current.lookAt(camera.position);
-    }
-  });
-
-  return (
-    <sprite ref={textRef} position={position}>
-      <spriteMaterial transparent opacity={backgroundColor ? 0.9 : 1}>
-        <canvasTexture attach="map" args={[createTextCanvas(children, { color, fontSize, backgroundColor })]} />
-      </spriteMaterial>
-    </sprite>
-  );
-};
-
-// Helper to create text canvas
-const createTextCanvas = (text, { color = 'white', fontSize = 24, backgroundColor = null }) => {
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d');
-  canvas.width = 256;
-  canvas.height = 128;
-  
-  if (backgroundColor) {
-    context.fillStyle = backgroundColor;
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = color;
-  } else {
-    context.fillStyle = 'rgba(0,0,0,0)';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = color;
-  }
-  
-  context.font = `${fontSize}px Arial, sans-serif`;
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.fillText(text, canvas.width / 2, canvas.height / 2);
-  
-  return canvas;
 };
 
 export default ConstellationField; 
