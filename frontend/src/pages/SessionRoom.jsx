@@ -190,7 +190,7 @@ const SessionRoom = () => {
           )}
 
           {activeTool === 'constellation' && (
-            <div className={`tool-panel constellation-tool ${isFullscreen ? 'fullscreen' : ''}`}>
+            <div className={`tool-panel constellation-tool ${isFullscreen ? 'fullscreen' : 'fullscreen'}`}>
               <div className="tool-header">
                 <h2>Campo de Constelação</h2>
                 <div className="tool-header-actions">
@@ -258,20 +258,13 @@ const SessionRoom = () => {
             </div>
           )}
 
-          {activeTool && meetingView === 'embedded' && !isFullscreen && (
-            <div className="compact-video-container">
-              <div className="compact-video-header">
-                <span>Videochamada</span>
-              </div>
-              <div className="compact-video-content">
-                <FallbackMeeting
-                  sessionId={sessionId}
-                  therapistName={session.therapist?.user?.name}
-                  clientName={session.client?.user?.name}
-                  isFloating={true}
-                />
-              </div>
-            </div>
+          {activeTool && meetingView === 'embedded' && (
+            <FallbackMeeting
+              sessionId={sessionId}
+              therapistName={session.therapist?.user?.name}
+              clientName={session.client?.user?.name}
+              isFloating={true}
+            />
           )}
         </div>
 
