@@ -9,6 +9,29 @@ const prisma = require('../utils/prisma');
 const router = express.Router();
 
 /**
+ * @route GET /clients/user
+ * @desc Obter ID do cliente pelo usuário logado
+ * @access Privado (apenas clientes)
+ */
+router.get('/user', authenticate, authorize(['CLIENT']), async (req, res) => {
+  try {
+    const client = await prisma.client.findUnique({
+      where: { userId: req.user.id },
+      select: { id: true }
+    });
+    
+    if (!client) {
+      return res.status(404).json({ message: 'Perfil de cliente não encontrado' });
+    }
+    
+    return res.json(client);
+  } catch (error) {
+    console.error('Erro ao buscar ID do cliente:', error);
+    return res.status(500).json({ message: 'Erro ao buscar ID do cliente' });
+  }
+});
+
+/**
  * @route GET /clients/profile
  * @desc Obter perfil do cliente logado
  * @access Privado (apenas o próprio cliente)

@@ -309,13 +309,14 @@ router.get('/:id', async (req, res) => {
 /**
  * @route GET /therapists/:therapistId/availability
  * @desc Obter disponibilidade de um terapeuta
- * @access Privado (apenas o próprio terapeuta)
+ * @access Privado (terapeuta e clientes)
  */
-router.get('/:therapistId/availability', authenticate, authorize(['THERAPIST']), async (req, res) => {
+router.get('/:therapistId/availability', authenticate, async (req, res) => {
   try {
     const { therapistId } = req.params;
+    const { month, year } = req.query;
     
-    console.log('Buscando disponibilidade para terapeuta:', therapistId);
+    console.log('Buscando disponibilidade para terapeuta:', therapistId, 'Mês:', month, 'Ano:', year);
     
     // Verificar se o terapeuta existe
     const therapist = await prisma.therapist.findUnique({
@@ -326,8 +327,11 @@ router.get('/:therapistId/availability', authenticate, authorize(['THERAPIST']),
       return res.status(404).json({ message: 'Terapeuta não encontrado' });
     }
     
-    // Verificar se o usuário logado é o dono do perfil
-    if (therapist.userId !== req.user.id) {
+    // Verificar permissões - terapeuta dono ou qualquer cliente pode ver
+    const isOwner = therapist.userId === req.user.id;
+    const isClient = req.user.role === 'CLIENT';
+    
+    if (!isOwner && !isClient) {
       return res.status(403).json({ message: 'Você não tem permissão para acessar estes dados' });
     }
     

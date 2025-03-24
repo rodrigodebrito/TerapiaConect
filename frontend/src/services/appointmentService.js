@@ -118,9 +118,12 @@ export const getTherapistDetails = async (therapistId) => {
   }
 };
 
+// Obter todos os agendamentos do usuário atual (cliente ou terapeuta)
 export const getAppointments = async () => {
   try {
+    console.log('Buscando todos os agendamentos do usuário');
     const response = await api.get('/appointments');
+    console.log('Agendamentos obtidos:', response.data);
     return response.data;
   } catch (error) {
     console.error('Erro ao buscar agendamentos:', error);

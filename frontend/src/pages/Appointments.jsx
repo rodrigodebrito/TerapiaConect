@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getTherapistAppointments, getClientAppointments, cancelAppointment } from '../services/appointmentService';
+import { getAppointments, cancelAppointment } from '../services/appointmentService';
 import './ClientAppointments.css';
+import { toast } from 'react-hot-toast';
+import api from '../services/api';
+import { format } from 'date-fns';
 
 // Função auxiliar para validar se uma data é futura
 const isValidFutureDate = (date, time) => {
@@ -31,34 +34,12 @@ function Appointments() {
     const fetchAppointments = async () => {
       try {
         setLoading(true);
-        let clientData = [];
-        let therapistData = [];
-
-        // Primeiro, verifica se o usuário tem um clientId
-        if (user.clientId) {
-          try {
-            clientData = await getClientAppointments(user.clientId);
-          } catch (err) {
-            console.log('Erro ao buscar agendamentos como cliente:', err);
-            // Não lança o erro aqui para permitir buscar agendamentos como terapeuta
-          }
-        }
-
-        // Depois, verifica se o usuário é terapeuta e tem therapistId
-        if (user.role === 'THERAPIST' && user.therapistId) {
-          try {
-            therapistData = await getTherapistAppointments(user.therapistId);
-          } catch (err) {
-            console.log('Erro ao buscar agendamentos como terapeuta:', err);
-            // Não lança o erro aqui para permitir mostrar agendamentos como cliente
-          }
-        }
-
-        // Marcar cada agendamento com seu tipo
-        const markedClientData = clientData.map(app => ({ ...app, appointmentType: 'client' }));
-        const markedTherapistData = therapistData.map(app => ({ ...app, appointmentType: 'therapist' }));
         
-        setAppointments([...markedClientData, ...markedTherapistData]);
+        // Buscar todos os agendamentos do usuário atual
+        const data = await getAppointments();
+        console.log('Agendamentos recebidos:', data);
+        
+        setAppointments(data);
         setError(null);
       } catch (err) {
         console.error('Erro ao buscar agendamentos:', err);
@@ -136,6 +117,47 @@ function Appointments() {
 
   const handleScheduleNew = () => {
     navigate('/directory');
+  };
+
+  const handleJoinSession = async (appointment) => {
+    try {
+      console.log('Criando sessão para o agendamento:', appointment.id);
+      
+      // Primeiro, verificar se já existe uma sessão para este agendamento
+      let sessionResponse;
+      try {
+        // Buscar todas as sessões do usuário
+        const sessionsResponse = await api.get('/sessions');
+        const sessions = sessionsResponse.data;
+        
+        // Verificar se alguma sessão já está associada a este agendamento
+        const existingSession = sessions.find(s => s.appointmentId === appointment.id);
+        
+        if (existingSession) {
+          console.log('Sessão existente encontrada:', existingSession.id);
+          sessionResponse = { data: existingSession };
+        }
+      } catch (error) {
+        console.log('Nenhuma sessão existente encontrada, criando nova');
+      }
+      
+      // Se não existir sessão, criar uma nova
+      if (!sessionResponse) {
+        console.log('Criando nova sessão para o agendamento');
+        sessionResponse = await api.post('/sessions', {
+          appointmentId: appointment.id,
+          title: `Sessão: ${appointment.therapist?.user?.name || 'Terapeuta'} - ${format(new Date(appointment.date), 'dd/MM/yyyy')}`,
+          scheduledDuration: appointment.duration || 60
+        });
+        console.log('Nova sessão criada:', sessionResponse.data);
+      }
+      
+      // Navegar para a sala de sessão - corrigindo a rota para "/session"
+      navigate(`/session/${sessionResponse.data.id}`);
+    } catch (error) {
+      console.error('Erro ao criar/acessar sessão:', error);
+      toast.error('Erro ao acessar a sala de sessão. Tente novamente.');
+    }
   };
 
   if (loading) {
@@ -250,8 +272,7 @@ function Appointments() {
                     </span>
                     <span className={`appointment-status ${appointment.status.toLowerCase()}`}>
                       {appointment.status === 'SCHEDULED' ? 'Agendada' :
-                       appointment.status === 'COMPLETED' ? 'Realizada' :
-                       appointment.status === 'CANCELLED' ? 'Cancelada' : 'Pendente'}
+                       appointment.status === 'COMPLETED' ? 'Realizada' : 'Cancelada'}
                     </span>
                   </div>
                 </div>
@@ -276,24 +297,33 @@ function Appointments() {
               </div>
 
               <div className="appointment-actions">
-                <button
-                  className="view-profile-button"
-                  onClick={() => navigate(
-                    appointment.appointmentType === 'client' 
-                      ? `/therapist/${appointment.therapistId}`
-                      : `/client/${appointment.clientId}`
-                  )}
-                >
-                  {appointment.appointmentType === 'client' ? 'Ver Terapeuta' : 'Ver Cliente'}
-                </button>
-                {activeTab === 'upcoming' && appointment.status === 'SCHEDULED' && (
-                  <button
-                    className="cancel-button"
-                    onClick={() => handleCancelAppointment(appointment.id)}
-                  >
-                    Cancelar Sessão
-                  </button>
+                {appointment.status === 'SCHEDULED' && (
+                  <>
+                    <button 
+                      onClick={() => handleCancelAppointment(appointment.id)} 
+                      className="cancel-btn"
+                    >
+                      Cancelar
+                    </button>
+                    
+                    {/* Botão para entrar na sala de sessão */}
+                    {appointment.mode === 'ONLINE' && (
+                      <button 
+                        onClick={() => handleJoinSession(appointment)} 
+                        className="join-session-btn"
+                      >
+                        Entrar na Sessão
+                      </button>
+                    )}
+                  </>
                 )}
+                
+                <button 
+                  onClick={() => handleViewTherapist(appointment.therapistId)} 
+                  className="view-therapist-btn"
+                >
+                  Ver Terapeuta
+                </button>
               </div>
             </div>
           ))

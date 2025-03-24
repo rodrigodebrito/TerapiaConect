@@ -1,85 +1,129 @@
-# Resumo do Chat - Desenvolvimento da Plataforma de Terapeutas
+# Histórico de Desenvolvimento - Terapia Conect
 
-## Funcionalidades Implementadas
+## Implementação do Campo de Constelação Familiar
 
-### Campo de Constelação Familiar
+### 1. Configuração Inicial
+- Criação do componente ConstellationField
+- Implementação da estrutura básica com Three.js
+- Configuração do ambiente de desenvolvimento
 
-O componente `ConstellationField` foi desenvolvido para permitir a interação em tempo real entre terapeutas e clientes durante sessões de constelação familiar.
+### 2. Desenvolvimento do Campo 3D
+- Implementação da cena 3D
+- Adição do campo de constelação
+- Configuração da câmera e iluminação
+- Implementação dos controles de câmera
 
-#### Características Principais:
+### 3. Modelos 3D
+- Adição dos modelos GLB para diferentes tipos de representantes:
+  - Idosos (masculino e feminino)
+  - Adultos (masculino e feminino)
+  - Adolescentes (masculino e feminino)
+  - Crianças (masculino e feminino)
+- Organização dos modelos na pasta `public/models`
 
-1. **Representação 3D** 
-   - Implementação de modelos 3D para representar pessoas no campo
-   - Modificação da representação visual simplificada para modelos mais intuitivos
-   - Ajuste de cores, tamanhos e propriedades visuais dos representantes
+### 4. Interface do Usuário
+- Desenvolvimento do painel lateral
+- Implementação dos controles de visualização
+- Adição do seletor de cores
+- Criação dos botões de controle
 
-2. **Interatividade**
-   - Sistema de arrastar e soltar para posicionar representantes no campo
-   - Controle de movimentação bidimensional (eixos X e Z)
-   - Rotação 360° dos representantes ao pressionar a tecla SHIFT durante o arrasto
-   - Correção de movimentos invertidos no eixo Z para melhor usabilidade
+### 5. Funcionalidades de Interação
+- Implementação do movimento de representantes
+- Adição da rotação com SHIFT
+- Desenvolvimento do sistema de seleção
+- Implementação do controle compartilhado
 
-3. **Colaboração em Tempo Real**
-   - Integração com Socket.io para comunicação entre terapeuta e cliente
-   - Sistema de transferência de controle entre participantes
-   - Indicadores visuais do estado de controle atual
+### 6. Ajustes de Visualização
+- Correção do posicionamento dos modelos
+- Ajuste da altura dos representantes
+- Melhoria na visualização das cores
+- Otimização do layout responsivo
 
-4. **Interface de Usuário**
-   - Painel lateral para gerenciar representantes
-   - Lista de representantes com indicadores de cores
-   - Botões para adicionar/remover representantes
-   - Feedback visual para representantes selecionados
+### 7. Correções e Melhorias
+- Resolução do problema com cores branco e preto
+- Ajuste do posicionamento dos labels
+- Melhoria na visualização do campo
+- Otimização da performance
+
+### 8. Deploy no Vercel
+- Configuração do deploy automático
+- Ajuste dos caminhos dos modelos 3D
+- Verificação da estrutura de arquivos
+- Testes de funcionamento em produção
 
 ## Problemas Resolvidos
 
-1. **Problema de Modelos 3D**
-   - Substituição de modelos GLB complexos por geometria simples gerada via Three.js
-   - Criação de um modelo tipo "pino" com base, corpo e topo para representar pessoas
-   - Aplicação de cores e efeitos visuais para melhorar a legibilidade
+### 1. Posicionamento dos Modelos
+- **Problema**: Modelos aparecendo abaixo do campo
+- **Solução**: Ajuste da coordenada Y para 0.5
 
-2. **Controles de Movimentação**
-   - Correção da inversão de movimento no eixo Z
-   - Implementação de limite de área para posicionamento
-   - Adição da funcionalidade de rotação ao pressionar SHIFT
+### 2. Cores dos Representantes
+- **Problema**: Cores branco e preto não visíveis
+- **Solução**: 
+  - Adição de bordas específicas
+  - Ajuste do contraste
+  - Implementação de sombras
 
-3. **Comunicação em Tempo Real**
-   - Preparação da estrutura para integração com Socket.io
-   - Funcionalidades de transferência de controle
-   - Sistema de gerenciamento de estado compartilhado
+### 3. Layout Responsivo
+- **Problema**: Interface não adaptativa
+- **Solução**: 
+  - Implementação de CSS responsivo
+  - Ajuste do grid de cores
+  - Otimização do painel lateral
 
-## Tecnologias Utilizadas
-
-- **Frontend**: React, React Three Fiber, Three.js
-- **Backend**: Node.js, Express, Socket.io (preparado para implementação)
-- **Banco de Dados**: PostgreSQL com Prisma ORM
+### 4. Deploy
+- **Problema**: Modelos 3D não carregando
+- **Solução**: Correção dos caminhos para pasta public
 
 ## Próximos Passos
 
-1. **Aprimoramento do Campo de Constelação**
-   - Implementação completa da comunicação via Socket.io
-   - Persistência de constelações no banco de dados
-   - Integração com o sistema de videoconferência
+### 1. Melhorias Planejadas
+- Implementação do salvamento de constelações
+- Adição de histórico de sessões
+- Sistema de anotações durante a sessão
 
-2. **Sistema de Ferramentas Terapêuticas**
-   - Integração do Campo de Constelação como ferramenta terapêutica
-   - Ajuste de preços e duração para cada ferramenta
-   - Interface de configuração para o terapeuta
+### 2. Otimizações
+- Compressão dos modelos 3D
+- Implementação de LOD
+- Melhoria na sincronização em tempo real
 
-3. **Experiência do Usuário**
-   - Melhorias visuais e de desempenho
-   - Otimização para diferentes dispositivos
-   - Acessibilidade
+### 3. Novas Funcionalidades
+- Sistema de agendamento
+- Pagamentos online
+- Chat entre terapeuta e cliente
+- Sistema de notificações
 
-## Notas Técnicas
+## Links Importantes
+- Frontend: https://terapia-conect-frontend.vercel.app
+- Campo de Constelação: https://terapia-conect-frontend.vercel.app/teste-constelacao
 
-- O componente `ConstellationField` está estruturado com subcomponentes para representantes, campo e controles
-- As renderizações 3D utilizam React Three Fiber para integração com o React
-- A comunicação em tempo real está preparada para funcionar com Socket.io em uma rota dedicada
-- O sistema usa state do React para gerenciar o estado local e prepara-se para sincronizar com o backend
+## Estrutura de Arquivos
+```
+frontend/
+  ├── public/
+  │   └── models/
+  │       ├── male_elder.glb
+  │       ├── female_elder.glb
+  │       ├── male_adult.glb
+  │       ├── female_adult.glb
+  │       ├── male_teen.glb
+  │       ├── female_teen.glb
+  │       ├── male_child.glb
+  │       └── female_child.glb
+  └── src/
+      └── components/
+          └── ConstellationField/
+              ├── index.jsx
+              └── ConstellationField.css
+```
 
-## Aprendizados e Decisões de Design
+## Tecnologias Utilizadas
+- React
+- Three.js / React Three Fiber
+- Socket.io
+- Styled-components
+- Context API
+- Vercel (deploy)
 
-- Simplificação dos modelos 3D para melhor desempenho
-- Interface intuitiva que prioriza a facilidade de uso
-- Separação clara entre controles de terapeuta e cliente
-- Sistema preparado para expansão com mais ferramentas terapêuticas 
+## Observações Finais
+O desenvolvimento do Campo de Constelação Familiar foi concluído com sucesso, implementando todas as funcionalidades básicas necessárias. O sistema está funcionando em produção e pronto para uso. As próximas melhorias serão focadas em otimização de performance e adição de novas funcionalidades conforme necessário. 

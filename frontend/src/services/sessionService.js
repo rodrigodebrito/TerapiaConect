@@ -1,100 +1,84 @@
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import api from './api';
 
 /**
- * Serviço para gerenciar as chamadas de API relacionadas à sessão
+ * Obter os detalhes de uma sessão pelo ID
  */
-const sessionService = {
-  /**
-   * Obter detalhes de uma sessão por ID
-   * @param {string} sessionId - ID da sessão
-   * @returns {Promise} - Promessa com os dados da sessão
-   */
-  getSession: async (sessionId) => {
-    try {
-      const response = await axios.get(`${API_URL}/api/sessions/${sessionId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Erro ao obter sessão:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Iniciar uma nova sessão
-   * @param {Object} sessionData - Dados da sessão
-   * @returns {Promise} - Promessa com os dados da sessão criada
-   */
-  startSession: async (sessionData) => {
-    try {
-      const response = await axios.post(`${API_URL}/api/sessions`, sessionData);
-      return response.data;
-    } catch (error) {
-      console.error('Erro ao iniciar sessão:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Finalizar uma sessão
-   * @param {string} sessionId - ID da sessão
-   * @returns {Promise} - Promessa com os dados da sessão finalizada
-   */
-  endSession: async (sessionId) => {
-    try {
-      const response = await axios.put(`${API_URL}/api/sessions/${sessionId}/end`);
-      return response.data;
-    } catch (error) {
-      console.error('Erro ao finalizar sessão:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Pausar uma sessão
-   * @param {string} sessionId - ID da sessão
-   * @returns {Promise} - Promessa com os dados da sessão pausada
-   */
-  pauseSession: async (sessionId) => {
-    try {
-      const response = await axios.put(`${API_URL}/api/sessions/${sessionId}/pause`);
-      return response.data;
-    } catch (error) {
-      console.error('Erro ao pausar sessão:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Retomar uma sessão
-   * @param {string} sessionId - ID da sessão
-   * @returns {Promise} - Promessa com os dados da sessão retomada
-   */
-  resumeSession: async (sessionId) => {
-    try {
-      const response = await axios.put(`${API_URL}/api/sessions/${sessionId}/resume`);
-      return response.data;
-    } catch (error) {
-      console.error('Erro ao retomar sessão:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Obter histórico de sessões de um usuário
-   * @param {string} userId - ID do usuário
-   * @returns {Promise} - Promessa com o histórico de sessões
-   */
-  getUserSessions: async (userId) => {
-    try {
-      const response = await axios.get(`${API_URL}/api/users/${userId}/sessions`);
-      return response.data;
-    } catch (error) {
-      console.error('Erro ao obter histórico de sessões:', error);
-      throw error;
-    }
+export const getSessionById = async (sessionId) => {
+  try {
+    console.log(`Buscando detalhes da sessão: ${sessionId}`);
+    const response = await api.get(`/sessions/${sessionId}`);
+    console.log('Detalhes da sessão obtidos:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao buscar sessão:', error);
+    throw error;
   }
 };
 
-export default sessionService; 
+/**
+ * Marcar uma sessão como concluída
+ */
+export const markSessionCompleted = async (sessionId) => {
+  try {
+    console.log(`Marcando sessão ${sessionId} como concluída`);
+    const response = await api.put(`/sessions/${sessionId}/complete`);
+    console.log('Sessão marcada como concluída:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao marcar sessão como concluída:', error);
+    throw error;
+  }
+};
+
+/**
+ * Iniciar uma sessão agendada
+ */
+export const startSession = async (sessionId) => {
+  try {
+    console.log(`Iniciando sessão ${sessionId}`);
+    const response = await api.put(`/sessions/${sessionId}/start`);
+    console.log('Sessão iniciada:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao iniciar sessão:', error);
+    throw error;
+  }
+};
+
+/**
+ * Cancelar uma sessão
+ */
+export const cancelSession = async (sessionId, reason) => {
+  try {
+    console.log(`Cancelando sessão ${sessionId}`);
+    const response = await api.put(`/sessions/${sessionId}/cancel`, { reason });
+    console.log('Sessão cancelada:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao cancelar sessão:', error);
+    throw error;
+  }
+};
+
+/**
+ * Reagendar uma sessão
+ */
+export const rescheduleSession = async (sessionId, newDateTime) => {
+  try {
+    console.log(`Reagendando sessão ${sessionId}`);
+    const response = await api.put(`/sessions/${sessionId}/reschedule`, newDateTime);
+    console.log('Sessão reagendada:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao reagendar sessão:', error);
+    throw error;
+  }
+};
+
+export default {
+  getSessionById,
+  markSessionCompleted,
+  startSession,
+  cancelSession,
+  rescheduleSession
+}; 

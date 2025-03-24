@@ -209,14 +209,22 @@
 }
 
 .cancel-button {
-  background-color: white;
-  border: 1px solid #dc3545;
-  color: #dc3545;
+  background-color: #e74c3c;
+  color: white;
 }
 
 .cancel-button:hover {
-  background-color: #dc3545;
+  background-color: #c0392b;
+}
+
+.join-session-button {
+  background-color: #27ae60;
   color: white;
+  font-weight: bold;
+}
+
+.join-session-button:hover {
+  background-color: #219653;
 }
 
 .no-appointments {

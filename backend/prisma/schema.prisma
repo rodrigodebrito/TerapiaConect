@@ -49,6 +49,7 @@ model Therapist {
   availability        Availability[]
   user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   tools               TherapistTool[]
+  sessions            Session[]
 }
 
 model Client {
@@ -72,6 +73,7 @@ model Client {
   zipCode        String?
   appointments   Appointment[]
   user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions       Session[]
 }
 
 model Tool {
@@ -92,17 +94,20 @@ model Appointment {
   clientId    String
   date        String
   notes       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
   duration    Int
   toolId      String
   mode        String
   price       Float
   time        String
   status      String    @default("SCHEDULED")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
   client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   therapist   Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
   tool        Tool      @relation(fields: [toolId], references: [id])
+  
+  sessions    Session[]
 }
 
 model Availability {
@@ -150,4 +155,60 @@ enum AppointmentStatus {
   CONFIRMED
   CANCELLED
   COMPLETED
+}
+
+enum SessionStatus {
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+model Session {
+  id                     String              @id @default(uuid())
+  appointmentId          String
+  therapistId            String
+  clientId               String
+  title                  String?
+  status                 SessionStatus       @default(SCHEDULED)
+  startTime              DateTime?
+  endTime                DateTime?
+  scheduledDuration      Int
+  actualDuration         Int?
+  notes                  String?
+  shareInsightsWithClient Boolean             @default(true)
+  toolsUsed              Json?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  dyteMeetingId          String?             // ID da reunião no Dyte
+  dyteRoomName           String?             // Nome da sala no Dyte
+
+  // Relacionamentos
+  therapist              Therapist           @relation(fields: [therapistId], references: [id])
+  client                 Client              @relation(fields: [clientId], references: [id])
+  appointment            Appointment         @relation(fields: [appointmentId], references: [id])
+  transcripts            SessionTranscript[]
+  insights               AIInsight[]
+}
+
+model SessionTranscript {
+  id          String    @id @default(uuid())
+  sessionId   String
+  speaker     String
+  content     String    @db.Text
+  timestamp   DateTime  @default(now())
+  
+  session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model AIInsight {
+  id          String    @id @default(uuid())
+  sessionId   String
+  content     String    @db.Text
+  type        String
+  keywords    String?
+  timestamp   DateTime  @default(now())
+  
+  session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }

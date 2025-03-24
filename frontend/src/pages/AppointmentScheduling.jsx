@@ -8,6 +8,7 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'react-toastify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faArrowRight, faCalendarAlt, faCircleCheck, faClock, faInfoCircle, faMapMarkerAlt, faSpinner, faExclamationTriangle, faTimes } from '@fortawesome/free-solid-svg-icons';
+import api from '../services/api';
 
 // Função auxiliar para validar se uma data é futura
 const isValidFutureDate = (date, time) => {
@@ -493,9 +494,10 @@ const AppointmentScheduling = () => {
       setLoading(true);
       const selectedToolData = therapist.tools.find(t => t.id === selectedTool);
       
+      // Usar o ID do usuário diretamente
       const appointmentData = {
         therapistId,
-        clientId: user.id,
+        clientId: user.id, // Usar ID do usuário diretamente
         date: selectedDate,
         time: selectedTime,
         toolId: selectedTool,
@@ -511,7 +513,11 @@ const AppointmentScheduling = () => {
       navigate('/client/appointments');
     } catch (error) {
       console.error('Erro ao criar agendamento:', error);
-      setError('Erro ao criar agendamento. Por favor, tente novamente.');
+      if (error.response && error.response.data && error.response.data.error) {
+        setError(`Erro: ${error.response.data.error}`);
+      } else {
+        setError('Erro ao criar agendamento. Por favor, tente novamente.');
+      }
     } finally {
       setLoading(false);
     }

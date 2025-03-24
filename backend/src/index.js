@@ -24,6 +24,11 @@ const appointmentRoutes = require('./routes/appointment.routes');
 const userRoutes = require('./routes/user.routes');
 const toolRoutes = require('./routes/tool.routes');
 const uploadRoutes = require('./routes/upload.routes');
+const sessionRoutes = require('./routes/session.routes');
+const aiRoutes = require('./routes/ai.routes');
+const transcriptRoutes = require('./routes/transcript.routes');
+const insightRoutes = require('./routes/insight.routes');
+const meetingRoutes = require('./routes/meeting.routes');
 
 // Configuração da aplicação
 const app = express();
@@ -48,6 +53,11 @@ app.use('/api/therapists', therapistRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/tools', toolRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/sessions', sessionRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/transcripts', transcriptRoutes);
+app.use('/api/insights', insightRoutes);
+app.use('/api/meetings', meetingRoutes);
 
 // Rota padrão
 app.get('/', (req, res) => {

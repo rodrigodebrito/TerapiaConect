@@ -177,15 +177,32 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Terapeuta não encontrado' });
     }
 
-    // Verificação temporariamente desabilitada para testes
-    // if (!therapist.isApproved) {
-    //   return res.status(400).json({ error: 'Terapeuta não está aprovado' });
-    // }
-
     // Verificar se o terapeuta oferece a ferramenta selecionada
     const therapistTool = therapist.tools[0];
     if (!therapistTool) {
       return res.status(400).json({ error: 'Ferramenta não disponível para este terapeuta' });
+    }
+
+    // Verificar se o clientId é na verdade o userId (compatibilidade com frontend)
+    let finalClientId = clientId;
+    
+    // Tentar buscar o cliente pelo userId (se o clientId fornecido for o userId)
+    const clientByUser = await prismaClient.client.findFirst({
+      where: { userId: clientId }
+    });
+    
+    if (clientByUser) {
+      console.log(`Cliente encontrado com userId ${clientId}: ${clientByUser.id}`);
+      finalClientId = clientByUser.id;
+    } else {
+      // Verificar se o cliente existe com o ID fornecido
+      const clientExists = await prismaClient.client.findUnique({
+        where: { id: clientId }
+      });
+      
+      if (!clientExists) {
+        return res.status(404).json({ error: 'Cliente não encontrado' });
+      }
     }
 
     // Verificar disponibilidade do horário
@@ -212,7 +229,7 @@ router.post('/', authenticate, async (req, res) => {
     const appointment = await prismaClient.appointment.create({
       data: {
         therapistId,
-        clientId,
+        clientId: finalClientId, // Usar o ID correto do cliente
         date,
         time,
         toolId,
@@ -315,6 +332,149 @@ router.put('/:id/status', authenticate, authorize(['THERAPIST']), async (req, re
   } catch (error) {
     console.error('Erro ao atualizar status do agendamento:', error);
     return res.status(500).json({ message: 'Erro ao atualizar status do agendamento' });
+  }
+});
+
+/**
+ * @route GET /appointments
+ * @desc Listar todos os agendamentos do usuário (terapeuta ou cliente)
+ * @access Privado
+ */
+router.get('/', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    console.log(`Buscando agendamentos para usuário ${userId} com role ${userRole}`);
+
+    let appointments = [];
+
+    if (userRole === 'THERAPIST') {
+      // Buscar o id do terapeuta relacionado ao usuário
+      const therapist = await prisma.therapist.findFirst({
+        where: { userId }
+      });
+
+      if (!therapist) {
+        return res.status(404).json({ message: 'Perfil de terapeuta não encontrado' });
+      }
+
+      // Buscar agendamentos do terapeuta
+      appointments = await prisma.appointment.findMany({
+        where: { 
+          therapistId: therapist.id
+        },
+        include: {
+          client: {
+            include: {
+              user: {
+                select: {
+                  name: true,
+                  email: true
+                }
+              }
+            }
+          },
+          therapist: {
+            include: {
+              user: {
+                select: {
+                  name: true,
+                  email: true
+                }
+              }
+            }
+          },
+          tool: true
+        },
+        orderBy: {
+          date: 'asc'
+        }
+      });
+
+      console.log(`Encontrados ${appointments.length} agendamentos para o terapeuta ${therapist.id}`);
+    } 
+    else if (userRole === 'CLIENT') {
+      // Buscar o id do cliente relacionado ao usuário
+      const client = await prisma.client.findFirst({
+        where: { userId }
+      });
+
+      if (!client) {
+        return res.status(404).json({ message: 'Perfil de cliente não encontrado' });
+      }
+
+      // Buscar agendamentos do cliente
+      appointments = await prisma.appointment.findMany({
+        where: { 
+          clientId: client.id
+        },
+        include: {
+          therapist: {
+            include: {
+              user: {
+                select: {
+                  name: true,
+                  email: true
+                }
+              }
+            }
+          },
+          client: {
+            include: {
+              user: {
+                select: {
+                  name: true,
+                  email: true
+                }
+              }
+            }
+          },
+          tool: true
+        },
+        orderBy: {
+          date: 'asc'
+        }
+      });
+
+      console.log(`Encontrados ${appointments.length} agendamentos para o cliente ${client.id}`);
+    }
+    else {
+      return res.status(403).json({ message: 'Papel de usuário não autorizado' });
+    }
+
+    // Formatar os dados para o frontend
+    const formattedAppointments = appointments.map(appointment => ({
+      id: appointment.id,
+      clientId: appointment.clientId,
+      therapistId: appointment.therapistId,
+      date: appointment.date,
+      time: appointment.time,
+      status: appointment.status,
+      mode: appointment.mode,
+      price: appointment.price,
+      duration: appointment.duration,
+      client: appointment.client ? {
+        id: appointment.client.id,
+        name: appointment.client.user.name,
+        email: appointment.client.user.email
+      } : null,
+      therapist: appointment.therapist ? {
+        id: appointment.therapist.id,
+        name: appointment.therapist.user.name,
+        email: appointment.therapist.user.email
+      } : null,
+      tool: appointment.tool ? {
+        id: appointment.tool.id,
+        name: appointment.tool.name
+      } : null,
+      appointmentType: userRole.toLowerCase() // para distinguir a perspectiva
+    }));
+
+    res.json(formattedAppointments);
+  } catch (error) {
+    console.error('Erro ao listar agendamentos:', error);
+    res.status(500).json({ error: 'Erro ao listar agendamentos' });
   }
 });
 
