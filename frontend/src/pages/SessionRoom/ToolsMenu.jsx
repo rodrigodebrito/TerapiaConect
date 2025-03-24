@@ -1,11 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-const ToolsMenu = ({ tools, activeTool, setActiveTool }) => {
-  const handleToolClick = (toolId) => {
-    setActiveTool(toolId === activeTool ? null : toolId);
-  };
-
+const ToolsMenu = ({ tools, activeTool, onToolClick }) => {
   return (
     <div className="tools-menu">
       <h3 className="tools-title">Ferramentas</h3>
@@ -13,7 +9,7 @@ const ToolsMenu = ({ tools, activeTool, setActiveTool }) => {
         <button
           key={tool.id}
           className={`tool-button ${activeTool === tool.id ? 'active' : ''}`}
-          onClick={() => handleToolClick(tool.id)}
+          onClick={() => onToolClick(tool.id)}
         >
           <span className="tool-icon">{tool.icon}</span>
           <span className="tool-name">{tool.name}</span>
@@ -32,7 +28,7 @@ ToolsMenu.propTypes = {
     })
   ).isRequired,
   activeTool: PropTypes.string,
-  setActiveTool: PropTypes.func.isRequired,
+  onToolClick: PropTypes.func.isRequired,
 };
 
 export default ToolsMenu; 

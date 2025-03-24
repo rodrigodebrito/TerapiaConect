@@ -4,11 +4,11 @@ import { ConstellationProvider } from '../../contexts/ConstellationContext';
 import ConstellationField from '../../components/ConstellationField';
 import { useAI } from '../../contexts/AIContext';
 
-const ActiveTools = ({ activeTool }) => {
+const ActiveTools = ({ activeTool, isFieldActive }) => {
   const { aiInsights, isProcessing } = useAI();
 
   return (
-    <div className="active-tools">
+    <div className={`active-tools ${isFieldActive ? 'field-active' : ''}`}>
       {activeTool === 'constellation' && (
         <div className="constellation-container">
           <h3 className="tool-header">Campo de Constelação</h3>
@@ -50,6 +50,12 @@ const ActiveTools = ({ activeTool }) => {
 
 ActiveTools.propTypes = {
   activeTool: PropTypes.string,
+  isFieldActive: PropTypes.bool
+};
+
+ActiveTools.defaultProps = {
+  activeTool: null,
+  isFieldActive: false
 };
 
 export default ActiveTools; 
