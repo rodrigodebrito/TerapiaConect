@@ -26,7 +26,7 @@ const DirectJitsi = () => {
         setSessionDetails(sessionData);
         
         // Abrir o Jitsi Meet em uma nova aba
-        window.open(`https://meet.jit.si/${room}`, '_blank');
+        window.open(`https://8x8.vc/${room}`, '_blank');
         
       } catch (error) {
         console.error('Erro ao preparar sessão:', error);
@@ -64,7 +64,7 @@ const DirectJitsi = () => {
             <p>Se a janela não abriu automaticamente, clique no botão abaixo:</p>
             
             <Button 
-              onClick={() => window.open(`https://meet.jit.si/${roomName}`, '_blank')}
+              onClick={() => window.open(`https://8x8.vc/${roomName}`, '_blank')}
               variant="primary"
               style={{ marginTop: '15px', marginBottom: '15px' }}
             >
@@ -72,7 +72,7 @@ const DirectJitsi = () => {
             </Button>
             
             <p style={{ fontSize: '0.9rem', color: '#666' }}>
-              <strong>Link da sala:</strong> <a href={`https://meet.jit.si/${roomName}`} target="_blank" rel="noopener noreferrer">https://meet.jit.si/{roomName}</a>
+              <strong>Link da sala:</strong> <a href={`https://8x8.vc/${roomName}`} target="_blank" rel="noopener noreferrer">https://8x8.vc/{roomName}</a>
             </p>
           </div>
           

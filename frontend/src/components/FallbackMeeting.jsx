@@ -22,7 +22,7 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
       type: 'jitsi',
       name: 'Jitsi Meet',
       logo: '📹',
-      url: `https://meet.jit.si/${roomName}`,
+      url: `https://8x8.vc/${roomName}`,
       description: 'Videoconferência gratuita e segura',
       recommended: true
     },
@@ -47,7 +47,7 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
   // Inicializar diretamente o Jitsi Meet quando o componente é montado
   useEffect(() => {
     console.log("FallbackMeeting: Inicializando Jitsi Meet...");
-    const jitsiUrl = `https://meet.jit.si/${roomName}`;
+    const jitsiUrl = `https://8x8.vc/${roomName}`;
     setMeetingUrl(jitsiUrl);
     setLoading(true);
     
