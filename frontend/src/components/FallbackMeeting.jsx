@@ -9,6 +9,7 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
   const [meetingType, setMeetingType] = useState('jitsi'); // Começa diretamente com Jitsi
   const [meetingUrl, setMeetingUrl] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showIframe, setShowIframe] = useState(true);
 
   // Gerar um nome de sala único baseado no ID da sessão
   const roomName = sessionId 
@@ -64,6 +65,10 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
     alert('Link copiado para a área de transferência!');
   };
 
+  const handleOpenInNewTab = () => {
+    window.open(meetingUrl, '_blank');
+  };
+
   const handleSelectOption = (optionType) => {
     console.log(`FallbackMeeting: Selecionando opção ${optionType}`);
     const selectedOption = meetingOptions.find(option => option.type === optionType);
@@ -71,6 +76,7 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
       setMeetingType(selectedOption.type);
       setMeetingUrl(selectedOption.url);
       setLoading(true);
+      setShowIframe(true);
       
       // Tempo para o novo iframe carregar
       setTimeout(() => {
@@ -82,6 +88,11 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
   const showOptions = () => {
     console.log("FallbackMeeting: Exibindo opções");
     setMeetingType(null);
+  };
+
+  const handleIframeError = () => {
+    console.log("FallbackMeeting: Erro ao carregar iframe");
+    setShowIframe(false);
   };
 
   return (
@@ -101,6 +112,13 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
                 Copiar Link
               </button>
               <button 
+                className="open-new-tab-button" 
+                onClick={handleOpenInNewTab}
+                title="Abrir em nova janela"
+              >
+                Abrir em Nova Janela
+              </button>
+              <button 
                 className="change-option-button" 
                 onClick={showOptions}
               >
@@ -108,9 +126,36 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
               </button>
             </div>
           </div>
+          
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1, padding: '40px' }}>
               <p>Carregando videoconferência... Por favor aguarde.</p>
+            </div>
+          ) : !showIframe ? (
+            <div className="iframe-error-container">
+              <h3>Não foi possível carregar a videoconferência no iframe</h3>
+              <p>Você pode tentar abrir a reunião em uma nova janela:</p>
+              <button 
+                onClick={handleOpenInNewTab}
+                className="open-new-tab-button-large"
+              >
+                Abrir Videoconferência em Nova Janela
+              </button>
+              <p>Ou copie o link e compartilhe com o outro participante:</p>
+              <div className="meeting-link-container">
+                <input 
+                  type="text" 
+                  value={meetingUrl} 
+                  readOnly 
+                  className="meeting-link-input"
+                />
+                <button 
+                  onClick={handleCopyLink}
+                  className="copy-link-button-small"
+                >
+                  Copiar
+                </button>
+              </div>
             </div>
           ) : (
             <iframe 
@@ -118,10 +163,14 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
               allow="camera; microphone; fullscreen; display-capture; autoplay"
               className="fallback-iframe"
               title="Video Conference"
+              onError={handleIframeError}
             ></iframe>
           )}
+          
           <div className="fallback-footer">
-            Se houver algum problema com esta videoconferência, você pode voltar e escolher outra opção.
+            <p>
+              Se houver problemas com a videoconferência, tente abrir em uma nova janela ou escolha outra opção.
+            </p>
           </div>
         </>
       ) : (

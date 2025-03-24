@@ -18,9 +18,12 @@ const SessionRoom = () => {
   const [meetingInitialized, setMeetingInitialized] = useState(false);
 
   useEffect(() => {
+    console.log("SessionRoom: Inicializando com ID", sessionId);
     const fetchSession = async () => {
       try {
+        console.log("SessionRoom: Buscando detalhes da sessão");
         const sessionData = await getSessionById(sessionId);
+        console.log("SessionRoom: Dados da sessão obtidos", sessionData);
         setSession(sessionData);
         setMeetingInitialized(true);
       } catch (err) {
@@ -50,6 +53,10 @@ const SessionRoom = () => {
       console.error('Erro ao encerrar sessão:', error);
       toast.error('Não foi possível encerrar a sessão. Tente novamente.');
     }
+  };
+
+  const openDirectJitsi = () => {
+    navigate(`/direct-jitsi/${sessionId}`);
   };
 
   if (loading) {
@@ -86,6 +93,7 @@ const SessionRoom = () => {
         <p><strong>Cliente:</strong> {session.client?.user?.name || 'Nome não disponível'}</p>
         
         <div className="session-actions">
+          <Button onClick={openDirectJitsi} variant="primary">Abrir Jitsi Meet</Button>
           <Button onClick={handleEndSession} variant="danger">Encerrar Sessão</Button>
           <Button onClick={() => navigate('/appointments')} variant="secondary">Voltar</Button>
         </div>

@@ -28,6 +28,9 @@ import { Toaster } from 'react-hot-toast';
 // Importar o componente de Constelação
 import ConstellationField from './components/ConstellationField';
 
+// Adicionar a importação do DirectJitsi
+import DirectJitsi from './pages/DirectJitsi';
+
 // Componente para rotas protegidas
 const ProtectedRoute = ({ element, allowedRoles }) => {
   const { user, loading } = useAuth();
@@ -157,6 +160,9 @@ function App() {
               path="/session/:sessionId" 
               element={<ProtectedRoute element={<SessionRoom />} allowedRoles={['CLIENT', 'THERAPIST']} />} 
             />
+            
+            {/* Adicionar a rota dentro do Routes */}
+            <Route path="/direct-jitsi/:sessionId" element={<DirectJitsi />} />
             
             {/* Página 404 */}
             <Route path="*" element={<NotFound />} />
