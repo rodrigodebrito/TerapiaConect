@@ -78,6 +78,7 @@
   position: relative;
   min-height: 600px;
   background-color: #f0f2f5;
+  padding-bottom: 170px; /* Espaço para as ferramentas fixas */
 }
 
 /* Área de trabalho principal */
@@ -313,25 +314,24 @@
 
 /* Container da área de ferramentas */
 .session-tools-container {
-  width: 100%;
-  background-color: #fff;
-  border-top: 2px solid #ddd;
-  box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
-  position: relative;
+  position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 9999;
-}
-
-/* Seção de ferramentas principal */
-.session-tools {
-  padding: 20px;
-  display: block !important;
+  background-color: #ffffff;
+  border-top: 3px solid #2ecc71;
+  box-shadow: 0 -5px 20px rgba(0,0,0,0.15);
+  z-index: 10000;
+  padding: 15px 20px;
   width: 100%;
 }
 
-/* Cabeçalho das ferramentas */
+.session-tools {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
 .tools-header {
   display: flex;
   justify-content: space-between;
@@ -340,45 +340,34 @@
 }
 
 .tools-header h3 {
-  font-size: 1.2rem;
+  font-size: 18px;
   font-weight: 600;
   color: #333;
   margin: 0;
 }
 
-/* Botão de alternância de ferramentas */
 .toggle-tools-button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 0.9rem;
-  color: #555;
-  padding: 5px 10px;
+  background-color: #f8f8f8;
+  border: 1px solid #ddd;
+  padding: 5px 12px;
   border-radius: 4px;
-  transition: all 0.2s ease;
+  cursor: pointer;
+  font-size: 14px;
+  color: #555;
+  transition: all 0.2s;
 }
 
 .toggle-tools-button:hover {
-  background-color: #f5f5f5;
+  background-color: #eee;
 }
 
-/* Grid de ferramentas - garantir visibilidade */
 .tools-grid {
   display: flex !important;
   flex-wrap: wrap;
   gap: 16px;
-  overflow-x: auto;
   padding-bottom: 8px;
-  width: 100%;
 }
 
-.tools-grid.visible {
-  display: flex !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-}
-
-/* Cards de ferramentas */
 .tool-card {
   display: flex !important;
   flex-direction: column;
@@ -393,35 +382,32 @@
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: center;
-  margin-bottom: 10px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-  visibility: visible !important;
-  opacity: 1 !important;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.1);
 }
 
 .tool-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 15px rgba(0,0,0,0.15);
   border-color: #2ecc71;
 }
 
 .tool-card.active {
   background-color: #e8f5e9;
   border-color: #2ecc71;
-  box-shadow: 0 6px 12px rgba(46, 204, 113, 0.15);
+  box-shadow: 0 6px 12px rgba(46, 204, 113, 0.2);
 }
 
 .tool-icon {
-  font-size: 2.5rem;
-  margin-bottom: 10px;
-  display: block !important;
+  font-size: 36px;
+  margin-bottom: 12px;
+  display: block;
 }
 
 .tool-name {
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: 14px;
   color: #333;
-  display: block !important;
+  display: block;
 }
 
 /* Mensagens de erro */

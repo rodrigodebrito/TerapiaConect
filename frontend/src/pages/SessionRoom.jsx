@@ -17,8 +17,6 @@ const SessionRoom = () => {
   const [error, setError] = useState(null);
   const [activeTool, setActiveTool] = useState(null);
   const [meetingView, setMeetingView] = useState('embedded'); // 'embedded', 'external', 'hidden'
-  const [toolsVisible, setToolsVisible] = useState(true);
-  const [videoMinimized, setVideoMinimized] = useState(false);
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -38,15 +36,6 @@ const SessionRoom = () => {
       fetchSession();
     }
   }, [sessionId]);
-
-  useEffect(() => {
-    // Quando uma ferramenta é ativada, minimizar o vídeo
-    if (activeTool) {
-      setVideoMinimized(true);
-    } else {
-      setVideoMinimized(false);
-    }
-  }, [activeTool]);
 
   const handleEndSession = async () => {
     if (!window.confirm('Tem certeza que deseja encerrar esta sessão?')) {
@@ -68,20 +57,13 @@ const SessionRoom = () => {
     setMeetingView('external');
   };
 
-  const switchTool = (toolName) => {
-    console.log("Ferramenta selecionada:", toolName);
-    
+  const handleSelectTool = (toolName) => {
+    console.log(`Selecionando ferramenta: ${toolName}`);
     if (activeTool === toolName) {
       setActiveTool(null);
-      setVideoMinimized(false);
     } else {
       setActiveTool(toolName);
-      setVideoMinimized(true);
     }
-  };
-
-  const toggleTools = () => {
-    setToolsVisible(!toolsVisible);
   };
 
   if (loading) {
@@ -232,36 +214,29 @@ const SessionRoom = () => {
             </div>
           </div>
         )}
+      </div>
 
-        {/* Seção de ferramentas simplificada e forçada a aparecer */}
-        <div className="session-tools-container">
-          <div className="session-tools">
-            <div className="tools-header">
-              <h3>Ferramentas</h3>
-              <button 
-                onClick={toggleTools}
-                className="toggle-tools-button"
-              >
-                {toolsVisible ? 'Ocultar' : 'Mostrar'} Ferramentas
-              </button>
+      {/* Barra de ferramentas simplificada e fixa */}
+      <div className="session-tools-container">
+        <div className="session-tools">
+          <div className="tools-header">
+            <h3>Ferramentas</h3>
+          </div>
+          <div className="tools-grid">
+            <div 
+              className={`tool-card ${activeTool === 'constellation' ? 'active' : ''}`}
+              onClick={() => handleSelectTool('constellation')}
+            >
+              <div className="tool-icon">☀️</div>
+              <div className="tool-name">Campo de Constelação</div>
             </div>
             
-            <div className="tools-grid visible">
-              <div 
-                className={`tool-card ${activeTool === 'constellation' ? 'active' : ''}`}
-                onClick={() => switchTool('constellation')}
-              >
-                <div className="tool-icon">☀️</div>
-                <div className="tool-name">Campo de Constelação</div>
-              </div>
-              
-              <div 
-                className={`tool-card ${activeTool === 'ai' ? 'active' : ''}`}
-                onClick={() => switchTool('ai')}
-              >
-                <div className="tool-icon">🤖</div>
-                <div className="tool-name">Assistente IA</div>
-              </div>
+            <div 
+              className={`tool-card ${activeTool === 'ai' ? 'active' : ''}`}
+              onClick={() => handleSelectTool('ai')}
+            >
+              <div className="tool-icon">🤖</div>
+              <div className="tool-name">Assistente IA</div>
             </div>
           </div>
         </div>
