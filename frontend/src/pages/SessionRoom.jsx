@@ -8,6 +8,14 @@ import Loader from '../components/Loader';
 import Button from '../components/Button';
 import '../styles/SessionRoom.css';
 
+// Verificar se o componente de campo de constelação existente está disponível
+let ConstellationField;
+try {
+  ConstellationField = require('../components/ConstellationField'); // Mantém a referência ao componente original, se existir
+} catch (error) {
+  ConstellationField = null;
+}
+
 const SessionRoom = () => {
   const { sessionId } = useParams();
   const navigate = useNavigate();
@@ -135,17 +143,21 @@ const SessionRoom = () => {
                 <button className="close-tool" onClick={() => setActiveTool(null)}>&times;</button>
               </div>
               <div className="tool-content">
-                <div className="constellation-placeholder">
-                  <div>
-                    <p style={{textAlign: 'center', margin: '0 0 20px 0'}}>
-                      <span style={{fontSize: '48px', display: 'block', marginBottom: '20px'}}>☀️</span>
-                      <strong style={{fontSize: '18px'}}>Visualização do Campo de Constelação</strong>
-                    </p>
-                    <p>
-                      Arraste os elementos para posicionar no campo
-                    </p>
-                  </div>
-                </div>
+                {/* Renderizar o componente do campo de constelação */}
+                {ConstellationField ? (
+                  <ConstellationField.default />
+                ) : (
+                  <iframe 
+                    src="/constelacao" 
+                    title="Campo de Constelação"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      border: 'none',
+                      minHeight: '500px',
+                    }}
+                  />
+                )}
               </div>
             </div>
           )}
