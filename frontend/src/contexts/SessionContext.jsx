@@ -9,7 +9,20 @@ const SessionContext = createContext();
 export const useSession = () => {
   const context = useContext(SessionContext);
   if (!context) {
-    throw new Error('useSession deve ser usado dentro de um SessionProvider');
+    // Em vez de lançar um erro, retornar valores padrão
+    return {
+      session: null,
+      loading: false,
+      error: null,
+      status: 'disconnected',
+      participants: [],
+      endSession: async () => false,
+      pauseSession: async () => false,
+      resumeSession: async () => false,
+      isTherapist: false,
+      isClient: false,
+      sendMessage: () => false
+    };
   }
   return context;
 };

@@ -9,7 +9,19 @@ const AIContext = createContext();
 export const useAI = () => {
   const context = useContext(AIContext);
   if (!context) {
-    throw new Error('useAI deve ser usado dentro de um AIProvider');
+    // Em vez de lançar um erro, retornar valores padrão
+    return {
+      aiInsights: null,
+      transcript: [],
+      isProcessing: false,
+      isListening: false,
+      error: null,
+      generateInsight: () => {},
+      startListening: () => {},
+      stopListening: () => {},
+      getSessionSummary: async () => null,
+      processNotes: async () => null
+    };
   }
   return context;
 };
