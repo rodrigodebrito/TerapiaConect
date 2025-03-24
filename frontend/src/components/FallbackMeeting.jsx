@@ -158,13 +158,17 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
               </div>
             </div>
           ) : (
-            <iframe 
-              src={meetingUrl} 
-              allow="camera; microphone; fullscreen; display-capture; autoplay"
-              className="fallback-iframe"
-              title="Video Conference"
-              onError={handleIframeError}
-            ></iframe>
+            <div className="video-container-wrapper">
+              <iframe 
+                src={meetingUrl} 
+                allow="camera; microphone; fullscreen; display-capture; autoplay; clipboard-write; clipboard-read"
+                allowFullScreen
+                className="fallback-iframe"
+                title="Video Conference"
+                onError={handleIframeError}
+                style={{width: '100%', height: '100%', border: 'none', minHeight: '500px'}}
+              ></iframe>
+            </div>
           )}
           
           <div className="fallback-footer">
