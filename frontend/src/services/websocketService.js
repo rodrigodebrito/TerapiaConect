@@ -20,7 +20,7 @@ class WebSocketService {
   connect(sessionId, token) {
     return new Promise((resolve, reject) => {
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = process.env.REACT_APP_WS_URL || `${wsProtocol}//${window.location.hostname}:3000`;
+      const wsUrl = import.meta.env.VITE_WS_URL || `${wsProtocol}//${window.location.hostname}:3000`;
       
       this.socket = new WebSocket(`${wsUrl}/ws/session/${sessionId}?token=${token}`);
 
