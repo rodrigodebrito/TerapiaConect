@@ -21,6 +21,7 @@ import ClientAppointments from './pages/ClientAppointments';
 import Appointments from './pages/Appointments';
 import ClientProfile from './pages/ClientProfile';
 import TherapistAvailabilitySimple from './pages/TherapistAvailabilitySimple';
+import SessionRoom from './pages/SessionRoom/index';
 import './App.css';
 
 // Importar o componente de Constelação
@@ -147,6 +148,12 @@ function App() {
             isHost={true}
             sessionId="teste-123"
           />} />
+          
+          {/* Rota da Sessão */}
+          <Route 
+            path="/session/:sessionId" 
+            element={<ProtectedRoute element={<SessionRoom />} allowedRoles={['CLIENT', 'THERAPIST']} />} 
+          />
           
           {/* Página 404 */}
           <Route path="*" element={<NotFound />} />
