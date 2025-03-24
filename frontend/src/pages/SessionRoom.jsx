@@ -233,25 +233,20 @@ const SessionRoom = () => {
           </div>
         )}
 
-        <div className="session-tools" id="tools-section">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <h3>Ferramentas</h3>
-            <button 
-              onClick={toggleTools} 
-              style={{ 
-                background: 'none', 
-                border: 'none', 
-                cursor: 'pointer', 
-                fontSize: '0.9rem', 
-                color: '#555' 
-              }}
-            >
-              {toolsVisible ? 'Ocultar' : 'Mostrar'} Ferramentas
-            </button>
-          </div>
-          
-          {toolsVisible && (
-            <div className="tools-grid">
+        {/* Seção de ferramentas simplificada e forçada a aparecer */}
+        <div className="session-tools-container">
+          <div className="session-tools">
+            <div className="tools-header">
+              <h3>Ferramentas</h3>
+              <button 
+                onClick={toggleTools}
+                className="toggle-tools-button"
+              >
+                {toolsVisible ? 'Ocultar' : 'Mostrar'} Ferramentas
+              </button>
+            </div>
+            
+            <div className="tools-grid visible">
               <div 
                 className={`tool-card ${activeTool === 'constellation' ? 'active' : ''}`}
                 onClick={() => switchTool('constellation')}
@@ -268,7 +263,7 @@ const SessionRoom = () => {
                 <div className="tool-name">Assistente IA</div>
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
