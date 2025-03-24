@@ -3,10 +3,10 @@ import './FallbackMeeting.css';
 
 /**
  * Componente para videoconferência com opções alternativas
- * Fornece o Jitsi Meet como opção principal, com Google Meet e Whereby como alternativas
+ * Fornece o Jitsi Meet como opção principal
  */
 const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
-  const [meetingType, setMeetingType] = useState(null);
+  const [meetingType, setMeetingType] = useState('jitsi'); // Começa diretamente com Jitsi
   const [meetingUrl, setMeetingUrl] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -22,7 +22,7 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
       name: 'Jitsi Meet',
       logo: '📹',
       url: `https://meet.jit.si/${roomName}`,
-      description: 'Videoconferência gratuita e segura (Recomendado)',
+      description: 'Videoconferência gratuita e segura',
       recommended: true
     },
     {
@@ -37,36 +37,27 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
       type: 'whereby',
       name: 'Whereby',
       logo: '🟣',
-      url: 'https://whereby.com/user',
+      url: 'https://whereby.com/create-room',
       description: 'Crie uma sala e compartilhe o link',
       recommended: false
     }
   ];
 
-  // Automaticamente seleciona o Jitsi Meet quando o componente é montado
+  // Inicializar diretamente o Jitsi Meet quando o componente é montado
   useEffect(() => {
-    const jitsiOption = meetingOptions.find(option => option.type === 'jitsi');
-    if (jitsiOption) {
-      handleSelectMeeting(jitsiOption);
-    }
-  }, []);
-
-  // Lidar com o evento de carregamento do iframe
-  useEffect(() => {
-    if (meetingUrl) {
-      const timer = setTimeout(() => {
-        setLoading(false);
-      }, 2000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [meetingUrl]);
-
-  const handleSelectMeeting = (option) => {
-    setMeetingType(option.type);
-    setMeetingUrl(option.url);
+    console.log("FallbackMeeting: Inicializando Jitsi Meet...");
+    const jitsiUrl = `https://meet.jit.si/${roomName}`;
+    setMeetingUrl(jitsiUrl);
     setLoading(true);
-  };
+    
+    // Tempo para o iframe carregar
+    const timer = setTimeout(() => {
+      console.log("FallbackMeeting: Jitsi Meet carregado");
+      setLoading(false);
+    }, 2000);
+    
+    return () => clearTimeout(timer);
+  }, [roomName]);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(meetingUrl);
@@ -74,10 +65,23 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
   };
 
   const handleSelectOption = (optionType) => {
+    console.log(`FallbackMeeting: Selecionando opção ${optionType}`);
     const selectedOption = meetingOptions.find(option => option.type === optionType);
     if (selectedOption) {
-      handleSelectMeeting(selectedOption);
+      setMeetingType(selectedOption.type);
+      setMeetingUrl(selectedOption.url);
+      setLoading(true);
+      
+      // Tempo para o novo iframe carregar
+      setTimeout(() => {
+        setLoading(false);
+      }, 2000);
     }
+  };
+
+  const showOptions = () => {
+    console.log("FallbackMeeting: Exibindo opções");
+    setMeetingType(null);
   };
 
   return (
@@ -86,7 +90,7 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
         <>
           <div className="fallback-header">
             <div>
-              {loading ? 'Iniciando videoconferência...' : `Videoconferência: ${therapistName} e ${clientName}`}
+              {loading ? 'Iniciando videoconferência...' : `Videoconferência: ${therapistName || 'Terapeuta'} e ${clientName || 'Cliente'}`}
             </div>
             <div className="header-actions">
               <button 
@@ -98,14 +102,14 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
               </button>
               <button 
                 className="change-option-button" 
-                onClick={() => setMeetingType(null)}
+                onClick={showOptions}
               >
                 Mudar Opção
               </button>
             </div>
           </div>
           {loading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1, padding: '40px' }}>
               <p>Carregando videoconferência... Por favor aguarde.</p>
             </div>
           ) : (
@@ -113,6 +117,7 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
               src={meetingUrl} 
               allow="camera; microphone; fullscreen; display-capture; autoplay"
               className="fallback-iframe"
+              title="Video Conference"
             ></iframe>
           )}
           <div className="fallback-footer">
