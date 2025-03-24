@@ -5,199 +5,131 @@ import './FallbackMeeting.css';
  * Componente para videoconferência com opções alternativas
  * Fornece o Jitsi Meet como opção principal
  */
-const FallbackMeeting = ({ sessionId, therapistName, clientName }) => {
-  const [meetingType, setMeetingType] = useState('jitsi'); // Começa diretamente com Jitsi
-  const [meetingUrl, setMeetingUrl] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [showIframe, setShowIframe] = useState(true);
+const FallbackMeeting = ({ sessionId, therapistName, clientName, isFloating = false }) => {
+  const [meetingOption, setMeetingOption] = useState(null);
+  const [showOptions, setShowOptions] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Gerar um nome de sala único baseado no ID da sessão
+  // Gerar um nome de sala consistente baseado no ID da sessão
   const roomName = sessionId 
     ? `terapiaconect-${sessionId.replace(/[^a-zA-Z0-9]/g, '')}`
-    : `terapiaconect-${Date.now()}`;
+    : `terapiaconect-${Math.random().toString(36).substring(2, 10)}`;
 
-  // Opções de plataformas para videoconferência
+  // Automatically select Jitsi Meet when component mounts
+  useEffect(() => {
+    setMeetingOption('jitsi');
+    setIsLoading(false);
+  }, []);
+
   const meetingOptions = [
     {
-      type: 'jitsi',
+      id: 'jitsi',
       name: 'Jitsi Meet',
-      logo: '📹',
+      icon: '🎥',
       url: `https://8x8.vc/${roomName}`,
-      description: 'Videoconferência gratuita e segura',
-      recommended: true
+      isRecommended: true
     },
     {
-      type: 'google',
+      id: 'googlemeet',
       name: 'Google Meet',
-      logo: '🔵',
-      url: 'https://meet.google.com/new',
-      description: 'Crie uma nova reunião no Google Meet',
-      recommended: false
+      icon: '👨‍💻',
+      url: `https://meet.google.com/new`,
+      isRecommended: false
     },
     {
-      type: 'whereby',
+      id: 'whereby',
       name: 'Whereby',
-      logo: '🟣',
-      url: 'https://whereby.com/create-room',
-      description: 'Crie uma sala e compartilhe o link',
-      recommended: false
+      icon: '🖥️',
+      url: `https://whereby.com/${roomName}`,
+      isRecommended: false
     }
   ];
 
-  // Inicializar diretamente o Jitsi Meet quando o componente é montado
-  useEffect(() => {
-    console.log("FallbackMeeting: Inicializando Jitsi Meet...");
-    const jitsiUrl = `https://8x8.vc/${roomName}`;
-    setMeetingUrl(jitsiUrl);
-    setLoading(true);
-    
-    // Tempo para o iframe carregar
-    const timer = setTimeout(() => {
-      console.log("FallbackMeeting: Jitsi Meet carregado");
-      setLoading(false);
-    }, 2000);
-    
-    return () => clearTimeout(timer);
-  }, [roomName]);
-
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(meetingUrl);
-    alert('Link copiado para a área de transferência!');
-  };
-
-  const handleOpenInNewTab = () => {
-    window.open(meetingUrl, '_blank');
-  };
-
-  const handleSelectOption = (optionType) => {
-    console.log(`FallbackMeeting: Selecionando opção ${optionType}`);
-    const selectedOption = meetingOptions.find(option => option.type === optionType);
-    if (selectedOption) {
-      setMeetingType(selectedOption.type);
-      setMeetingUrl(selectedOption.url);
-      setLoading(true);
-      setShowIframe(true);
-      
-      // Tempo para o novo iframe carregar
-      setTimeout(() => {
-        setLoading(false);
-      }, 2000);
+    const option = meetingOptions.find(opt => opt.id === meetingOption);
+    if (option) {
+      navigator.clipboard.writeText(option.url);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
     }
   };
 
-  const showOptions = () => {
-    console.log("FallbackMeeting: Exibindo opções");
-    setMeetingType(null);
+  const handleChangeOption = () => {
+    setShowOptions(true);
   };
 
-  const handleIframeError = () => {
-    console.log("FallbackMeeting: Erro ao carregar iframe");
-    setShowIframe(false);
-  };
+  if (isLoading) {
+    return (
+      <div className="fallback-loading">
+        <div className="loading-spinner"></div>
+        <p>Inicializando videoconferência...</p>
+      </div>
+    );
+  }
+
+  if (showOptions) {
+    return (
+      <div className="fallback-options-container">
+        <h3>Escolha uma opção de videoconferência:</h3>
+        <div className="fallback-options-grid">
+          {meetingOptions.map(option => (
+            <div 
+              key={option.id}
+              className={`fallback-option-card ${option.isRecommended ? 'recommended' : ''}`}
+              onClick={() => {
+                setMeetingOption(option.id);
+                setShowOptions(false);
+              }}
+            >
+              {option.isRecommended && <div className="recommended-badge">Recomendado</div>}
+              <div className="option-icon">{option.icon}</div>
+              <div className="option-name">{option.name}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const selectedOption = meetingOptions.find(opt => opt.id === meetingOption);
+
+  if (!selectedOption) return null;
+
+  // Nome da reunião para exibição
+  const meetingTitle = `${therapistName || 'Terapeuta'} e ${clientName || 'Cliente'}`;
 
   return (
-    <div className="fallback-meeting-container">
-      {meetingType ? (
-        <>
-          <div className="fallback-header">
-            <div>
-              {loading ? 'Iniciando videoconferência...' : `Videoconferência: ${therapistName || 'Terapeuta'} e ${clientName || 'Cliente'}`}
-            </div>
-            <div className="header-actions">
-              <button 
-                className="copy-link-button" 
-                onClick={handleCopyLink} 
-                title="Copiar link para compartilhar"
-              >
-                Copiar Link
-              </button>
-              <button 
-                className="open-new-tab-button" 
-                onClick={handleOpenInNewTab}
-                title="Abrir em nova janela"
-              >
-                Abrir em Nova Janela
-              </button>
-              <button 
-                className="change-option-button" 
-                onClick={showOptions}
-              >
-                Mudar Opção
-              </button>
-            </div>
+    <div className={`video-container ${isFloating ? 'floating' : ''}`}>
+      <div className={`video-container-wrapper ${isFloating ? 'floating' : ''}`}>
+        <iframe
+          src={selectedOption.url}
+          allow="camera; microphone; fullscreen; display-capture; autoplay"
+          allowFullScreen
+          className={`fallback-iframe ${isFloating ? 'floating' : ''}`}
+          title={`Videoconferência: ${meetingTitle}`}
+          onError={() => console.error("Erro ao carregar iframe")}
+        />
+      </div>
+      
+      {!isFloating && (
+        <div className="meeting-header">
+          <div className="meeting-title">
+            Videoconferência: {meetingTitle}
           </div>
-          
-          {loading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1, padding: '40px' }}>
-              <p>Carregando videoconferência... Por favor aguarde.</p>
-            </div>
-          ) : !showIframe ? (
-            <div className="iframe-error-container">
-              <h3>Não foi possível carregar a videoconferência no iframe</h3>
-              <p>Você pode tentar abrir a reunião em uma nova janela:</p>
-              <button 
-                onClick={handleOpenInNewTab}
-                className="open-new-tab-button-large"
-              >
-                Abrir Videoconferência em Nova Janela
-              </button>
-              <p>Ou copie o link e compartilhe com o outro participante:</p>
-              <div className="meeting-link-container">
-                <input 
-                  type="text" 
-                  value={meetingUrl} 
-                  readOnly 
-                  className="meeting-link-input"
-                />
-                <button 
-                  onClick={handleCopyLink}
-                  className="copy-link-button-small"
-                >
-                  Copiar
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="video-container-wrapper">
-              <iframe 
-                src={meetingUrl} 
-                allow="camera; microphone; fullscreen; display-capture; autoplay; clipboard-write; clipboard-read"
-                allowFullScreen
-                className="fallback-iframe"
-                title="Video Conference"
-                onError={handleIframeError}
-                style={{width: '100%', height: '100%', border: 'none', minHeight: '500px'}}
-              ></iframe>
-            </div>
-          )}
-          
-          <div className="fallback-footer">
-            <p>
-              Se houver problemas com a videoconferência, tente abrir em uma nova janela ou escolha outra opção.
-            </p>
-          </div>
-        </>
-      ) : (
-        <div className="fallback-options-container">
-          <h2>Escolha uma opção para sua videoconferência</h2>
-          <div className="fallback-options-grid">
-            {meetingOptions.map((option) => (
-              <div 
-                key={option.type} 
-                className={`fallback-option-card ${option.recommended ? 'recommended' : ''}`}
-                onClick={() => handleSelectOption(option.type)}
-              >
-                {option.recommended && <span className="recommended-badge">Recomendado</span>}
-                <div className="option-logo">{option.logo}</div>
-                <h4>{option.name}</h4>
-                <p>{option.description}</p>
-                <button className="select-option-button">Selecionar</button>
-              </div>
-            ))}
-          </div>
-          <div className="fallback-note">
-            <p>Nota: Ao escolher uma opção, você será redirecionado para uma sala de conferência segura. 
-            Os participantes precisarão permitir acesso à câmera e microfone.</p>
+          <div className="header-actions">
+            <button 
+              className="change-option-button" 
+              onClick={handleChangeOption}
+            >
+              Mudar Opção
+            </button>
+            <button 
+              className="change-option-button" 
+              onClick={handleCopyLink}
+            >
+              {isCopied ? '✓ Copiado!' : 'Copiar Link'}
+            </button>
           </div>
         </div>
       )}

@@ -250,4 +250,194 @@
 
 .copy-link-button-small:hover {
   background-color: #27ae60;
+}
+
+/* Container principal */
+.video-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.video-container.floating {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.video-container-wrapper {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  width: 100%;
+}
+
+.video-container-wrapper.floating {
+  width: 100%;
+  height: 100%;
+}
+
+/* Iframe principal */
+.fallback-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  min-height: 500px;
+  background-color: #000;
+}
+
+.fallback-iframe.floating {
+  min-height: 100%;
+  border-radius: 0;
+}
+
+/* Cabeçalho da reunião */
+.meeting-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background-color: #37b24d;
+  color: white;
+}
+
+.meeting-title {
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.change-option-button {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.change-option-button:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Opções de plataformas */
+.fallback-options-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background-color: #f8f9fa;
+}
+
+.fallback-options-container h3 {
+  margin: 0 0 24px 0;
+  color: #333;
+  font-size: 1.2rem;
+}
+
+.fallback-options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+  width: 100%;
+  max-width: 700px;
+}
+
+.fallback-option-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: white;
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+  padding: 32px 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.fallback-option-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+.fallback-option-card.recommended {
+  border: 2px solid #2ecc71;
+  box-shadow: 0 5px 15px rgba(46, 204, 113, 0.15);
+}
+
+.recommended-badge {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background-color: #2ecc71;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: bold;
+  padding: 5px 10px;
+  border-radius: 20px;
+  transform: rotate(15deg);
+}
+
+.option-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.option-name {
+  font-weight: 600;
+  font-size: 1rem;
+  color: #333;
+}
+
+/* Estado de carregamento */
+.fallback-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 30px;
+  background-color: #f8f9fa;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid #f3f3f3;
+  border-top: 5px solid #37b24d;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .fallback-options-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .meeting-header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
 } 

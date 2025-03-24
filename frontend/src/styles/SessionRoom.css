@@ -76,7 +76,7 @@
   flex: 1;
   overflow: hidden;
   position: relative;
-  min-height: 500px;
+  min-height: 600px;
   background-color: #f0f2f5;
 }
 
@@ -92,9 +92,7 @@
 
 /* Quando uma ferramenta está ativa */
 .session-workspace.with-tool {
-  display: flex;
-  flex-direction: row;
-  min-height: 600px;
+  background-color: #fff;
 }
 
 /* Container de vídeo */
@@ -106,6 +104,7 @@
   position: relative;
   overflow: hidden;
   min-height: 500px;
+  width: 50%;
 }
 
 .video-conference-container > * {
@@ -117,39 +116,25 @@
 /* Aviso para reunião em nova janela */
 .external-meeting-notice {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
   width: 100%;
-  background-color: #2c3e50;
-  color: white;
-  text-align: center;
-  padding: 20px;
+  background-color: #f9f9f9;
 }
 
 .notice-content {
   max-width: 500px;
-  background-color: rgba(0, 0, 0, 0.3);
-  padding: 30px;
-  border-radius: 10px;
-  backdrop-filter: blur(10px);
+  text-align: center;
+  padding: 40px;
+  background-color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.08);
 }
 
 .notice-icon {
   font-size: 3rem;
-  margin-bottom: 15px;
-}
-
-.notice-content h3 {
-  margin: 0 0 15px 0;
-  font-size: 1.3rem;
-}
-
-.notice-content p {
-  margin-bottom: 20px;
-  opacity: 0.9;
-  line-height: 1.5;
+  margin-bottom: 16px;
 }
 
 /* Painéis de ferramentas */
@@ -163,31 +148,36 @@
   background-color: white;
   border-left: 1px solid #e0e0e0;
   overflow: auto;
+  width: 50%;
+  box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+  position: relative;
+  z-index: 10;
 }
 
 .tool-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  align-items: center;
+  padding: 16px 24px;
   border-bottom: 1px solid #e0e0e0;
-  background-color: #f8f9fa;
+  background-color: #fff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 .tool-header h2 {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
-  color: #333;
 }
 
+/* Botão de fechar na ferramenta */
 .close-tool {
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: rgba(0, 0, 0, 0.15);
   color: #333;
   font-size: 1.5rem;
   border: none;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -198,35 +188,127 @@
 }
 
 .close-tool:hover {
-  background-color: rgba(0, 0, 0, 0.2);
+  background-color: rgba(0, 0, 0, 0.3);
   transform: scale(1.1);
+  color: #fff;
 }
 
+/* Conteúdo da ferramenta */
 .tool-content {
   flex: 1;
-  padding: 16px;
-  overflow-y: auto;
-  min-height: 500px;
+  padding: 20px;
+  overflow: auto;
 }
 
-/* Placeholders para as ferramentas */
-.constellation-placeholder,
+/* Ferramenta em tela cheia */
+.tool-fullscreen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #fff;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow: auto;
+}
+
+/* Container de vídeo em tela cheia */
+.video-conference-container.full {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-color: #2c3e50;
+}
+
+/* Video flutuante quando uma ferramenta está ativa */
+.floating-video-container {
+  position: fixed;
+  bottom: 70px;
+  right: 20px;
+  width: 300px;
+  height: 225px;
+  background-color: #000;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+}
+
+.floating-video-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background-color: rgba(0,0,0,0.7);
+  color: #fff;
+}
+
+.floating-video-header span {
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.maximize-video {
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+}
+
+.floating-video-content {
+  flex: 1;
+  overflow: hidden;
+}
+
+.floating-video-content > * {
+  width: 100%;
+  height: 100%;
+}
+
+/* Estilos específicos para a ferramenta Campo de Constelação */
+.constellation-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 450px;
+  background-color: #fafafa;
+  border: 2px dashed #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  flex: 1;
+}
+
+.constellation-placeholder p {
+  color: #666;
+  line-height: 1.6;
+  margin: 0 0 10px 0;
+}
+
+/* Estilos para o assistente IA */
 .ai-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
-  background-color: #f9f9f9;
+  min-height: 450px;
+  background-color: #fafafa;
   border: 2px dashed #ddd;
   border-radius: 8px;
-  color: #666;
-  text-align: center;
   padding: 20px;
-}
-
-.constellation-placeholder p,
-.ai-placeholder p {
-  line-height: 1.6;
+  text-align: center;
+  flex: 1;
 }
 
 /* Barra de ferramentas na parte inferior */
@@ -356,9 +438,14 @@
     width: 100px;
     height: 100px;
   }
+  
+  .floating-video-container {
+    width: 240px;
+    height: 180px;
+  }
 }
 
-@media (max-width: 576px) {
+@media (max-width: 768px) {
   .session-header {
     padding: 12px;
   }
@@ -390,12 +477,21 @@
   .session-workspace.with-tool {
     grid-template-rows: 40% 60%;
   }
+  
+  .floating-video-container {
+    width: 180px;
+    height: 135px;
+    bottom: 16px;
+    right: 16px;
+  }
 }
 
 /* Estilos específicos para a ferramenta Campo de Constelação */
 .constellation-tool {
   z-index: 50;
   background-color: #fff;
+  display: flex;
+  flex-direction: column;
 }
 
 .constellation-placeholder {
@@ -409,6 +505,7 @@
   border-radius: 8px;
   padding: 20px;
   text-align: center;
+  flex: 1;
 }
 
 .constellation-placeholder p {
@@ -417,8 +514,30 @@
   margin: 0 0 10px 0;
 }
 
-/* Botão de fechar mais visível */
+/* Estilos para o assistente IA */
+.ai-tool {
+  z-index: 50;
+  background-color: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 450px;
+  background-color: #fafafa;
+  border: 2px dashed #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  flex: 1;
+}
+
 .close-tool:hover {
-  background-color: rgba(0, 0, 0, 0.2);
+  background-color: rgba(0, 0, 0, 0.3);
   transform: scale(1.1);
+  color: #fff;
 } 
