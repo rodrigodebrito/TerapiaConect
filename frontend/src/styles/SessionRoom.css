@@ -76,9 +76,9 @@
   flex: 1;
   overflow: hidden;
   position: relative;
-  min-height: 600px;
+  min-height: 500px;
   background-color: #f0f2f5;
-  padding-bottom: 170px; /* Espaço para as ferramentas fixas */
+  padding-bottom: 70px;
 }
 
 /* Área de trabalho principal */
@@ -88,12 +88,14 @@
   position: relative;
   overflow: hidden;
   transition: all 0.3s ease;
-  min-height: 500px;
+  min-height: 600px;
 }
 
 /* Quando uma ferramenta está ativa */
 .session-workspace.with-tool {
-  background-color: #fff;
+  display: flex;
+  flex-direction: row;
+  background-color: #f8f9fa;
 }
 
 /* Container de vídeo */
@@ -140,81 +142,128 @@
 
 /* Painéis de ferramentas */
 .tool-panel {
-  flex: 1;
-  min-width: 400px;
-  max-width: 50%;
+  width: 55%;
   height: 100%;
+  background-color: white;
+  border-radius: 8px;
+  margin: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  background-color: white;
-  border-left: 1px solid #e0e0e0;
-  overflow: auto;
-  width: 50%;
-  box-shadow: -2px 0 10px rgba(0,0,0,0.1);
-  position: relative;
-  z-index: 10;
+  transition: all 0.3s ease;
 }
 
-.tool-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 24px;
-  border-bottom: 1px solid #e0e0e0;
-  background-color: #fff;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
-
-.tool-header h2 {
+/* Modo tela cheia para ferramentas */
+.tool-panel.fullscreen {
+  width: 100%;
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-}
-
-/* Botão de fechar na ferramenta */
-.close-tool {
-  background-color: rgba(0, 0, 0, 0.15);
-  color: #333;
-  font-size: 1.5rem;
-  border: none;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
-  z-index: 100;
-}
-
-.close-tool:hover {
-  background-color: rgba(0, 0, 0, 0.3);
-  transform: scale(1.1);
-  color: #fff;
-}
-
-/* Conteúdo da ferramenta */
-.tool-content {
-  flex: 1;
-  padding: 20px;
-  overflow: auto;
-}
-
-/* Ferramenta em tela cheia */
-.tool-fullscreen {
+  border-radius: 0;
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #fff;
-  z-index: 50;
+  z-index: 100;
+}
+
+/* Quando a workspace está em modo tela cheia */
+.session-workspace.fullscreen-tool {
+  padding: 0;
+}
+
+/* Cabeçalho da ferramenta */
+.tool-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.tool-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.tool-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Botão de alternar tela cheia */
+.fullscreen-toggle {
+  background-color: transparent;
+  border: none;
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.fullscreen-toggle:hover {
+  background-color: rgba(0,0,0,0.05);
+}
+
+/* Botão de fechar */
+.close-tool {
+  background-color: rgba(0, 0, 0, 0.05);
+  color: #333;
+  font-size: 1.5rem;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.close-tool:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Conteúdo da ferramenta */
+.tool-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Container de vídeo compacto quando uma ferramenta está ativa */
+.compact-video-container {
+  width: 45%;
+  height: 100%;
+  background-color: #2c3e50;
+  border-radius: 8px;
+  margin: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  width: 100%;
-  overflow: auto;
+}
+
+.compact-video-header {
+  background-color: rgba(0,0,0,0.7);
+  color: white;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.compact-video-content {
+  flex: 1;
+  overflow: hidden;
 }
 
 /* Container de vídeo em tela cheia */
@@ -225,181 +274,105 @@
   background-color: #2c3e50;
 }
 
-/* Video flutuante quando uma ferramenta está ativa */
-.floating-video-container {
-  position: fixed;
-  bottom: 70px;
-  right: 20px;
-  width: 300px;
-  height: 225px;
-  background-color: #000;
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
+/* Animação suave para transições */
+.tool-panel, .compact-video-container {
+  animation: fadeIn 0.3s ease;
 }
 
-.floating-video-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 10px;
-  background-color: rgba(0,0,0,0.7);
-  color: #fff;
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.floating-video-header span {
-  font-size: 0.8rem;
-  font-weight: 500;
-}
-
-.maximize-video {
-  background: none;
-  border: none;
-  color: #fff;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px;
-}
-
-.floating-video-content {
-  flex: 1;
-  overflow: hidden;
-}
-
-.floating-video-content > * {
-  width: 100%;
-  height: 100%;
-}
-
-/* Estilos específicos para a ferramenta Campo de Constelação */
-.constellation-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  min-height: 450px;
-  background-color: #fafafa;
-  border: 2px dashed #ddd;
-  border-radius: 8px;
-  padding: 20px;
-  text-align: center;
-  flex: 1;
-}
-
-.constellation-placeholder p {
-  color: #666;
-  line-height: 1.6;
-  margin: 0 0 10px 0;
-}
-
-/* Estilos para o assistente IA */
-.ai-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  min-height: 450px;
-  background-color: #fafafa;
-  border: 2px dashed #ddd;
-  border-radius: 8px;
-  padding: 20px;
-  text-align: center;
-  flex: 1;
-}
-
-/* Container da área de ferramentas */
+/* Barra de ferramentas na parte inferior - design compacto e moderno */
 .session-tools-container {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background-color: #ffffff;
-  border-top: 3px solid #2ecc71;
-  box-shadow: 0 -5px 20px rgba(0,0,0,0.15);
+  position: absolute;
+  top: 10px;
+  right: 10px;
   z-index: 10000;
-  padding: 15px 20px;
-  width: 100%;
+  width: auto;
 }
 
 .session-tools {
-  width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.tools-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-}
-
-.tools-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-  margin: 0;
-}
-
-.toggle-tools-button {
-  background-color: #f8f8f8;
-  border: 1px solid #ddd;
-  padding: 5px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  color: #555;
-  transition: all 0.2s;
-}
-
-.toggle-tools-button:hover {
-  background-color: #eee;
+  position: relative;
 }
 
 .tools-grid {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+  padding: 10px;
+  margin-top: 5px;
+  flex-direction: column !important;
+  min-width: 200px;
+}
+
+.tools-grid.show {
   display: flex !important;
-  flex-wrap: wrap;
-  gap: 16px;
-  padding-bottom: 8px;
 }
 
 .tool-card {
   display: flex !important;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  width: 120px;
-  height: 120px;
+  justify-content: flex-start;
+  width: 100%;
+  height: 40px;
   background-color: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 12px;
-  padding: 16px;
+  border: none;
+  border-radius: 5px;
+  padding: 8px 12px;
   cursor: pointer;
   transition: all 0.2s ease;
-  text-align: center;
-  box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+  text-align: left;
+  margin-bottom: 5px;
 }
 
 .tool-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 15px rgba(0,0,0,0.15);
-  border-color: #2ecc71;
+  background-color: #f0f0f0;
+  transform: none;
+  box-shadow: none;
 }
 
 .tool-card.active {
   background-color: #e8f5e9;
-  border-color: #2ecc71;
-  box-shadow: 0 6px 12px rgba(46, 204, 113, 0.2);
+  color: #2ecc71;
+}
+
+.tools-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background-color: white;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+  border: none;
+  font-size: 20px;
+  color: #333;
+  transition: all 0.2s ease;
+}
+
+.tools-toggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+  background-color: #f8f8f8;
+}
+
+.tools-toggle.active {
+  background-color: #2ecc71;
+  color: white;
 }
 
 .tool-icon {
-  font-size: 36px;
-  margin-bottom: 12px;
+  font-size: 18px;
+  margin: 0 8px 0 0;
   display: block;
 }
 
@@ -408,6 +381,21 @@
   font-size: 14px;
   color: #333;
   display: block;
+  white-space: nowrap;
+}
+
+/* Estilos específicos para placeholders */
+.ai-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background-color: #fafafa;
+  border: 2px dashed #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  color: #666;
 }
 
 /* Mensagens de erro */
@@ -455,23 +443,13 @@
     flex-direction: column;
   }
   
-  .tool-panel, 
-  .video-conference-container {
-    width: 100%;
-    max-width: 100%;
-    min-width: 100%;
-    height: 500px;
-    min-height: 300px;
+  .tool-panel, .compact-video-container {
+    width: auto;
+    margin: 10px;
   }
   
-  .tool-card {
-    width: 100px;
-    height: 100px;
-  }
-  
-  .floating-video-container {
-    width: 240px;
-    height: 180px;
+  .compact-video-container {
+    height: 300px;
   }
 }
 
@@ -495,24 +473,16 @@
   }
   
   .tool-card {
-    width: 90px;
-    height: 90px;
-    padding: 12px;
+    width: 100px;
+    height: 100px;
   }
   
   .tool-icon {
-    font-size: 2rem;
+    font-size: 28px;
   }
   
   .session-workspace.with-tool {
     grid-template-rows: 40% 60%;
-  }
-  
-  .floating-video-container {
-    width: 180px;
-    height: 135px;
-    bottom: 16px;
-    right: 16px;
   }
 }
 

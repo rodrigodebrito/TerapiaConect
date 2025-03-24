@@ -25,6 +25,8 @@ const SessionRoom = () => {
   const [error, setError] = useState(null);
   const [activeTool, setActiveTool] = useState(null);
   const [meetingView, setMeetingView] = useState('embedded'); // 'embedded', 'external', 'hidden'
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showToolsMenu, setShowToolsMenu] = useState(false);
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -44,6 +46,21 @@ const SessionRoom = () => {
       fetchSession();
     }
   }, [sessionId]);
+
+  // Fecha o menu de ferramentas quando clicar fora dele
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      const toolsContainer = document.querySelector('.session-tools-container');
+      if (toolsContainer && !toolsContainer.contains(event.target)) {
+        setShowToolsMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const handleEndSession = async () => {
     if (!window.confirm('Tem certeza que deseja encerrar esta sessão?')) {
@@ -71,7 +88,17 @@ const SessionRoom = () => {
       setActiveTool(null);
     } else {
       setActiveTool(toolName);
+      setIsFullscreen(false); // Iniciar ferramentas em modo normal
     }
+    setShowToolsMenu(false); // Fechar o menu após selecionar uma ferramenta
+  };
+
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+  };
+
+  const toggleToolsMenu = () => {
+    setShowToolsMenu(!showToolsMenu);
   };
 
   if (loading) {
@@ -135,50 +162,7 @@ const SessionRoom = () => {
       </header>
 
       <div className="session-main">
-        <div className={`session-workspace ${activeTool ? 'with-tool' : ''}`}>
-          {activeTool === 'constellation' && (
-            <div className="tool-fullscreen constellation-tool">
-              <div className="tool-header">
-                <h2>Campo de Constelação</h2>
-                <button className="close-tool" onClick={() => setActiveTool(null)}>&times;</button>
-              </div>
-              <div className="tool-content">
-                {/* Renderizar o componente do campo de constelação */}
-                {ConstellationField ? (
-                  <ConstellationField.default />
-                ) : (
-                  <iframe 
-                    src="/constelacao" 
-                    title="Campo de Constelação"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      border: 'none',
-                      minHeight: '500px',
-                    }}
-                  />
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTool === 'ai' && (
-            <div className="tool-fullscreen ai-tool">
-              <div className="tool-header">
-                <h2>Assistente IA</h2>
-                <button className="close-tool" onClick={() => setActiveTool(null)}>&times;</button>
-              </div>
-              <div className="tool-content">
-                <div className="ai-placeholder">
-                  <p>
-                    Interface do Assistente de IA<br />
-                    Faça perguntas e receba insights para a terapia
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
+        <div className={`session-workspace ${activeTool ? 'with-tool' : ''} ${isFullscreen ? 'fullscreen-tool' : ''}`}>
           {!activeTool && meetingView === 'embedded' && (
             <div className="video-conference-container full">
               <FallbackMeeting
@@ -204,51 +188,119 @@ const SessionRoom = () => {
               </div>
             </div>
           )}
+
+          {activeTool === 'constellation' && (
+            <div className={`tool-panel constellation-tool ${isFullscreen ? 'fullscreen' : ''}`}>
+              <div className="tool-header">
+                <h2>Campo de Constelação</h2>
+                <div className="tool-header-actions">
+                  <button 
+                    className="fullscreen-toggle" 
+                    onClick={toggleFullscreen} 
+                    title={isFullscreen ? "Minimizar" : "Maximizar"}
+                  >
+                    {isFullscreen ? (
+                      <span>🗕</span>
+                    ) : (
+                      <span>🗖</span>
+                    )}
+                  </button>
+                  <button className="close-tool" onClick={() => setActiveTool(null)} title="Fechar">&times;</button>
+                </div>
+              </div>
+              <div className="tool-content">
+                {/* Renderizar o componente do campo de constelação */}
+                {ConstellationField ? (
+                  <ConstellationField.default />
+                ) : (
+                  <iframe 
+                    src="/teste-constelacao" 
+                    title="Campo de Constelação"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      border: 'none',
+                      overflow: 'hidden',
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTool === 'ai' && (
+            <div className={`tool-panel ai-tool ${isFullscreen ? 'fullscreen' : ''}`}>
+              <div className="tool-header">
+                <h2>Assistente IA</h2>
+                <div className="tool-header-actions">
+                  <button 
+                    className="fullscreen-toggle" 
+                    onClick={toggleFullscreen} 
+                    title={isFullscreen ? "Minimizar" : "Maximizar"}
+                  >
+                    {isFullscreen ? (
+                      <span>🗕</span>
+                    ) : (
+                      <span>🗖</span>
+                    )}
+                  </button>
+                  <button className="close-tool" onClick={() => setActiveTool(null)} title="Fechar">&times;</button>
+                </div>
+              </div>
+              <div className="tool-content">
+                <div className="ai-placeholder">
+                  <p>
+                    Interface do Assistente de IA<br />
+                    Faça perguntas e receba insights para a terapia
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTool && meetingView === 'embedded' && !isFullscreen && (
+            <div className="compact-video-container">
+              <div className="compact-video-header">
+                <span>Videochamada</span>
+              </div>
+              <div className="compact-video-content">
+                <FallbackMeeting
+                  sessionId={sessionId}
+                  therapistName={session.therapist?.user?.name}
+                  clientName={session.client?.user?.name}
+                  isFloating={true}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
-        {activeTool && meetingView === 'embedded' && (
-          <div className="floating-video-container">
-            <div className="floating-video-header">
-              <span>Videochamada</span>
-              <button className="maximize-video" onClick={() => setActiveTool(null)}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                  <path d="M5.828 10.172a.5.5 0 0 0-.707 0l-4.096 4.096V11.5a.5.5 0 0 0-1 0v3.975a.5.5 0 0 0 .5.5H4.5a.5.5 0 0 0 0-1H1.732l4.096-4.096a.5.5 0 0 0 0-.707zm4.344-4.344a.5.5 0 0 0 .707 0l4.096-4.096V4.5a.5.5 0 1 0 1 0V.525a.5.5 0 0 0-.5-.5H11.5a.5.5 0 0 0 0 1h2.768l-4.096 4.096a.5.5 0 0 0 0 .707z"/>
-                </svg>
-              </button>
-            </div>
-            <div className="floating-video-content">
-              <FallbackMeeting
-                sessionId={sessionId}
-                therapistName={session.therapist?.user?.name}
-                clientName={session.client?.user?.name}
-                isFloating={true}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Barra de ferramentas simplificada e fixa */}
-      <div className="session-tools-container">
-        <div className="session-tools">
-          <div className="tools-header">
-            <h3>Ferramentas</h3>
-          </div>
-          <div className="tools-grid">
-            <div 
-              className={`tool-card ${activeTool === 'constellation' ? 'active' : ''}`}
-              onClick={() => handleSelectTool('constellation')}
-            >
-              <div className="tool-icon">☀️</div>
-              <div className="tool-name">Campo de Constelação</div>
-            </div>
-            
-            <div 
-              className={`tool-card ${activeTool === 'ai' ? 'active' : ''}`}
-              onClick={() => handleSelectTool('ai')}
-            >
-              <div className="tool-icon">🤖</div>
-              <div className="tool-name">Assistente IA</div>
+        {/* Menu dropdown de ferramentas */}
+        <div className="session-tools-container">
+          <button 
+            className={`tools-toggle ${showToolsMenu ? 'active' : ''}`} 
+            onClick={toggleToolsMenu}
+            title="Ferramentas"
+          >
+            🛠️
+          </button>
+          <div className="session-tools">
+            <div className={`tools-grid ${showToolsMenu ? 'show' : ''}`}>
+              <div 
+                className={`tool-card ${activeTool === 'constellation' ? 'active' : ''}`}
+                onClick={() => handleSelectTool('constellation')}
+              >
+                <div className="tool-icon">☀️</div>
+                <div className="tool-name">Campo de Constelação</div>
+              </div>
+              
+              <div 
+                className={`tool-card ${activeTool === 'ai' ? 'active' : ''}`}
+                onClick={() => handleSelectTool('ai')}
+              >
+                <div className="tool-icon">🤖</div>
+                <div className="tool-name">Assistente IA</div>
+              </div>
             </div>
           </div>
         </div>
