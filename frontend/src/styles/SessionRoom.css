@@ -284,7 +284,7 @@
   to { opacity: 1; }
 }
 
-/* Barra de ferramentas na parte inferior - design compacto e moderno */
+/* Barra de ferramentas na parte superior - menu dropdown */
 .session-tools-container {
   position: absolute;
   top: 10px;
@@ -313,6 +313,7 @@
 
 .tools-grid.show {
   display: flex !important;
+  animation: fadeIn 0.2s ease;
 }
 
 .tool-card {
