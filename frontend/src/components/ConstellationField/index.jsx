@@ -69,16 +69,16 @@ useGLTF.preload(REPRESENTATIVE_TYPES.SUBJETIVO_LONGO.modelPath);
 useGLTF.preload(REPRESENTATIVE_TYPES.SUBJETIVO_CURTO.modelPath);
 
 // Componente para o campo de constelação
-const ConstellationField = ({ isHost = true, sessionId = null }) => {
+const ConstellationField = ({ isHost = true, sessionId = null, fieldTexture = "/white-circle.png" }) => {
   return (
     <ConstellationProvider isHost={isHost} sessionId={sessionId}>
-      <ConstellationView />
+      <ConstellationView fieldTexture={fieldTexture} />
     </ConstellationProvider>
   );
 };
 
 // Componente de visualização que usa o ConstellationContext
-const ConstellationView = () => {
+const ConstellationView = ({ fieldTexture }) => {
   const { 
     representatives, 
     selectedRepresentative, 
@@ -106,7 +106,10 @@ const ConstellationView = () => {
     setEditName,
     setEditColor,
     REPRESENTATIVE_COLORS,
-    REPRESENTATIVE_TYPES
+    REPRESENTATIVE_TYPES,
+    handleRepresentativeClick,
+    setRepresentativePosition,
+    setDraggingState
   } = useContext(ConstellationContext);
 
   return (
@@ -335,31 +338,38 @@ const ConstellationView = () => {
       <div className="canvas-container" style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', padding: 0, margin: 0 }}>
         <Canvas 
           shadows 
-          camera={{ position: [0, 7.5, 7.5], fov: 55 }}
-          style={{ background: 'transparent', margin: 0, padding: 0, width: '100%', height: '100%' }}
+          camera={{ position: [0, 5, 8], fov: 45 }}
+          style={{ background: 'transparent' }}
         >
-          <color attach="background" args={['#1a1a2e']} />
-          <ambientLight intensity={1} />
+          <color attach="background" args={['#ffffff']} />
+          <fog attach="fog" args={['#ffffff', 10, 20]} />
+          <ambientLight intensity={0.8} />
           <directionalLight
-            position={[5, 10, 5]}
+            position={[3, 5, 3]}
             intensity={1}
-            castShadow={false}
+            castShadow
+            shadow-mapSize-width={1024}
+            shadow-mapSize-height={1024}
           />
-          <spotLight
-            position={[-5, 10, 5]}
-            intensity={0.8}
-            angle={0.5}
-            penumbra={0.5}
-            castShadow={false}
-          />
+          <pointLight position={[-3, 5, -3]} intensity={0.6} />
           <Field 
-            viewMode={hasControl ? "edit" : "readonly"}
+            fieldTexture={fieldTexture} 
+            representatives={representatives}
+            selectedRepresentative={selectedRepresentative}
+            onSelectionChange={handleRepresentativeClick}
+            onPositionChange={setRepresentativePosition}
+            onDragChange={setDraggingState}
+            canMove={hasControl}
           />
           <OrbitControls 
-            enabled={!selectedRepresentative}
+            makeDefault
+            enablePan={false}
             maxPolarAngle={Math.PI / 2.2}
+            minPolarAngle={Math.PI / 6}
+            enableRotate={!isDraggingAny}
+            maxDistance={12}
             minDistance={3}
-            maxDistance={18}
+            enabled={!isDraggingAny}  // Desabilita completamente durante arrasto
           />
         </Canvas>
         
@@ -466,15 +476,18 @@ const CompassRose = () => {
   );
 };
 
-const Field = ({ viewMode }) => {
+const Field = ({ fieldTexture, representatives, selectedRepresentative, handleRepresentativeSelect, handleContextMenu }) => {
   // Carregar a textura para o plano
   const circleTexture = useMemo(() => {
     const textureLoader = new THREE.TextureLoader();
-    return textureLoader.load('/white-circle.png');
-  }, []);
+    return textureLoader.load(fieldTexture || '/white-circle.png');
+  }, [fieldTexture]);
 
   // Acessar os estados e funções do componente pai
-  const { representatives, selectedRepresentative, handleRepresentativeSelect, handleContextMenu } = useContext(ConstellationContext);
+  const { handleRepresentativeSelect: contextHandleSelect, handleContextMenu: contextHandleContextMenu } = useContext(ConstellationContext);
+
+  const finalHandleSelect = handleRepresentativeSelect || contextHandleSelect;
+  const finalHandleContextMenu = handleContextMenu || contextHandleContextMenu;
 
   return (
     <group>
@@ -485,7 +498,7 @@ const Field = ({ viewMode }) => {
         receiveShadow
         onClick={(e) => {
           e.stopPropagation();
-          handleRepresentativeSelect(null);
+          finalHandleSelect(null);
         }}
       >
         <circleGeometry args={[7, 64]} />
@@ -509,9 +522,8 @@ const Field = ({ viewMode }) => {
           key={rep.id}
           representative={rep}
           selected={selectedRepresentative?.id === rep.id}
-          onSelect={handleRepresentativeSelect}
-          onContextMenu={handleContextMenu}
-          viewMode={viewMode}
+          onSelect={finalHandleSelect}
+          onContextMenu={finalHandleContextMenu}
         />
       ))}
     </group>
@@ -519,7 +531,7 @@ const Field = ({ viewMode }) => {
 };
 
 // Componente para um representante individual (modelo 3D)
-const Representative = ({ representative, selected, onSelect, onContextMenu, viewMode }) => {
+const Representative = ({ representative, selected, onSelect, onContextMenu }) => {
   const { id, name, position, color, type } = representative;
   const [localPosition, setLocalPosition] = useState([position[0], 0, position[2]]);
   const [rotation, setRotation] = useState(0);
@@ -674,7 +686,8 @@ const Representative = ({ representative, selected, onSelect, onContextMenu, vie
   
   // Manipulador de eventos para clique do mouse
   const handleMouseDown = useCallback((e) => {
-    if (viewMode === 'readonly') return;
+    // Remover a verificação do viewMode que está causando o erro
+    // if (viewMode === 'readonly') return;
     
     // Parar propagação para evitar que eventos de clique afetem outros objetos
     e.stopPropagation();
@@ -705,7 +718,7 @@ const Representative = ({ representative, selected, onSelect, onContextMenu, vie
     
     // Informar ao contexto que começamos a arrastar
     setDraggingState(true);
-  }, [localPosition, rotation, viewMode, representative, onSelect, screenToPlaneCoordinates, setDraggingState]);
+  }, [localPosition, rotation, representative, onSelect, screenToPlaneCoordinates, setDraggingState]);
   
   // Manipulador para liberar o mouse
   const handleMouseUp = useCallback(() => {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ConstellationProvider } from './contexts/ConstellationContext';
-import ConstellationField from './components/ConstellationField';
+import ConstellationField from './components/ConstellationField/index';
 
 const ConstellationDemo = () => {
   return (

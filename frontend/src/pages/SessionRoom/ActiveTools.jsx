@@ -1,7 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { ConstellationProvider } from '../../contexts/ConstellationContext';
-import ConstellationField from '../../components/ConstellationField';
+import ConstellationField from '../../components/ConstellationField/index';
 import { useAI } from '../../contexts/AIContext';
 
 const ActiveTools = ({ activeTool, isFieldActive }) => {
