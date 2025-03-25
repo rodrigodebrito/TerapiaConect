@@ -26,18 +26,21 @@
 
 /* Estilo de video flutuante */
 .fallback-meeting-container.floating {
-  width: 280px;
-  height: 210px;
   position: absolute;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-  border: 1px solid rgba(0,0,0,0.2);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+  border: 1px solid rgba(0,0,0,0.3);
   transition: box-shadow 0.2s;
+  background-color: #000;
+  min-width: 180px;
+  min-height: 135px;
+  max-width: 90vw;
+  max-height: 60vh;
 }
 
 .fallback-meeting-container.floating:hover {
-  box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.6);
 }
 
 /* Barra para arrastar o vídeo */
@@ -60,6 +63,25 @@
 
 .drag-handle:active {
   cursor: grabbing;
+}
+
+/* Alça para redimensionar o vídeo */
+.resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: #ddd;
+  cursor: nwse-resize;
+  z-index: 10;
+  user-select: none;
+  background-color: rgba(40, 40, 40, 0.8);
+  border-top-left-radius: 4px;
 }
 
 /* Container para o iframe do vídeo */
@@ -352,8 +374,8 @@
 /* Modo flutuante em telas pequenas */
 @media (max-width: 480px) {
   .fallback-meeting-container.floating {
-    width: 180px;
-    height: 135px;
+    min-width: 180px;
+    min-height: 135px;
   }
   
   .fallback-meeting-container.floating .meeting-controls {
@@ -365,5 +387,4 @@
     height: 30px;
     font-size: 14px;
   }
-}
 } 

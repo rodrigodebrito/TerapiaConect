@@ -5,14 +5,17 @@ import './FallbackMeeting.css';
  * Componente para videoconferência com opções alternativas
  * Design inspirado no Zoom para melhor usabilidade
  */
-const FallbackMeeting = ({ sessionId, therapistName, clientName, isFloating }) => {
+const FallbackMeeting = ({ sessionId, therapistName, clientName, isFloating, floatingSize = 'medium' }) => {
   const [meetingOption, setMeetingOption] = useState(null);
   const [showOptions, setShowOptions] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [position, setPosition] = useState({ x: 20, y: 20 });
   const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [customSize, setCustomSize] = useState({ width: 280, height: 210 });
+  const [resizeStart, setResizeStart] = useState({ width: 0, height: 0, x: 0, y: 0 });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [isVideoMuted, setIsVideoMuted] = useState(false);
@@ -23,6 +26,21 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName, isFloating }) =
   const roomName = sessionId 
     ? `terapiaconect-${sessionId.replace(/[^a-zA-Z0-9]/g, '')}`
     : `terapiaconect-${Math.random().toString(36).substring(2, 10)}`;
+
+  // Configurar tamanhos predefinidos
+  useEffect(() => {
+    if (isFloating) {
+      let newSize = { width: 280, height: 210 }; // medium (default)
+      
+      if (floatingSize === 'small') {
+        newSize = { width: 200, height: 150 };
+      } else if (floatingSize === 'large') {
+        newSize = { width: 360, height: 270 };
+      }
+      
+      setCustomSize(newSize);
+    }
+  }, [floatingSize, isFloating]);
 
   // Automatically select Jitsi Meet when component mounts
   useEffect(() => {
@@ -69,7 +87,7 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName, isFloating }) =
 
   // Funções para arrastar o componente quando estiver flutuante
   const handleMouseDown = (e) => {
-    if (!isFloating || e.target.closest('.meeting-controls')) return;
+    if (!isFloating || e.target.closest('.meeting-controls') || e.target.closest('.resize-handle')) return;
     
     setIsDragging(true);
     setDragStart({
@@ -81,18 +99,45 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName, isFloating }) =
   };
 
   const handleMouseMove = (e) => {
-    if (!isDragging) return;
-    
-    setPosition({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y
-    });
-    
-    e.preventDefault();
+    if (isDragging) {
+      setPosition({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y
+      });
+      e.preventDefault();
+    } else if (isResizing) {
+      // Calcular o novo tamanho com base no movimento do mouse
+      const newWidth = Math.max(180, resizeStart.width + (e.clientX - resizeStart.x));
+      const newHeight = Math.max(135, resizeStart.height + (e.clientY - resizeStart.y));
+      
+      setCustomSize({
+        width: newWidth,
+        height: newHeight
+      });
+      
+      e.preventDefault();
+    }
   };
 
   const handleMouseUp = () => {
     setIsDragging(false);
+    setIsResizing(false);
+  };
+
+  // Iniciar redimensionamento
+  const handleResizeStart = (e) => {
+    if (!isFloating) return;
+    
+    setIsResizing(true);
+    setResizeStart({
+      width: customSize.width,
+      height: customSize.height,
+      x: e.clientX,
+      y: e.clientY
+    });
+    
+    e.stopPropagation();
+    e.preventDefault();
   };
 
   // Toggle fullscreen mode
@@ -159,7 +204,7 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName, isFloating }) =
         document.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isFloating, isDragging, dragStart]);
+  }, [isFloating, isDragging, dragStart, isResizing, resizeStart]);
 
   // Funções para controlar áudio e vídeo (mostrar notificação)
   const toggleAudio = () => {
@@ -241,6 +286,8 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName, isFloating }) =
     position: 'absolute',
     top: `${position.y}px`,
     left: `${position.x}px`,
+    width: `${customSize.width}px`,
+    height: `${customSize.height}px`,
     zIndex: 1000,
     cursor: isDragging ? 'grabbing' : 'grab'
   } : {};
@@ -329,7 +376,16 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName, isFloating }) =
       </div>
 
       {isFloating && (
-        <div className="drag-handle" title="Arrastar">⋮⋮</div>
+        <>
+          <div className="drag-handle" title="Arrastar">⋮⋮</div>
+          <div 
+            className="resize-handle"
+            onMouseDown={handleResizeStart}
+            title="Redimensionar"
+          >
+            ⤡
+          </div>
+        </>
       )}
     </div>
   );

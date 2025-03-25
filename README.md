@@ -1,142 +1,165 @@
-# Plataforma Terapeuta
+# TerapiaConect
 
-Uma plataforma web completa para conectar terapeutas e clientes, permitindo o gerenciamento de perfis profissionais, agendamentos e sessões terapêuticas.
+Plataforma de terapia online que permite a conexão entre terapeutas e clientes para sessões online com ferramentas especializadas.
 
-## Funcionalidades Principais
+## Visão Geral
 
-### Para Terapeutas
-- Perfil profissional detalhado
-- Gerenciamento de disponibilidade
-- Ferramentas terapêuticas personalizáveis
+TerapiaConect é uma plataforma completa para realização de sessões de terapia online, permitindo:
+
+- Cadastro separado para terapeutas e clientes
 - Agendamento de sessões
-- Campo de Constelação Familiar interativo
-- Dashboard administrativo
+- Videoconferência integrada
+- Ferramentas terapêuticas especializadas (Campo de Constelação)
+- Gerenciamento de prontuários
+- Pagamentos integrados
 
-### Para Clientes
-- Busca avançada de terapeutas
-- Agendamento online
-- Sessões remotas
-- Participação em sessões de Constelação Familiar
-- Histórico de atendimentos
+## Tecnologias Utilizadas
+
+### Frontend
+- React.js
+- React Router
+- Axios
+- Context API
+- React Hook Form
+- CSS Modules
+
+### Backend
+- Node.js
+- Express
+- Sequelize ORM
+- MySQL
+- JWT para autenticação
+- Bcrypt para criptografia
+
+### Videoconferência
+- Jitsi Meet (implementação atual)
+- Alternativas consideradas: Daily.com
 
 ## Estrutura do Projeto
 
-O projeto está dividido em duas partes principais:
+O projeto é dividido em duas partes principais:
 
-### Backend (Porta 3000)
-- API RESTful desenvolvida com Node.js e Express
-- Banco de dados PostgreSQL com Prisma ORM
-- Autenticação JWT
-- Upload de arquivos
-- Websockets para comunicação em tempo real (Campo de Constelação)
+- `frontend/`: Aplicação React
+- `backend/`: API RESTful em Node.js
 
-### Frontend (Porta 3001)
-- Aplicação React com Vite
-- State management com React Context e hooks
-- UI responsiva e moderna
-- Componentes Three.js para visualização 3D
-- Integração com APIs de pagamento e videoconferência
+## Instalação
 
-## Destaques Técnicos
-
-### Campo de Constelação Familiar
-Uma ferramenta inovadora para terapeutas conduzirem sessões de constelação familiar de forma digital:
-
-- **Visualização 3D interativa** - Ambiente tridimensional para posicionamento de representantes
-- **Controle compartilhado** - Terapeuta pode transferir o controle ao cliente durante a sessão
-- **Personalização de representantes** - Cores e nomes customizáveis
-- **Rotação de elementos** - Pressione SHIFT enquanto arrasta para girar representantes em 360°
-- **Comunicação em tempo real** - Sincronização instantânea entre terapeuta e cliente
-
-### Sistema de Disponibilidade
-- Calendário interativo para terapeutas
-- Slots customizáveis por dia e horário
-- Suporte a disponibilidade recorrente e específica
-- Integração com sistema de agendamento
-
-### Ferramentas Terapêuticas
-- Catálogo de ferramentas predefinidas
-- Personalização de duração e preço por ferramenta
-- Integração com sistema de agendamento
-
-## Tecnologias
-
-- **Frontend**: React, Vite, Three.js, React Three Fiber, Socket.io-client
-- **Backend**: Node.js, Express, Prisma, PostgreSQL, Socket.io
-- **Autenticação**: JWT
-- **Arquivos**: Multer
-
-## Instalação e Configuração
-
-### Pré-requisitos
-- Node.js 18+
-- PostgreSQL 14+
+### Requisitos
+- Node.js 14+
+- MySQL 8+
 - NPM ou Yarn
 
-### Instalação do Backend
-```bash
+### Passos para instalação
+
+1. Clone o repositório:
+```
+git clone https://github.com/seu-usuario/terapiaconect.git
+cd terapiaconect
+```
+
+2. Instale as dependências do backend:
+```
 cd backend
 npm install
 ```
 
-Configure o arquivo `.env` com suas credenciais de banco de dados e JWT:
+3. Configure o banco de dados no arquivo `.env`:
 ```
-DATABASE_URL="postgresql://user:password@localhost:5432/terapeutas"
-JWT_SECRET="seu_jwt_secret"
-```
-
-Execute as migrações do banco de dados:
-```bash
-npx prisma migrate dev
+DB_HOST=localhost
+DB_USER=seu_usuario
+DB_PASS=sua_senha
+DB_NAME=terapiaconect
+JWT_SECRET=chave_secreta_jwt
 ```
 
-Inicie o servidor:
-```bash
-npm run dev
+4. Execute as migrações do banco de dados:
+```
+npx sequelize db:migrate
 ```
 
-### Instalação do Frontend
-```bash
-cd frontend
+5. Instale as dependências do frontend:
+```
+cd ../frontend
 npm install
+```
+
+6. Configure o arquivo `.env` do frontend:
+```
+REACT_APP_API_URL=http://localhost:3000
+```
+
+## Executando o Projeto
+
+1. Inicie o servidor backend:
+```
+cd backend
 npm run dev
 ```
 
-## Rotas Principais da API
+2. Em outro terminal, inicie o frontend:
+```
+cd frontend
+npm start
+```
 
-### Autenticação
-- `POST /api/auth/register` - Registro de novo usuário
-- `POST /api/auth/login` - Login
-- `POST /api/auth/refresh` - Renovar token de acesso
+3. Acesse a aplicação em `http://localhost:3001`
 
-### Terapeutas
-- `GET /api/therapists` - Listar terapeutas
-- `GET /api/therapists/:id` - Detalhes de um terapeuta
-- `POST /api/therapists` - Criar perfil de terapeuta
-- `PUT /api/therapists/:id` - Atualizar perfil
+## Funcionalidades Principais
 
-### Clientes
-- `GET /api/clients/:id` - Detalhes de um cliente
-- `PUT /api/clients/:id` - Atualizar perfil de cliente
+### Sistema de Usuários
+- Cadastro e autenticação de terapeutas e clientes
+- Perfis com atributos específicos para cada tipo de usuário
+- Gestão de permissões
 
-### Agendamentos
-- `GET /api/appointments/therapist/:id` - Agendamentos de um terapeuta
-- `POST /api/appointments` - Criar novo agendamento
+### Agendamento
+- Calendário de disponibilidade
+- Confirmação de agendamentos
+- Notificações por email
+
+### Videoconferência
+- Integração com Jitsi Meet para videoconferência
+- Salas privadas por sessão
+- Controles de áudio e vídeo
+
+### Observações sobre Videoconferência
+A implementação atual utiliza Jitsi Meet como solução de videoconferência. Durante o desenvolvimento, enfrentamos desafios com a integração WebRTC:
+
+1. **Problemas de conexão WebSocket**: Instabilidades na conexão WebSocket ao utilizar a SDK do Dyte.
+
+2. **Alternativas consideradas**:
+   - **Daily.com**: Uma alternativa robusta ao Dyte, com API simples e focada em confiabilidade.
+   - **Implementação própria com WebRTC**: Possibilidade de desenvolver uma solução personalizada utilizando a API WebRTC.
+
+3. **Próximos passos**:
+   - Avaliar a implementação do Daily.com como alternativa mais estável
+   - Corrigir os problemas de WebRTC na implementação atual
+   - Garantir compatibilidade cross-browser
+
+### Ferramentas Terapêuticas
+- Campo de Constelação para terapia
+- Assistente IA (em desenvolvimento)
+
+## Roadmap
+
+- [x] Sistema de usuários e autenticação
+- [x] Agendamento básico
+- [x] Integração de videoconferência
+- [x] Campo de Constelação
+- [ ] Melhorias na integração de videoconferência
+- [ ] Implementação de pagamentos
+- [ ] Assistente IA para terapeutas
+- [ ] Aplicativo móvel
 
 ## Contribuição
 
 Para contribuir com o projeto:
 
-1. Fork o repositório
-2. Crie uma branch para sua feature (`git checkout -b feature/nova-funcionalidade`)
-3. Commit suas mudanças (`git commit -m 'Adiciona nova funcionalidade'`)
-4. Push para a branch (`git push origin feature/nova-funcionalidade`)
-5. Abra um Pull Request
+1. Faça um fork do repositório
+2. Crie uma branch para sua feature (`git checkout -b feature/nome-da-feature`)
+3. Faça commit das mudanças (`git commit -am 'Adiciona nova feature'`)
+4. Push para a branch (`git push origin feature/nome-da-feature`)
+5. Crie um novo Pull Request
 
 ## Licença
 
-Este projeto está licenciado sob a licença MIT - veja o arquivo LICENSE para mais detalhes.
-
-## Contato
-
-Para mais informações, entre em contato com a equipe de desenvolvimento. 
+Este projeto está licenciado sob a licença MIT. 

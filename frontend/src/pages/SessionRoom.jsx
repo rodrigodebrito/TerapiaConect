@@ -31,6 +31,8 @@ const SessionRoom = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [videoMuted, setVideoMuted] = useState(false);
   const [audioMuted, setAudioMuted] = useState(false);
+  const [floatingVideo, setFloatingVideo] = useState(true);
+  const [floatingVideoSize, setFloatingVideoSize] = useState('medium'); // small, medium, large
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -110,6 +112,13 @@ const SessionRoom = () => {
     setShowNotification(`Microfone ${!audioMuted ? 'desativado' : 'ativado'}`);
   };
 
+  const toggleFloatingVideoSize = () => {
+    const sizes = ['small', 'medium', 'large'];
+    const currentIndex = sizes.indexOf(floatingVideoSize);
+    const nextIndex = (currentIndex + 1) % sizes.length;
+    setFloatingVideoSize(sizes[nextIndex]);
+  };
+
   if (loading) {
     return <Loader />;
   }
@@ -156,6 +165,7 @@ const SessionRoom = () => {
               sessionId={sessionId}
               therapistName={session.therapist?.user?.name}
               clientName={session.client?.user?.name}
+              isFloating={false}
             />
           </div>
         )}
@@ -183,6 +193,22 @@ const SessionRoom = () => {
             <div className="tool-header">
               <h2>Campo de Constelação</h2>
               <div className="tool-controls">
+                {floatingVideo && (
+                  <button 
+                    className="control-button resize-btn" 
+                    onClick={toggleFloatingVideoSize}
+                    title="Alterar tamanho do vídeo"
+                  >
+                    📐
+                  </button>
+                )}
+                <button 
+                  className="control-button toggle-video-btn" 
+                  onClick={() => setFloatingVideo(!floatingVideo)}
+                  title={floatingVideo ? "Ocultar vídeo" : "Mostrar vídeo"}
+                >
+                  {floatingVideo ? "🎥" : "📺"}
+                </button>
                 <button 
                   className="control-button fullscreen-btn" 
                   onClick={toggleFullscreen} 
@@ -210,6 +236,16 @@ const SessionRoom = () => {
                   allowFullScreen
                 />
               )}
+              
+              {floatingVideo && meetingView === 'embedded' && (
+                <FallbackMeeting
+                  sessionId={sessionId}
+                  therapistName={session.therapist?.user?.name}
+                  clientName={session.client?.user?.name}
+                  isFloating={true}
+                  floatingSize={floatingVideoSize}
+                />
+              )}
             </div>
           </div>
         )}
@@ -220,6 +256,22 @@ const SessionRoom = () => {
             <div className="tool-header">
               <h2>Assistente IA</h2>
               <div className="tool-controls">
+                {floatingVideo && (
+                  <button 
+                    className="control-button resize-btn" 
+                    onClick={toggleFloatingVideoSize}
+                    title="Alterar tamanho do vídeo"
+                  >
+                    📐
+                  </button>
+                )}
+                <button 
+                  className="control-button toggle-video-btn" 
+                  onClick={() => setFloatingVideo(!floatingVideo)}
+                  title={floatingVideo ? "Ocultar vídeo" : "Mostrar vídeo"}
+                >
+                  {floatingVideo ? "🎥" : "📺"}
+                </button>
                 <button 
                   className="control-button fullscreen-btn" 
                   onClick={toggleFullscreen} 
@@ -241,6 +293,16 @@ const SessionRoom = () => {
                 <h3>Assistente IA</h3>
                 <p>Funcionalidade em desenvolvimento...</p>
               </div>
+              
+              {floatingVideo && meetingView === 'embedded' && (
+                <FallbackMeeting
+                  sessionId={sessionId}
+                  therapistName={session.therapist?.user?.name}
+                  clientName={session.client?.user?.name}
+                  isFloating={true}
+                  floatingSize={floatingVideoSize}
+                />
+              )}
             </div>
           </div>
         )}
@@ -320,14 +382,18 @@ const SessionRoom = () => {
           </button>
           {activeTool === 'constellation' && (
             <>
-              <button className="control-button action-btn">
+              <button className="control-button action-btn" title="Passar para o próximo">
                 Passar
               </button>
-              <button className="control-button action-btn">
+              <button className="control-button action-btn" title="Salvar constelação atual">
                 Salvar
               </button>
-              <button className="control-button action-btn">
-                Ocultar
+              <button 
+                className="control-button action-btn"
+                onClick={() => setFloatingVideo(!floatingVideo)}
+                title={floatingVideo ? "Ocultar vídeo" : "Mostrar vídeo"}
+              >
+                {floatingVideo ? "Ocultar Vídeo" : "Mostrar Vídeo"}
               </button>
             </>
           )}
