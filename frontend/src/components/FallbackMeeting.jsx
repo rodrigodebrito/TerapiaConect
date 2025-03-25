@@ -3,7 +3,7 @@ import './FallbackMeeting.css';
 
 /**
  * Componente para videoconferência com opções alternativas
- * Fornece o Jitsi Meet como opção principal
+ * Design inspirado no Zoom para melhor usabilidade
  */
 const FallbackMeeting = ({ sessionId, therapistName, clientName, isFloating }) => {
   const [meetingOption, setMeetingOption] = useState(null);
@@ -13,7 +13,11 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName, isFloating }) =
   const [position, setPosition] = useState({ x: 20, y: 20 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const [isVideoMuted, setIsVideoMuted] = useState(false);
   const containerRef = useRef(null);
+  const iframeRef = useRef(null);
 
   // Gerar um nome de sala consistente baseado no ID da sessão
   const roomName = sessionId 
@@ -65,7 +69,7 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName, isFloating }) =
 
   // Funções para arrastar o componente quando estiver flutuante
   const handleMouseDown = (e) => {
-    if (!isFloating) return;
+    if (!isFloating || e.target.closest('.meeting-controls')) return;
     
     setIsDragging(true);
     setDragStart({
@@ -91,6 +95,59 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName, isFloating }) =
     setIsDragging(false);
   };
 
+  // Toggle fullscreen mode
+  const toggleFullscreen = () => {
+    if (!containerRef.current) return;
+    
+    if (!isFullscreen) {
+      if (containerRef.current.requestFullscreen) {
+        containerRef.current.requestFullscreen();
+      } else if (containerRef.current.mozRequestFullScreen) {
+        containerRef.current.mozRequestFullScreen();
+      } else if (containerRef.current.webkitRequestFullscreen) {
+        containerRef.current.webkitRequestFullscreen();
+      } else if (containerRef.current.msRequestFullscreen) {
+        containerRef.current.msRequestFullscreen();
+      }
+      setIsFullscreen(true);
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.mozCancelFullScreen) {
+        document.mozCancelFullScreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      }
+      setIsFullscreen(false);
+    }
+  };
+
+  // Detectar quando sair do modo fullscreen usando a tecla ESC
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(
+        document.fullscreenElement || 
+        document.mozFullScreenElement || 
+        document.webkitFullscreenElement || 
+        document.msFullscreenElement
+      );
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('msfullscreenchange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('msfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
   // Adicionar e remover event listeners para o arrastar
   useEffect(() => {
     if (isFloating) {
@@ -103,6 +160,37 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName, isFloating }) =
       };
     }
   }, [isFloating, isDragging, dragStart]);
+
+  // Funções para controlar áudio e vídeo (mostrar notificação)
+  const toggleAudio = () => {
+    setIsAudioMuted(!isAudioMuted);
+    
+    // Notificação - simulada para interface
+    const audioStatus = !isAudioMuted ? 'desativado' : 'ativado';
+    showTemporaryNotification(`Microfone ${audioStatus}`);
+    
+    // Aqui você adicionaria a integração real com a API Jitsi
+  };
+
+  const toggleVideo = () => {
+    setIsVideoMuted(!isVideoMuted);
+    
+    // Notificação - simulada para interface
+    const videoStatus = !isVideoMuted ? 'desativada' : 'ativada';
+    showTemporaryNotification(`Câmera ${videoStatus}`);
+    
+    // Aqui você adicionaria a integração real com a API Jitsi
+  };
+
+  // Função para mostrar notificação temporária
+  const [notification, setNotification] = useState(null);
+  
+  const showTemporaryNotification = (message) => {
+    setNotification(message);
+    setTimeout(() => {
+      setNotification(null);
+    }, 3000);
+  };
 
   if (isLoading) {
     return (
@@ -145,9 +233,11 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName, isFloating }) =
   const meetingTitle = `${therapistName || 'Terapeuta'} e ${clientName || 'Cliente'}`;
 
   // Aplicar estilos específicos quando estiver no modo flutuante
-  const containerClassName = isFloating ? "fallback-meeting-container floating" : "fallback-meeting-container";
+  const containerClassName = isFloating 
+    ? `fallback-meeting-container floating ${isFullscreen ? 'fullscreen' : ''}` 
+    : `fallback-meeting-container ${isFullscreen ? 'fullscreen' : ''}`;
   
-  const floatingStyle = isFloating ? {
+  const floatingStyle = isFloating && !isFullscreen ? {
     position: 'absolute',
     top: `${position.y}px`,
     left: `${position.x}px`,
@@ -162,43 +252,84 @@ const FallbackMeeting = ({ sessionId, therapistName, clientName, isFloating }) =
       ref={containerRef}
       onMouseDown={handleMouseDown}
     >
-      {selectedOption ? (
+      {notification && (
+        <div className="meeting-notification">
+          {notification}
+        </div>
+      )}
+
+      <div className="meeting-header">
+        <div className="meeting-title">
+          {meetingTitle}
+        </div>
+        <div className="header-actions">
+          <button 
+            className="meeting-control-btn"
+            onClick={handleCopyLink}
+            title="Copiar link da reunião"
+          >
+            {isCopied ? '✓' : '🔗'}
+          </button>
+          <button 
+            className="meeting-control-btn"
+            onClick={handleChangeOption}
+            title="Mudar opção de videoconferência"
+          >
+            📋
+          </button>
+        </div>
+      </div>
+
+      {selectedOption && (
         <div className="video-container-wrapper">
           <iframe
+            ref={iframeRef}
             src={selectedOption.url}
             allow="camera; microphone; fullscreen; display-capture; autoplay"
             allowFullScreen
             className="fallback-iframe"
             title={`Videoconferência: ${meetingTitle}`}
             onError={() => console.error("Erro ao carregar iframe")}
-            style={{
-              width: '100%',
-              height: '100%',
-              minHeight: isFloating ? '170px' : '500px',
-              border: 'none'
-            }}
           />
         </div>
-      ) : (
-        <div className="meeting-header">
-          <div className="meeting-title">
-            Videoconferência: {meetingTitle}
-          </div>
-          <div className="header-actions">
-            <button 
-              className="change-option-button" 
-              onClick={handleChangeOption}
-            >
-              Mudar Opção
-            </button>
-            <button 
-              className="change-option-button" 
-              onClick={handleCopyLink}
-            >
-              {isCopied ? '✓ Copiado!' : 'Copiar Link'}
-            </button>
-          </div>
+      )}
+
+      {/* Barra de controles estilo Zoom */}
+      <div className="meeting-controls">
+        <div className="controls-left">
+          <button 
+            className={`meeting-control-btn ${isAudioMuted ? 'disabled' : ''}`}
+            onClick={toggleAudio}
+            title={isAudioMuted ? "Ativar microfone" : "Desativar microfone"}
+          >
+            {isAudioMuted ? '🔇' : '🎤'}
+          </button>
+          <button 
+            className={`meeting-control-btn ${isVideoMuted ? 'disabled' : ''}`}
+            onClick={toggleVideo}
+            title={isVideoMuted ? "Ativar câmera" : "Desativar câmera"}
+          >
+            {isVideoMuted ? '🚫' : '📹'}
+          </button>
         </div>
+        
+        <div className="controls-center">
+          {/* Botões adicionais de controle central podem ser colocados aqui */}
+        </div>
+        
+        <div className="controls-right">
+          <button 
+            className="meeting-control-btn"
+            onClick={toggleFullscreen}
+            title={isFullscreen ? "Sair da tela cheia" : "Entrar em tela cheia"}
+          >
+            {isFullscreen ? '⬆' : '⤢'}
+          </button>
+        </div>
+      </div>
+
+      {isFloating && (
+        <div className="drag-handle" title="Arrastar">⋮⋮</div>
       )}
     </div>
   );

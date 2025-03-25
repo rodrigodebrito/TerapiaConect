@@ -26,7 +26,11 @@ const SessionRoom = () => {
   const [activeTool, setActiveTool] = useState(null);
   const [meetingView, setMeetingView] = useState('embedded'); // 'embedded', 'external', 'hidden'
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showToolsMenu, setShowToolsMenu] = useState(false);
+  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
+  const [showNotification, setShowNotification] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [videoMuted, setVideoMuted] = useState(false);
+  const [audioMuted, setAudioMuted] = useState(false);
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -47,20 +51,15 @@ const SessionRoom = () => {
     }
   }, [sessionId]);
 
-  // Fecha o menu de ferramentas quando clicar fora dele
+  // Notificações temporárias
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      const toolsContainer = document.querySelector('.session-tools-container');
-      if (toolsContainer && !toolsContainer.contains(event.target)) {
-        setShowToolsMenu(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
+    if (showNotification) {
+      const timer = setTimeout(() => {
+        setShowNotification(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [showNotification]);
 
   const handleEndSession = async () => {
     if (!window.confirm('Tem certeza que deseja encerrar esta sessão?')) {
@@ -90,15 +89,25 @@ const SessionRoom = () => {
       setActiveTool(toolName);
       setIsFullscreen(false); // Iniciar ferramentas em modo normal
     }
-    setShowToolsMenu(false); // Fechar o menu após selecionar uma ferramenta
+    setIsSidebarOpen(false);
   };
 
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
   };
 
-  const toggleToolsMenu = () => {
-    setShowToolsMenu(!showToolsMenu);
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  const toggleVideo = () => {
+    setVideoMuted(!videoMuted);
+    setShowNotification(`Câmera ${!videoMuted ? 'desativada' : 'ativada'}`);
+  };
+
+  const toggleAudio = () => {
+    setAudioMuted(!audioMuted);
+    setShowNotification(`Microfone ${!audioMuted ? 'desativado' : 'ativado'}`);
   };
 
   if (loading) {
@@ -127,175 +136,211 @@ const SessionRoom = () => {
 
   return (
     <div className="therapy-session-container">
+      {/* Header minimalista com informações da sessão */}
       <header className="session-header">
-        <div className="session-title">
-          <h1>Sessão de Terapia</h1>
-          <div className="session-info">
-            <span>{new Date(session.date).toLocaleDateString('pt-BR')}</span>
-            <span className="divider">•</span>
-            <span>{session.startTime} às {session.endTime}</span>
-          </div>
+        <div className="session-info">
+          <h1>Sessão: {session.therapist?.user?.name} com {session.client?.user?.name}</h1>
+          <span>{new Date(session.date).toLocaleDateString('pt-BR')} • {session.startTime} às {session.endTime}</span>
         </div>
-        
-        <div className="session-participants">
-          <div className="participant therapist">
-            <span className="role">Terapeuta:</span>
-            <span className="name">{session.therapist?.user?.name || 'Nome não disponível'}</span>
-          </div>
-          <div className="participant client">
-            <span className="role">Cliente:</span>
-            <span className="name">{session.client?.user?.name || 'Nome não disponível'}</span>
-          </div>
-        </div>
-
-        <div className="session-actions">
-          <Button variant="primary" onClick={openDirectJitsi}>
-            Abrir Jitsi Meet
-          </Button>
-          <Button variant="danger" onClick={handleEndSession}>
-            Encerrar Sessão
-          </Button>
-          <Button variant="secondary" onClick={() => navigate('/appointments')}>
-            Voltar
-          </Button>
-        </div>
+        <Button variant="secondary" onClick={() => navigate('/appointments')} className="back-btn">
+          Voltar
+        </Button>
       </header>
 
-      <div className="session-main">
-        <div className={`session-workspace ${activeTool ? 'with-tool' : ''} ${isFullscreen ? 'fullscreen-tool' : ''}`}>
-          {!activeTool && meetingView === 'embedded' && (
-            <div className="video-conference-container full">
-              <FallbackMeeting
-                sessionId={sessionId}
-                therapistName={session.therapist?.user?.name}
-                clientName={session.client?.user?.name}
-              />
-            </div>
-          )}
-
-          {!activeTool && meetingView === 'external' && (
-            <div className="external-meeting-notice">
-              <div className="notice-content">
-                <div className="notice-icon">🎥</div>
-                <h3>Videoconferência aberta em nova janela</h3>
-                <p>A videoconferência foi aberta em uma nova janela. Você pode continuar usando as ferramentas nesta janela.</p>
-                <Button 
-                  variant="secondary" 
-                  onClick={() => setMeetingView('embedded')}
-                >
-                  Mostrar Videoconferência Aqui
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {activeTool === 'constellation' && (
-            <div className={`tool-panel constellation-tool ${isFullscreen ? 'fullscreen' : 'fullscreen'}`}>
-              <div className="tool-header">
-                <h2>Campo de Constelação</h2>
-                <div className="tool-header-actions">
-                  <button 
-                    className="fullscreen-toggle" 
-                    onClick={toggleFullscreen} 
-                    title={isFullscreen ? "Minimizar" : "Maximizar"}
-                  >
-                    {isFullscreen ? (
-                      <span>🗕</span>
-                    ) : (
-                      <span>🗖</span>
-                    )}
-                  </button>
-                  <button className="close-tool" onClick={() => setActiveTool(null)} title="Fechar">&times;</button>
-                </div>
-              </div>
-              <div className="tool-content">
-                {/* Renderizar o componente do campo de constelação */}
-                {ConstellationField ? (
-                  <ConstellationField.default />
-                ) : (
-                  <iframe 
-                    src="/teste-constelacao" 
-                    title="Campo de Constelação"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      border: 'none',
-                      overflow: 'hidden',
-                    }}
-                  />
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTool === 'ai' && (
-            <div className={`tool-panel ai-tool ${isFullscreen ? 'fullscreen' : ''}`}>
-              <div className="tool-header">
-                <h2>Assistente IA</h2>
-                <div className="tool-header-actions">
-                  <button 
-                    className="fullscreen-toggle" 
-                    onClick={toggleFullscreen} 
-                    title={isFullscreen ? "Minimizar" : "Maximizar"}
-                  >
-                    {isFullscreen ? (
-                      <span>🗕</span>
-                    ) : (
-                      <span>🗖</span>
-                    )}
-                  </button>
-                  <button className="close-tool" onClick={() => setActiveTool(null)} title="Fechar">&times;</button>
-                </div>
-              </div>
-              <div className="tool-content">
-                <div className="ai-placeholder">
-                  <p>
-                    Interface do Assistente de IA<br />
-                    Faça perguntas e receba insights para a terapia
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTool && meetingView === 'embedded' && (
+      {/* Área principal - estilo Zoom com área de vídeo e ferramentas */}
+      <main className={`session-main ${isFullscreen ? 'fullscreen' : ''}`}>
+        {/* Área do meeting em tela cheia quando uma ferramenta não está ativa */}
+        {!activeTool && meetingView === 'embedded' && (
+          <div className="zoom-video-area">
             <FallbackMeeting
               sessionId={sessionId}
               therapistName={session.therapist?.user?.name}
               clientName={session.client?.user?.name}
-              isFloating={true}
             />
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Menu dropdown de ferramentas */}
-        <div className="session-tools-container">
-          <button 
-            className={`tools-toggle ${showToolsMenu ? 'active' : ''}`} 
-            onClick={toggleToolsMenu}
-            title="Ferramentas"
-          >
-            🛠️
-          </button>
-          <div className="session-tools">
-            <div className={`tools-grid ${showToolsMenu ? 'show' : ''}`}>
-              <div 
-                className={`tool-card ${activeTool === 'constellation' ? 'active' : ''}`}
-                onClick={() => handleSelectTool('constellation')}
+        {/* Se o meeting for aberto em uma janela externa */}
+        {!activeTool && meetingView === 'external' && (
+          <div className="external-meeting-notice">
+            <div className="notice-content">
+              <div className="notice-icon">🎥</div>
+              <h3>Videoconferência aberta em nova janela</h3>
+              <p>A videoconferência foi aberta em uma nova janela.</p>
+              <Button 
+                variant="secondary" 
+                onClick={() => setMeetingView('embedded')}
               >
-                <div className="tool-icon">☀️</div>
-                <div className="tool-name">Campo de Constelação</div>
+                Mostrar Videoconferência Aqui
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Campo de Constelação - layout centrado e responsivo */}
+        {activeTool === 'constellation' && (
+          <div className={`tool-container constellation-tool ${isFullscreen ? 'fullscreen' : ''}`}>
+            <div className="tool-header">
+              <h2>Campo de Constelação</h2>
+              <div className="tool-controls">
+                <button 
+                  className="control-button fullscreen-btn" 
+                  onClick={toggleFullscreen} 
+                  title={isFullscreen ? "Sair da tela cheia" : "Tela cheia"}
+                >
+                  {isFullscreen ? "⬆" : "⤢"}
+                </button>
+                <button 
+                  className="control-button close-btn" 
+                  onClick={() => setActiveTool(null)} 
+                  title="Fechar"
+                >
+                  ×
+                </button>
               </div>
-              
-              <div 
-                className={`tool-card ${activeTool === 'ai' ? 'active' : ''}`}
-                onClick={() => handleSelectTool('ai')}
-              >
-                <div className="tool-icon">🤖</div>
-                <div className="tool-name">Assistente IA</div>
+            </div>
+            <div className="tool-content">
+              {ConstellationField ? (
+                <ConstellationField.default />
+              ) : (
+                <iframe 
+                  src="/teste-constelacao" 
+                  title="Campo de Constelação"
+                  className="constellation-iframe"
+                  allowFullScreen
+                />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Assistente IA - mesmo estilo do campo de constelação */}
+        {activeTool === 'ai' && (
+          <div className={`tool-container ai-tool ${isFullscreen ? 'fullscreen' : ''}`}>
+            <div className="tool-header">
+              <h2>Assistente IA</h2>
+              <div className="tool-controls">
+                <button 
+                  className="control-button fullscreen-btn" 
+                  onClick={toggleFullscreen} 
+                  title={isFullscreen ? "Sair da tela cheia" : "Tela cheia"}
+                >
+                  {isFullscreen ? "⬆" : "⤢"}
+                </button>
+                <button 
+                  className="control-button close-btn" 
+                  onClick={() => setActiveTool(null)} 
+                  title="Fechar"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div className="tool-content">
+              <div className="ai-placeholder">
+                <h3>Assistente IA</h3>
+                <p>Funcionalidade em desenvolvimento...</p>
               </div>
             </div>
           </div>
+        )}
+
+        {/* Barra lateral retrátil para ferramentas - estilo Zoom */}
+        <div className={`session-sidebar ${isSidebarOpen ? 'open' : 'closed'}`}>
+          <div className="sidebar-header">
+            <h3>Ferramentas</h3>
+            <button className="close-sidebar" onClick={toggleSidebar}>×</button>
+          </div>
+          <div className="sidebar-tools">
+            <div 
+              className={`tool-button ${activeTool === 'constellation' ? 'active' : ''}`} 
+              onClick={() => handleSelectTool('constellation')}
+            >
+              <div className="tool-icon">⭐</div>
+              <span>Campo de Constelação</span>
+            </div>
+            <div 
+              className={`tool-button ${activeTool === 'ai' ? 'active' : ''}`}
+              onClick={() => handleSelectTool('ai')}
+            >
+              <div className="tool-icon">🤖</div>
+              <span>Assistente IA</span>
+            </div>
+            <div 
+              className="tool-button"
+              onClick={openDirectJitsi}
+            >
+              <div className="tool-icon">📺</div>
+              <span>Abrir em Nova Janela</span>
+            </div>
+            <div 
+              className="tool-button"
+              onClick={handleEndSession}
+            >
+              <div className="tool-icon red">⏹️</div>
+              <span>Encerrar Sessão</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Notificação temporária - desaparece após alguns segundos */}
+        {showNotification && (
+          <div className="notification-popup">
+            {showNotification}
+          </div>
+        )}
+      </main>
+
+      {/* Barra de controles fixa no estilo Zoom */}
+      <div className="zoom-controls-bar">
+        <div className="control-group left">
+          <button 
+            className={`control-button ${audioMuted ? 'disabled' : ''}`} 
+            onClick={toggleAudio}
+            title={audioMuted ? "Ativar microfone" : "Desativar microfone"}
+          >
+            {audioMuted ? "🔇" : "🎤"}
+          </button>
+          <button 
+            className={`control-button ${videoMuted ? 'disabled' : ''}`} 
+            onClick={toggleVideo}
+            title={videoMuted ? "Ativar câmera" : "Desativar câmera"}
+          >
+            {videoMuted ? "🚫" : "📹"}
+          </button>
+        </div>
+        
+        <div className="control-group center">
+          <button 
+            className="control-button tools-btn" 
+            onClick={toggleSidebar}
+            title="Exibir ferramentas"
+          >
+            🛠️
+          </button>
+          {activeTool === 'constellation' && (
+            <>
+              <button className="control-button action-btn">
+                Passar
+              </button>
+              <button className="control-button action-btn">
+                Salvar
+              </button>
+              <button className="control-button action-btn">
+                Ocultar
+              </button>
+            </>
+          )}
+        </div>
+        
+        <div className="control-group right">
+          <button 
+            className="control-button end-btn" 
+            onClick={handleEndSession}
+            title="Encerrar sessão"
+          >
+            Encerrar Sessão
+          </button>
         </div>
       </div>
     </div>
