@@ -10,6 +10,7 @@ TerapiaConect é uma plataforma completa para realização de sessões de terapi
 - Agendamento de sessões
 - Videoconferência integrada
 - Ferramentas terapêuticas especializadas (Campo de Constelação)
+- Assistente de IA para suporte ao terapeuta
 - Gerenciamento de prontuários
 - Pagamentos integrados
 
@@ -30,10 +31,16 @@ TerapiaConect é uma plataforma completa para realização de sessões de terapi
 - MySQL
 - JWT para autenticação
 - Bcrypt para criptografia
+- OpenAI API para funcionalidades de IA
 
 ### Videoconferência
 - Jitsi Meet (implementação atual)
 - Alternativas consideradas: Daily.com
+
+### Inteligência Artificial
+- OpenAI GPT-4 para análise de sessões
+- Processamento de linguagem natural para sugestões em tempo real
+- Geração automática de relatórios
 
 ## Estrutura do Projeto
 
@@ -48,6 +55,7 @@ O projeto é dividido em duas partes principais:
 - Node.js 14+
 - MySQL 8+
 - NPM ou Yarn
+- Chave de API da OpenAI
 
 ### Passos para instalação
 
@@ -63,13 +71,14 @@ cd backend
 npm install
 ```
 
-3. Configure o banco de dados no arquivo `.env`:
+3. Configure o banco de dados e a API da OpenAI no arquivo `.env`:
 ```
 DB_HOST=localhost
 DB_USER=seu_usuario
 DB_PASS=sua_senha
 DB_NAME=terapiaconect
 JWT_SECRET=chave_secreta_jwt
+OPENAI_API_KEY=sua_chave_da_openai
 ```
 
 4. Execute as migrações do banco de dados:
@@ -121,6 +130,13 @@ npm start
 - Salas privadas por sessão
 - Controles de áudio e vídeo
 
+### Assistente de IA
+- Análise em tempo real das sessões
+- Sugestões contextuais para o terapeuta
+- Geração automática de relatórios
+- Transcrição das sessões
+- Insights sobre padrões e temas recorrentes
+
 ### Observações sobre Videoconferência
 A implementação atual utiliza Jitsi Meet como solução de videoconferência. Durante o desenvolvimento, enfrentamos desafios com a integração WebRTC:
 
@@ -137,7 +153,9 @@ A implementação atual utiliza Jitsi Meet como solução de videoconferência. 
 
 ### Ferramentas Terapêuticas
 - Campo de Constelação para terapia
-- Assistente IA (em desenvolvimento)
+- Assistente IA integrado à videoconferência
+- Análise de sessões em tempo real
+- Geração de relatórios e insights
 
 ## Roadmap
 
@@ -145,9 +163,11 @@ A implementação atual utiliza Jitsi Meet como solução de videoconferência. 
 - [x] Agendamento básico
 - [x] Integração de videoconferência
 - [x] Campo de Constelação
+- [x] Assistente IA para terapeutas
+- [x] Análise de sessões em tempo real
+- [x] Geração de relatórios
 - [ ] Melhorias na integração de videoconferência
 - [ ] Implementação de pagamentos
-- [ ] Assistente IA para terapeutas
 - [ ] Aplicativo móvel
 
 ## Contribuição
