@@ -5,7 +5,22 @@ const { authenticate } = require('../middleware/auth.middleware');
 
 const router = express.Router();
 
-// Middleware de autenticação para todas as rotas
+// Rota de teste (sem autenticação)
+router.get('/test', async (req, res) => {
+    try {
+        const openAIService = require('../services/ai/openai.service');
+        const response = await openAIService.analyzeText("Olá, isso é um teste de integração.");
+        res.json({ analysis: response });
+    } catch (error) {
+        console.error('Erro no teste:', error);
+        res.status(500).json({
+            message: 'Erro no teste de integração',
+            details: error.message
+        });
+    }
+});
+
+// Middleware de autenticação para todas as rotas abaixo
 router.use(authenticate);
 
 // Adicionar transcrição
@@ -23,20 +38,13 @@ router.post(
 // Obter transcrições de uma sessão
 router.get('/transcriptions/session/:sessionId', aiController.getSessionTranscripts);
 
-// Solicitar insight
-router.post(
-  '/insights/session/:sessionId',
-  [
-    body('prompt').isString().optional(),
-    body('keywords').isString().optional()
-  ],
-  aiController.requestInsight
-);
+// Analisar sessão
+router.post('/analyze/:sessionId', aiController.analyzeSession);
 
-// Obter insights de uma sessão
-router.get('/insights/session/:sessionId', aiController.getSessionInsights);
+// Gerar sugestões em tempo real
+router.post('/suggest/:sessionId', aiController.generateSuggestions);
 
-// Gerar resumo da sessão
-router.get('/summary/session/:sessionId', aiController.generateSessionSummary);
+// Gerar relatório da sessão
+router.post('/report/:sessionId', aiController.generateReport);
 
 module.exports = router; 

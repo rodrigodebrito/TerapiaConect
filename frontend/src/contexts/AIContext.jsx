@@ -1,37 +1,25 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { useSession } from './SessionContext';
-import aiService from '../services/aiService';
+import aiService from '../services/ai.service';
 import websocketService from '../services/websocketService';
 
-const AIContext = createContext();
+const AIContext = createContext({});
 
 export const useAI = () => {
   const context = useContext(AIContext);
   if (!context) {
-    // Em vez de lançar um erro, retornar valores padrão
-    return {
-      aiInsights: null,
-      transcript: [],
-      isProcessing: false,
-      isListening: false,
-      error: null,
-      generateInsight: () => {},
-      startListening: () => {},
-      stopListening: () => {},
-      getSessionSummary: async () => null,
-      processNotes: async () => null
-    };
+    throw new Error('useAI must be used within an AIProvider');
   }
   return context;
 };
 
 export const AIProvider = ({ children }) => {
   const { session, status } = useSession();
-  const [aiInsights, setAiInsights] = useState(null);
-  const [transcript, setTranscript] = useState([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isListening, setIsListening] = useState(false);
+  const [transcripts, setTranscripts] = useState([]);
+  const [analysis, setAnalysis] = useState('');
+  const [suggestions, setSuggestions] = useState('');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   // Inicializar o sistema de transcrição ao conectar
@@ -56,24 +44,113 @@ export const AIProvider = ({ children }) => {
   // Handler para atualizações de transcrição
   const handleTranscriptionUpdate = (data) => {
     if (data && data.text) {
-      setTranscript(prev => [...prev, data]);
+      setTranscripts(prev => [...prev, data]);
     }
   };
 
   // Handler para insights de IA
   const handleAiInsight = (data) => {
     if (data && data.insight) {
-      setAiInsights(data.insight);
-      setIsProcessing(false);
+      setAnalysis(data.insight);
+      setLoading(false);
     }
   };
+
+  // Função para adicionar uma transcrição
+  const addTranscription = useCallback(async (data) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await aiService.addTranscription(data);
+      setTranscripts(prev => [...prev, response]);
+      return response;
+    } catch (error) {
+      console.error('Erro ao adicionar transcrição:', error);
+      setError('Não foi possível adicionar a transcrição');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Função para buscar transcrições
+  const fetchTranscripts = useCallback(async (sessionId) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await aiService.getSessionTranscripts(sessionId);
+      setTranscripts(response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao buscar transcrições:', error);
+      setError('Não foi possível carregar as transcrições');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Função para analisar a sessão
+  const analyzeSession = useCallback(async (sessionId) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await aiService.analyzeSession(sessionId);
+      setAnalysis(response.analysis);
+      return response.analysis;
+    } catch (error) {
+      console.error('Erro ao analisar sessão:', error);
+      setError('Não foi possível analisar a sessão');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Função para gerar sugestões
+  const generateSuggestions = useCallback(async (sessionId) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await aiService.generateSuggestions(sessionId);
+      setSuggestions(response.suggestions);
+      return response.suggestions;
+    } catch (error) {
+      console.error('Erro ao gerar sugestões:', error);
+      setError('Não foi possível gerar sugestões');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Função para gerar relatório
+  const generateReport = useCallback(async (sessionId) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await aiService.generateReport(sessionId);
+      return response.report;
+    } catch (error) {
+      console.error('Erro ao gerar relatório:', error);
+      setError('Não foi possível gerar o relatório');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Função para limpar erros
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
 
   // Função para iniciar a captura de áudio
   const startListening = async () => {
     if (!session?.id) return;
     
     try {
-      setIsListening(true);
+      setLoading(true);
       
       // Iniciar transcrição no servidor
       await aiService.startTranscription(session.id)
@@ -84,7 +161,7 @@ export const AIProvider = ({ children }) => {
     } catch (err) {
       console.error('Erro ao iniciar transcrição:', err);
       setError('Falha ao iniciar o sistema de transcrição');
-      setIsListening(false);
+      setLoading(false);
     }
   };
 
@@ -97,11 +174,11 @@ export const AIProvider = ({ children }) => {
         timestamp: new Date().toISOString()
       };
       
-      setTranscript(prev => [...prev, mockSpeech]);
+      setTranscripts(prev => [...prev, mockSpeech]);
       
       // A cada 5 transcrições, gerar um insight
-      if (transcript.length > 0 && transcript.length % 5 === 0) {
-        generateInsight(transcript);
+      if (transcripts.length > 0 && transcripts.length % 5 === 0) {
+        analyzeSession(session.id);
       }
     }, 10000); // A cada 10 segundos
 
@@ -110,7 +187,7 @@ export const AIProvider = ({ children }) => {
 
   // Parar a captura de áudio
   const stopListening = async () => {
-    if (!session?.id || !isListening) return;
+    if (!session?.id || loading) return;
     
     try {
       await aiService.stopTranscription(session.id)
@@ -119,56 +196,9 @@ export const AIProvider = ({ children }) => {
           console.log('Transcrição parada (simulação)');
         });
       
-      setIsListening(false);
+      setLoading(false);
     } catch (err) {
       console.error('Erro ao parar transcrição:', err);
-    }
-  };
-
-  // Gerar insights baseados na transcrição
-  const generateInsight = async (transcriptData) => {
-    if (!transcriptData || transcriptData.length < 2 || !session?.id) return;
-    
-    setIsProcessing(true);
-    try {
-      const result = await aiService.generateInsights(transcriptData, session.id)
-        .catch(() => {
-          // Simulação
-          return { 
-            insight: "Baseado na conversa, parece haver um padrão de comunicação que pode ser explorado mais profundamente. Considere perguntar sobre as emoções associadas aos eventos mencionados."
-          };
-        });
-      
-      setAiInsights(result.insight);
-    } catch (err) {
-      console.error('Erro ao gerar insights:', err);
-      setError('Falha ao processar análise de IA');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Obter resumo da sessão
-  const getSessionSummary = async () => {
-    if (!session?.id) return null;
-    
-    try {
-      return await aiService.getSessionSummary(session.id);
-    } catch (err) {
-      console.error('Erro ao obter resumo da sessão:', err);
-      return null;
-    }
-  };
-
-  // Processar notas da sessão com IA
-  const processNotes = async (notes) => {
-    if (!session?.id) return null;
-    
-    try {
-      return await aiService.processSessionNotes(session.id, notes);
-    } catch (err) {
-      console.error('Erro ao processar notas da sessão:', err);
-      return null;
     }
   };
 
@@ -187,16 +217,17 @@ export const AIProvider = ({ children }) => {
   };
 
   const value = {
-    aiInsights,
-    transcript,
-    isProcessing,
-    isListening,
+    transcripts,
+    analysis,
+    suggestions,
+    loading,
     error,
-    generateInsight,
-    startListening,
-    stopListening,
-    getSessionSummary,
-    processNotes
+    addTranscription,
+    fetchTranscripts,
+    analyzeSession,
+    generateSuggestions,
+    generateReport,
+    clearError
   };
 
   return <AIContext.Provider value={value}>{children}</AIContext.Provider>;

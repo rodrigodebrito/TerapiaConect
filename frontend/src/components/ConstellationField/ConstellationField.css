@@ -25,44 +25,65 @@
 }
 
 .canvas-container {
-  flex-grow: 1;
   position: relative;
+  width: calc(100% - 280px);
+  height: calc(100vh - 64px);
   overflow: hidden;
-  height: 100%;
-  max-width: calc(100% - 280px);
-  margin: 0;
   padding: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  margin: 0;
   background: #1a1a1a;
 }
 
-/* Garantir que o canvas ocupe todo o espaço disponível */
 .canvas-container canvas {
   width: 100% !important;
   height: 100% !important;
-  max-width: none !important;
-  max-height: none !important;
   display: block;
 }
 
-/* Modo tela cheia */
-.fullscreen .canvas-container {
-  max-width: 100%;
-  width: 100vw;
-  height: 100vh;
+/* Desabilitar controles de tela cheia */
+.canvas-container:fullscreen {
+  display: none !important;
 }
 
-.fullscreen .canvas-container canvas {
-  width: 100vw !important;
-  height: 100vh !important;
+.canvas-container:-webkit-full-screen {
+  display: none !important;
+}
+
+.canvas-container:-moz-full-screen {
+  display: none !important;
+}
+
+.canvas-container:-ms-fullscreen {
+  display: none !important;
+}
+
+/* Esconder botões de tela cheia do navegador */
+::-webkit-full-screen-exit-button {
+  display: none !important;
+}
+
+::-webkit-full-screen-button {
+  display: none !important;
+}
+
+::-moz-full-screen-button {
+  display: none !important;
+}
+
+::-ms-fullscreen-button {
+  display: none !important;
+}
+
+/* Prevenir tela cheia via F11 */
+body:fullscreen .canvas-container {
+  max-width: calc(100% - 280px) !important;
+  max-height: calc(100vh - 64px) !important;
 }
 
 /* Responsividade para telas menores */
 @media (max-height: 700px) {
-  .canvas-container canvas {
-    max-height: calc(100vh - 140px) !important;
+  .canvas-container {
+    height: calc(100vh - 140px);
   }
   
   .constellation-controls {
@@ -71,13 +92,13 @@
   }
   
   .canvas-container {
-    max-width: calc(100% - 140px);
+    width: calc(100% - 140px);
   }
 }
 
 @media (max-height: 600px) {
-  .canvas-container canvas {
-    max-height: calc(100vh - 120px) !important;
+  .canvas-container {
+    height: calc(100vh - 120px);
   }
 }
 
@@ -96,12 +117,8 @@
   }
   
   .canvas-container {
-    max-width: 100%;
-    max-height: calc(100% - 120px);
-  }
-  
-  .canvas-container canvas {
-    max-height: calc(100vh - 250px) !important;
+    width: 100%;
+    height: calc(100vh - 184px);
   }
 }
 

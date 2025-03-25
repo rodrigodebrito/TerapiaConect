@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { FallbackMeeting } from '../components/FallbackMeeting';
 import ConstellationField from '../components/ConstellationField/index';
+import aiService from '../services/aiService';
 import { 
   MdMic, MdMicOff, 
   MdVideocam, MdVideocamOff,
@@ -38,6 +39,8 @@ const SessionRoom = () => {
   const [isResizing, setIsResizing] = useState(false);
   const [videoSize, setVideoSize] = useState({ width: 320, height: 180 });
   const resizeStartRef = useRef({ width: 0, height: 0 });
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [transcription, setTranscription] = useState('');
 
   const containerRef = useRef(null);
   const videoWrapperRef = useRef(null);
@@ -73,17 +76,16 @@ const SessionRoom = () => {
   const handleMouseDown = (e) => {
     if (!isPipMode) return;
     
-    // Se clicar no resize handle, não iniciar o drag
     if (e.target.classList.contains('resize-handle')) {
       return;
     }
     
     setIsDragging(true);
-    setIsResizing(false); // Desabilitar o resize durante o drag
+    setIsResizing(false);
     
     dragStartRef.current = {
-      x: e.clientX - dragPosition.x,
-      y: e.clientY - dragPosition.y
+      x: e.screenX - dragPosition.x,
+      y: e.screenY - dragPosition.y
     };
     
     e.preventDefault();
@@ -92,9 +94,12 @@ const SessionRoom = () => {
   const handleMouseMove = (e) => {
     if (!isDragging) return;
     
+    const newX = e.screenX - dragStartRef.current.x;
+    const newY = e.screenY - dragStartRef.current.y;
+    
     setDragPosition({
-      x: e.clientX - dragStartRef.current.x,
-      y: e.clientY - dragStartRef.current.y
+      x: newX,
+      y: newY
     });
   };
 
@@ -268,6 +273,67 @@ const SessionRoom = () => {
     };
   }, [isResizing]);
 
+  // Funções para lidar com as ações da IA
+  const handleAnalyze = async () => {
+    try {
+      setIsProcessing(true);
+      const result = await aiService.analyzeSession(sessionId, transcription);
+      console.log('Análise:', result);
+      showNotification({
+        message: 'Análise da sessão concluída',
+        type: 'success'
+      });
+    } catch (error) {
+      console.error('Erro ao analisar sessão:', error);
+      showNotification({
+        message: 'Erro ao analisar sessão',
+        type: 'error'
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSuggest = async () => {
+    try {
+      setIsProcessing(true);
+      const result = await aiService.generateSuggestions(sessionId, transcription);
+      console.log('Sugestões:', result);
+      showNotification({
+        message: 'Sugestões geradas com sucesso',
+        type: 'success'
+      });
+    } catch (error) {
+      console.error('Erro ao gerar sugestões:', error);
+      showNotification({
+        message: 'Erro ao gerar sugestões',
+        type: 'error'
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleReport = async () => {
+    try {
+      setIsProcessing(true);
+      const result = await aiService.generateReport(sessionId, transcription);
+      console.log('Relatório:', result);
+      showNotification({
+        message: 'Relatório gerado com sucesso',
+        type: 'success'
+      });
+    } catch (error) {
+      console.error('Erro ao gerar relatório:', error);
+      showNotification({
+        message: 'Erro ao gerar relatório',
+        type: 'error'
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // Encerrar sessão
   const handleEndSession = async () => {
     if (!window.confirm('Tem certeza que deseja encerrar esta sessão?')) {
@@ -328,6 +394,10 @@ const SessionRoom = () => {
             videoEnabled={videoEnabled}
             isFloating={isPipMode}
             onPipModeChange={handlePipModeChange}
+            onAnalyze={handleAnalyze}
+            onSuggest={handleSuggest}
+            onReport={handleReport}
+            isProcessing={isProcessing}
           />
           {isPipMode && (
             <div 

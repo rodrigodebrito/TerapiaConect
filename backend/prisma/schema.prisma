@@ -190,6 +190,7 @@ model Session {
   appointment            Appointment         @relation(fields: [appointmentId], references: [id])
   transcripts            SessionTranscript[]
   insights               AIInsight[]
+  reports                SessionReport[]
 }
 
 model SessionTranscript {
@@ -210,5 +211,14 @@ model AIInsight {
   keywords    String?
   timestamp   DateTime  @default(now())
   
+  session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model SessionReport {
+  id          String    @id @default(uuid())
+  sessionId   String
+  content     String    @db.Text
+  generatedBy String    // AI, THERAPIST
+  timestamp   DateTime  @default(now())
   session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }

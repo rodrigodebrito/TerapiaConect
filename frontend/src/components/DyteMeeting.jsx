@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useDyteClient, DyteProvider } from '@dytesdk/react-web-core';
 import { DyteMeeting } from '@dytesdk/react-ui-kit';
 import { joinMeeting } from '../services/meetingService';
+import aiService from '../services/aiService';
+import AITools from './AITools';
 import './DyteMeeting.css';
 
 const DyteVideoMeeting = ({ sessionId, onError }) => {
@@ -10,8 +12,63 @@ const DyteVideoMeeting = ({ sessionId, onError }) => {
   const [error, setError] = useState(null);
   const [debugInfo, setDebugInfo] = useState(null);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const [transcription, setTranscription] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
   const meetingEl = useRef();
   const maxReconnectAttempts = 3;
+
+  // Funções para lidar com as ações da IA
+  const handleAnalyze = async () => {
+    try {
+      setIsProcessing(true);
+      const result = await aiService.analyzeSession(sessionId, transcription);
+      // Aqui você pode mostrar o resultado em um modal ou componente de feedback
+      console.log('Análise:', result);
+    } catch (error) {
+      console.error('Erro ao analisar sessão:', error);
+      // Mostrar mensagem de erro para o usuário
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSuggest = async () => {
+    try {
+      setIsProcessing(true);
+      const result = await aiService.generateSuggestions(sessionId, transcription);
+      // Mostrar sugestões em um componente de feedback
+      console.log('Sugestões:', result);
+    } catch (error) {
+      console.error('Erro ao gerar sugestões:', error);
+      // Mostrar mensagem de erro para o usuário
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleReport = async () => {
+    try {
+      setIsProcessing(true);
+      const result = await aiService.generateReport(sessionId, transcription);
+      // Mostrar relatório em um modal ou nova página
+      console.log('Relatório:', result);
+    } catch (error) {
+      console.error('Erro ao gerar relatório:', error);
+      // Mostrar mensagem de erro para o usuário
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Função para atualizar a transcrição
+  const updateTranscription = async (text) => {
+    try {
+      await aiService.addTranscription(sessionId, text);
+      setTranscription(prev => prev + ' ' + text);
+    } catch (error) {
+      console.error('Erro ao atualizar transcrição:', error);
+    }
+  };
 
   useEffect(() => {
     if (!sessionId) {
@@ -167,33 +224,42 @@ const DyteVideoMeeting = ({ sessionId, onError }) => {
   return (
     <div className="dyte-meeting-container" ref={meetingEl}>
       {meeting && (
-        <DyteProvider value={meeting}>
-          <DyteMeeting
-            meeting={meeting}
-            showSetupScreen
-            uiConfig={{
-              controlBar: true,
-              header: true,
-              participantCount: true,
-              layout: {
-                grid: {
-                  fit: 'contain',
+        <>
+          <DyteProvider value={meeting}>
+            <DyteMeeting
+              meeting={meeting}
+              showSetupScreen
+              uiConfig={{
+                controlBar: true,
+                header: true,
+                participantCount: true,
+                layout: {
+                  grid: {
+                    fit: 'contain',
+                  },
                 },
-              },
-              colors: {
-                primary: '#3498db',
-                secondary: '#2980b9',
-                textPrimary: '#ffffff',
-                videoBackground: '#1a2531',
-              },
-              dimensions: {
-                controlBar: {
-                  height: '80px',
+                colors: {
+                  primary: '#3498db',
+                  secondary: '#2980b9',
+                  textPrimary: '#ffffff',
+                  videoBackground: '#1a2531',
                 },
-              },
-            }}
+                dimensions: {
+                  controlBar: {
+                    height: '80px',
+                  },
+                },
+              }}
+            />
+          </DyteProvider>
+          
+          <AITools
+            onAnalyze={handleAnalyze}
+            onSuggest={handleSuggest}
+            onReport={handleReport}
+            isProcessing={isProcessing}
           />
-        </DyteProvider>
+        </>
       )}
     </div>
   );

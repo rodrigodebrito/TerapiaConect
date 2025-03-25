@@ -1,10 +1,9 @@
 .session-room {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 64px); /* Considerando um cabeçalho de 64px */
-  background-color: #f5f6fa;
-  padding: 20px;
-  gap: 20px;
+  height: 100vh;
+  background-color: #f5f5f5;
+  position: relative;
 }
 
 .session-room-loading,
@@ -68,10 +67,24 @@
 }
 
 .video-area {
-  flex: 2;
-  min-width: 300px;
-  height: 100%;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #000;
   position: relative;
+  transition: all 0.3s ease;
+}
+
+.video-area.floating {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 300px;
+  height: 200px;
+  z-index: 1000;
+  border-radius: 10px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .video-container {
@@ -357,13 +370,36 @@
 }
 
 .tools-menu {
+  position: fixed;
+  top: 50%;
+  left: 20px;
+  transform: translateY(-50%);
+  background-color: #fff;
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+
+.tools-container {
+  position: relative;
+  flex: 1;
   display: flex;
-  gap: 10px;
-  padding: 15px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  overflow-x: auto;
+  justify-content: center;
+  align-items: center;
+}
+
+.transcript-container {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 400px;
+  height: calc(100vh - 40px);
+  background-color: #fff;
+  border-radius: 10px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  z-index: 90;
 }
 
 .tools-menu::-webkit-scrollbar {
@@ -472,6 +508,25 @@
     height: 35px;
     font-size: 1.2rem;
   }
+
+  .video-area.floating {
+    width: 200px;
+    height: 150px;
+  }
+
+  .transcript-container {
+    width: 100%;
+    height: 50vh;
+    top: auto;
+    bottom: 0;
+    right: 0;
+    border-radius: 10px 10px 0 0;
+  }
+
+  .tools-menu {
+    left: 10px;
+    padding: 5px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -572,4 +627,23 @@
 
 .alternative-btn:hover {
   background-color: #219d54;
+}
+
+/* Estilos para impressão */
+@media print {
+  .session-room {
+    height: auto;
+    background-color: #fff;
+  }
+
+  .video-area,
+  .tools-menu,
+  .tools-container {
+    display: none;
+  }
+
+  .print-content {
+    display: block !important;
+    padding: 20px;
+  }
 } 

@@ -335,23 +335,99 @@ const ConstellationView = ({ fieldTexture }) => {
         )}
       </div>
       
-      <div className="canvas-container" style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', padding: 0, margin: 0 }}>
+      <div className="canvas-container">
         <Canvas 
           shadows 
-          camera={{ position: [0, 5, 8], fov: 45 }}
-          style={{ background: 'transparent' }}
+          camera={{ position: [0, 8, 12], fov: 45 }}
+          style={{ background: '#e6e0ff' }}
+          gl={{ 
+            antialias: true,
+            alpha: false,
+            preserveDrawingBuffer: true,
+            powerPreference: "high-performance"
+          }}
         >
-          <color attach="background" args={['#ffffff']} />
-          <fog attach="fog" args={['#ffffff', 10, 20]} />
-          <ambientLight intensity={0.8} />
+          <color attach="background" args={['#e6e0ff']} />
+          <fog attach="fog" args={['#e6e0ff', 35, 45]} />
+          <ambientLight intensity={0.6} />
           <directionalLight
             position={[3, 5, 3]}
-            intensity={1}
+            intensity={0.8}
             castShadow
-            shadow-mapSize-width={1024}
-            shadow-mapSize-height={1024}
           />
-          <pointLight position={[-3, 5, -3]} intensity={0.6} />
+          <pointLight position={[-3, 5, -3]} intensity={0.4} />
+          <spotLight
+            position={[0, 8, 0]}
+            intensity={0.3}
+            angle={Math.PI / 4}
+            penumbra={0.2}
+            castShadow
+          />
+
+          <mesh 
+            position={[0, 0, 0]} 
+            rotation={[-Math.PI / 2, 0, 0]} 
+            receiveShadow
+            castShadow
+            onClick={(e) => {
+              e.stopPropagation();
+              finalHandleSelect(null);
+            }}
+          >
+            <circleGeometry args={[5, 64]} />
+            <meshPhysicalMaterial 
+              color="#000000"
+              metalness={0.7}
+              roughness={0.2}
+              clearcoat={0.8}
+              clearcoatRoughness={0.2}
+              reflectivity={0.8}
+              side={THREE.DoubleSide}
+            />
+          </mesh>
+
+          {/* Círculos decorativos com linhas mais brilhantes */}
+          <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[4.5, 4.55, 64]} />
+            <meshStandardMaterial 
+              color="#888888" 
+              metalness={0.9}
+              roughness={0.1}
+              emissive="#ffffff"
+              emissiveIntensity={0.1}
+            />
+          </mesh>
+          <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[3.5, 3.55, 64]} />
+            <meshStandardMaterial 
+              color="#888888"
+              metalness={0.9}
+              roughness={0.1}
+              emissive="#ffffff"
+              emissiveIntensity={0.1}
+            />
+          </mesh>
+          <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[2.5, 2.55, 64]} />
+            <meshStandardMaterial 
+              color="#888888"
+              metalness={0.9}
+              roughness={0.1}
+              emissive="#ffffff"
+              emissiveIntensity={0.1}
+            />
+          </mesh>
+          <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[1.5, 1.55, 32]} />
+            <meshStandardMaterial 
+              color="#888888"
+              metalness={0.9}
+              roughness={0.1}
+              emissive="#ffffff"
+              emissiveIntensity={0.1}
+            />
+          </mesh>
+
           <Field 
             fieldTexture={fieldTexture} 
             representatives={representatives}
@@ -363,13 +439,19 @@ const ConstellationView = ({ fieldTexture }) => {
           />
           <OrbitControls 
             makeDefault
-            enablePan={false}
+            enablePan={true}
+            screenSpacePanning={true}
             maxPolarAngle={Math.PI / 2.2}
             minPolarAngle={Math.PI / 6}
             enableRotate={!isDraggingAny}
-            maxDistance={12}
-            minDistance={3}
-            enabled={!isDraggingAny}  // Desabilita completamente durante arrasto
+            maxDistance={15}
+            minDistance={4}
+            enabled={!isDraggingAny}
+            keyPanSpeed={15}
+            panSpeed={1.5}
+            enableDamping={true}
+            dampingFactor={0.05}
+            target={[0, 0, 0]}
           />
         </Canvas>
         
@@ -390,28 +472,20 @@ const CompassRose = () => {
     <group>
       {/* Círculos decorativos */}
       <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[6, 6.05, 64]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
+        <ringGeometry args={[4.5, 4.55, 64]} />
+        <meshBasicMaterial color="#cccccc" transparent opacity={0.4} />
       </mesh>
       <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[5, 5.05, 64]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
+        <ringGeometry args={[3.5, 3.55, 64]} />
+        <meshBasicMaterial color="#cccccc" transparent opacity={0.4} />
       </mesh>
       <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[4, 4.05, 64]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
+        <ringGeometry args={[2.5, 2.55, 64]} />
+        <meshBasicMaterial color="#cccccc" transparent opacity={0.4} />
       </mesh>
       <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[3, 3.05, 32]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
-      </mesh>
-      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[2, 2.05, 32]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
-      </mesh>
-      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[1, 1.05, 32]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
+        <ringGeometry args={[1.5, 1.55, 32]} />
+        <meshBasicMaterial color="#cccccc" transparent opacity={0.4} />
       </mesh>
       
       {/* Linhas direcionais primárias (N, S, L, O) */}
@@ -501,16 +575,29 @@ const Field = ({ fieldTexture, representatives, selectedRepresentative, handleRe
           finalHandleSelect(null);
         }}
       >
-        <circleGeometry args={[7, 64]} />
-        <meshStandardMaterial 
-          map={circleTexture}
-          color="#f0f0f0" 
-          roughness={0.2}
-          metalness={0.3}
+        <circleGeometry args={[5, 64]} />
+        <meshBasicMaterial 
+          color="#ffffff"
           side={THREE.DoubleSide}
-          emissive="#ffffff"
-          emissiveIntensity={0.1}
         />
+      </mesh>
+      
+      {/* Círculos decorativos com linhas cinzas */}
+      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[4.5, 4.55, 64]} />
+        <meshBasicMaterial color="#666666" />
+      </mesh>
+      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[3.5, 3.55, 64]} />
+        <meshBasicMaterial color="#666666" />
+      </mesh>
+      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[2.5, 2.55, 64]} />
+        <meshBasicMaterial color="#666666" />
+      </mesh>
+      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[1.5, 1.55, 32]} />
+        <meshBasicMaterial color="#666666" />
       </mesh>
       
       {/* Componente decorativo */}
@@ -537,18 +624,154 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
   const [rotation, setRotation] = useState(0);
   const modelRef = useRef();
   const { camera } = useThree();
-  const tempRay = useMemo(() => new THREE.Raycaster(), []);
-  
-  // Obter funções e estados do contexto
   const { setRepresentativePosition, setDraggingState, showNames } = useContext(ConstellationContext);
-  
-  // Carregar o modelo 3D apropriado para o tipo de representante com preload
+
+  // Referência única para informações de arrasto
+  const dragInfo = useRef({
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    startPosition: new THREE.Vector3(),
+    startPoint: new THREE.Vector3(),
+    startRotation: 0,
+    isRotating: false
+  });
+
+  // Função para converter coordenadas de tela para coordenadas no plano
+  const screenToPlaneCoordinates = useCallback((clientX, clientY) => {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return null;
+
+    const rect = canvas.getBoundingClientRect();
+    
+    // Usar coordenadas relativas ao canvas
+    const x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+    // Criar raycaster e plano
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera({ x, y }, camera);
+    
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const intersection = new THREE.Vector3();
+    
+    const hit = raycaster.ray.intersectPlane(plane, intersection);
+    return hit ? intersection : null;
+  }, [camera]);
+
+  // Manipulador de movimento do mouse
+  const handleMouseMove = useCallback((e) => {
+    if (!dragInfo.current.isDragging) return;
+
+    if (e.shiftKey || dragInfo.current.isRotating) {
+      // Modo de rotação
+      const canvas = document.querySelector('canvas');
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const deltaX = ((e.clientX - dragInfo.current.startX) / rect.width) * Math.PI * 2;
+      setRotation(dragInfo.current.startRotation + deltaX);
+    } else {
+      // Modo de movimento
+      const currentPoint = screenToPlaneCoordinates(e.clientX, e.clientY);
+      if (!currentPoint || !dragInfo.current.startPoint) return;
+
+      const deltaX = currentPoint.x - dragInfo.current.startPoint.x;
+      const deltaZ = currentPoint.z - dragInfo.current.startPoint.z;
+
+      const newX = dragInfo.current.startPosition.x + deltaX;
+      const newZ = dragInfo.current.startPosition.z + deltaZ;
+
+      // Limitar ao círculo
+      const radius = 5;
+      const distance = Math.sqrt(newX * newX + newZ * newZ);
+      
+      let finalX = newX;
+      let finalZ = newZ;
+      
+      if (distance > radius) {
+        const angle = Math.atan2(newZ, newX);
+        finalX = Math.cos(angle) * radius;
+        finalZ = Math.sin(angle) * radius;
+      }
+
+      setLocalPosition([finalX, 0, finalZ]);
+      setRepresentativePosition(id, [finalX, 0, finalZ]);
+    }
+  }, [id, screenToPlaneCoordinates, setRepresentativePosition]);
+
+  // Manipulador de teclas
+  const handleKeyDown = useCallback((e) => {
+    if (e.shiftKey && dragInfo.current.isDragging) {
+      dragInfo.current.isRotating = true;
+      document.body.style.cursor = 'ew-resize';
+    }
+  }, []);
+
+  const handleKeyUp = useCallback((e) => {
+    if (!e.shiftKey && dragInfo.current.isDragging) {
+      dragInfo.current.isRotating = false;
+      document.body.style.cursor = 'grabbing';
+    }
+  }, []);
+
+  // Manipulador para soltar o mouse
+  const handleMouseUp = useCallback(() => {
+    if (dragInfo.current.isDragging) {
+      dragInfo.current.isDragging = false;
+      dragInfo.current.isRotating = false;
+      
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keyup', handleKeyUp);
+      
+      document.body.style.cursor = 'auto';
+      setDraggingState(false);
+    }
+  }, [handleMouseMove, handleKeyDown, handleKeyUp, setDraggingState]);
+
+  // Manipulador de clique do mouse
+  const handleMouseDown = useCallback((e) => {
+    e.stopPropagation();
+    onSelect(representative);
+
+    const startPoint = screenToPlaneCoordinates(e.clientX, e.clientY);
+    if (!startPoint) return;
+
+    dragInfo.current = {
+      isDragging: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      startPosition: new THREE.Vector3(localPosition[0], localPosition[1], localPosition[2]),
+      startPoint: startPoint,
+      startRotation: rotation,
+      isRotating: false
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+
+    document.body.style.cursor = 'grabbing';
+    setDraggingState(true);
+  }, [localPosition, rotation, representative, onSelect, screenToPlaneCoordinates, handleMouseMove, handleMouseUp, handleKeyDown, handleKeyUp, setDraggingState]);
+
+  // Atualizar posição quando mudar externamente
+  useEffect(() => {
+    if (!dragInfo.current.isDragging) {
+      setLocalPosition([position[0], 0, position[2]]);
+    }
+  }, [position]);
+
+  // Carregar o modelo 3D apropriado para o tipo de representante
   const modelPath = useMemo(() => {
     return REPRESENTATIVE_TYPES[Object.keys(REPRESENTATIVE_TYPES).find(key => 
       REPRESENTATIVE_TYPES[key].id === type
     )]?.modelPath || REPRESENTATIVE_TYPES.MALE_ELDER.modelPath;
   }, [type]);
-  
+
   // Usar diretamente useGLTF com clone para garantir que cada instância seja independente
   const { scene: originalModel } = useGLTF(modelPath);
   
@@ -559,24 +782,23 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
     }
     return null;
   }, [originalModel]);
-  
+
   // Definir a escala baseada no tipo do representante
   const modelScale = useMemo(() => {
     if (type === 'male_child' || type === 'female_child') {
-      return 0.8; // Tamanho reduzido para crianças
+      return 0.6;
     } else if (type === 'subjetivo_longo') {
-      return 1.2; // Tamanho maior para subjetivo longo
+      return 0.9;
     } else if (type === 'subjetivo_curto') {
-      return 0.6; // Tamanho bem menor para subjetivo curto
+      return 0.4;
     }
-    return 1.0; // Tamanho normal para adultos e idosos
+    return 0.75;
   }, [type]);
-  
+
   // Limpar quando o componente for desmontado
   useEffect(() => {
     return () => {
       if (model) {
-        // Limpar memória do modelo e materiais
         model.traverse((node) => {
           if (node.isMesh) {
             if (node.geometry) node.geometry.dispose();
@@ -592,21 +814,20 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
       }
     };
   }, [model]);
-  
+
   // Aplicar a cor selecionada ao modelo
   useEffect(() => {
     if (model) {
       model.traverse((node) => {
         if (node.isMesh && node.material) {
-          // Clonar o material para não afetar outras instâncias do mesmo modelo
           node.material = node.material.clone();
-          
-          // Aplicar a cor selecionada
           node.material.color.set(color);
+          node.material.roughness = 0.5;
+          node.material.metalness = 0.1;
+          node.material.envMapIntensity = 0.8;
           
-          // Adicionar efeito de emissão quando selecionado
           if (selected) {
-            node.material.emissive = new THREE.Color(color);
+            node.material.emissive = new THREE.Color(color).multiplyScalar(0.3);
             node.material.emissiveIntensity = 0.3;
           } else {
             node.material.emissive = new THREE.Color('#000000');
@@ -616,198 +837,22 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
       });
     }
   }, [model, color, selected]);
-  
-  // Informações de arrastar
-  const dragInfo = useRef({
-    isDragging: false,
-    startX: 0,
-    startY: 0,
-    startPosition: new THREE.Vector3(),
-    startPoint: new THREE.Vector3(),
-    startRotation: 0,
-    isRotating: false
-  });
-  
-  // Manter a posição do modela atualizada com a posição externa
-  useEffect(() => {
-    if (!dragInfo.current.isDragging) {
-      // Mantém a altura Y fixa enquanto atualiza X e Z
-      setLocalPosition([position[0], 0, position[2]]);
-    }
-  }, [position]);
-  
+
   // Ajustar escala do modelo
   useEffect(() => {
     if (modelRef.current) {
-      // Aplicar escala padrão para todos os modelos
-      const scale = modelScale;
-      
-      // Ajuste específico para o modelo Adulto Feminino para garantir consistência
-      if (type === REPRESENTATIVE_TYPES.FEMALE_ADULT.id) {
-        modelRef.current.scale.set(scale, scale, scale);
-      } else {
-        // Escala padrão para os outros modelos
-        modelRef.current.scale.set(scale, scale, scale);
-      }
-      
+      modelRef.current.scale.set(modelScale, modelScale, modelScale);
       modelRef.current.rotation.y = rotation;
     }
-  }, [rotation, type, modelScale]);
-  
+  }, [rotation, modelScale]);
+
   // Atualizar rotação no frame
   useFrame(() => {
     if (modelRef.current) {
       modelRef.current.rotation.y = rotation;
     }
   });
-  
-  // Função para converter coordenadas de tela para coordenadas no plano horizontal
-  const screenToPlaneCoordinates = useCallback((screenX, screenY) => {
-    // Converter coordenadas da tela para normalized device coordinates (-1 a +1)
-    const x = (screenX / window.innerWidth) * 2 - 1;
-    const y = -(screenY / window.innerHeight) * 2 + 1;
-    
-    // Configurar o raycaster a partir da câmera
-    tempRay.setFromCamera({ x, y }, camera);
-    
-    // Verificar interseção com o plano horizontal
-    const planeHeight = 0; // Altura do plano onde o representante se move
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeHeight);
-    
-    // Calcular o ponto de interseção
-    const target = new THREE.Vector3();
-    if (tempRay.ray.intersectPlane(plane, target)) {
-      // Retornamos as coordenadas globais, independente da rotação da câmera
-      return target;
-    }
-    
-    return null;
-  }, [camera, tempRay]);
-  
-  // Manipulador de eventos para clique do mouse
-  const handleMouseDown = useCallback((e) => {
-    // Remover a verificação do viewMode que está causando o erro
-    // if (viewMode === 'readonly') return;
-    
-    // Parar propagação para evitar que eventos de clique afetem outros objetos
-    e.stopPropagation();
-    
-    // Selecionar este representante
-    onSelect(representative);
-    
-    // Calcular o ponto de início no plano
-    const startPoint = screenToPlaneCoordinates(e.clientX, e.clientY);
-    
-    // Indicar que o arrasto começou
-    dragInfo.current.isDragging = true;
-    dragInfo.current.startX = e.clientX;
-    dragInfo.current.startY = e.clientY;
-    dragInfo.current.startPosition.set(localPosition[0], localPosition[1], localPosition[2]);
-    dragInfo.current.startPoint = startPoint.clone();
-    dragInfo.current.startRotation = rotation;
-    dragInfo.current.isRotating = false;
-    
-    // Adicionar eventos globais para capturar movimento e liberação do mouse
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('keyup', handleKeyUp);
-    
-    // Mudar cursor para indicar que o objeto está sendo arrastado
-    document.body.style.cursor = 'grabbing';
-    
-    // Informar ao contexto que começamos a arrastar
-    setDraggingState(true);
-  }, [localPosition, rotation, representative, onSelect, screenToPlaneCoordinates, setDraggingState]);
-  
-  // Manipulador para liberar o mouse
-  const handleMouseUp = useCallback(() => {
-    if (dragInfo.current.isDragging) {
-      // Indicar que o arrasto terminou
-      dragInfo.current.isDragging = false;
-      dragInfo.current.isRotating = false;
-      
-      // Remover os eventos globais
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('keyup', handleKeyUp);
-      
-      // Restaurar o cursor padrão
-      document.body.style.cursor = 'auto';
-      
-      // Informar ao contexto que paramos de arrastar
-      setDraggingState(false);
-    }
-  }, [setDraggingState]);
-  
-  // Manipuladores para teclas (para ativar rotação)
-  const handleKeyDown = useCallback((e) => {
-    if (e.shiftKey && dragInfo.current.isDragging) {
-      dragInfo.current.isRotating = true;
-      document.body.style.cursor = 'ew-resize';
-    }
-  }, []);
-  
-  const handleKeyUp = useCallback((e) => {
-    if (!e.shiftKey && dragInfo.current.isDragging) {
-      dragInfo.current.isRotating = false;
-      document.body.style.cursor = 'grabbing';
-    }
-  }, []);
-  
-  // Manipulador para movimento do mouse
-  const handleMouseMove = useCallback((e) => {
-    if (!dragInfo.current.isDragging) return;
-    
-    // Verificar se está no modo de rotação (shift pressionado)
-    if (e.shiftKey || dragInfo.current.isRotating) {
-      dragInfo.current.isRotating = true;
-      // Calcular rotação (movimento horizontal do mouse)
-      const deltaX = (e.clientX - dragInfo.current.startX) * 0.02;
-      
-      // Aplicar rotação
-      const newRotation = dragInfo.current.startRotation + deltaX;
-      setRotation(newRotation);
-    } else {
-      // Para movimento normal, usar raycasting para mapear movimento do mouse para o plano
-      const currentPoint = screenToPlaneCoordinates(e.clientX, e.clientY);
-      
-      if (currentPoint) {
-        // Calcular o deslocamento no plano do mundo
-        const movementX = currentPoint.x - dragInfo.current.startPoint.x;
-        const movementZ = currentPoint.z - dragInfo.current.startPoint.z;
-        
-        // Calcular nova posição baseada no deslocamento
-        const newX = dragInfo.current.startPosition.x + movementX;
-        const newZ = dragInfo.current.startPosition.z + movementZ;
-        
-        // Limitar à área do prato (círculo com raio 6.5)
-        const plateRadius = 6.5;
-        const distance = Math.sqrt(newX * newX + newZ * newZ);
-        
-        let limitedX = newX;
-        let limitedZ = newZ;
-        
-        // Se a posição estiver fora do prato, ajustar para a borda
-        if (distance > plateRadius) {
-          const angle = Math.atan2(newZ, newX);
-          limitedX = Math.cos(angle) * plateRadius;
-          limitedZ = Math.sin(angle) * plateRadius;
-        }
-        
-        // Atualizar posição (mantendo Y constante)
-        const newPosition = [limitedX, 0, limitedZ];
-        
-        setLocalPosition(newPosition);
-        
-        // Atualizar a posição no contexto global
-        setRepresentativePosition && setRepresentativePosition(id, [limitedX, 0, limitedZ]);
-      }
-    }
-  }, [rotation, screenToPlaneCoordinates, id, setRepresentativePosition]);
 
-  // Mostrar o modelo com uma cor de destaque se selecionado
   return (
     <group
       ref={modelRef}
@@ -826,7 +871,6 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
     >
       {model && <primitive object={model} position={[0, 1.0, 0]} />}
       
-      {/* Rótulo com o nome do representante - só exibir se showNames for true */}
       {showNames && (
         <Html
           position={[0, 2.8, 0]}

@@ -1,109 +1,66 @@
-import axios from 'axios';
+import api from './api';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
-/**
- * Serviço para gerenciar as chamadas de API relacionadas à IA
- */
 const aiService = {
   /**
-   * Analisar transcrição e gerar insights
-   * @param {Array} transcript - Array de objetos de transcrição
+   * Analisa o conteúdo da sessão
    * @param {string} sessionId - ID da sessão
-   * @returns {Promise} - Promessa com os insights gerados
+   * @param {string} content - Conteúdo para análise
+   * @returns {Promise<Object>} Resultado da análise
    */
-  generateInsights: async (transcript, sessionId) => {
+  async analyzeSession(sessionId, content) {
     try {
-      const response = await axios.post(`${API_URL}/api/ai/insights`, {
-        transcript,
-        sessionId
-      });
+      const response = await api.post(`/ai/analyze/${sessionId}`, { content });
       return response.data;
     } catch (error) {
-      console.error('Erro ao gerar insights:', error);
+      console.error('Erro ao analisar sessão:', error);
       throw error;
     }
   },
 
   /**
-   * Iniciar transcrição de áudio
+   * Gera sugestões em tempo real
    * @param {string} sessionId - ID da sessão
-   * @returns {Promise} - Promessa com o status da transcrição
+   * @param {string} context - Contexto atual da sessão
+   * @returns {Promise<Object>} Sugestões geradas
    */
-  startTranscription: async (sessionId) => {
+  async generateSuggestions(sessionId, context) {
     try {
-      const response = await axios.post(`${API_URL}/api/ai/transcription/start`, {
-        sessionId
-      });
+      const response = await api.post(`/ai/suggest/${sessionId}`, { context });
       return response.data;
     } catch (error) {
-      console.error('Erro ao iniciar transcrição:', error);
+      console.error('Erro ao gerar sugestões:', error);
       throw error;
     }
   },
 
   /**
-   * Parar transcrição de áudio
+   * Gera relatório da sessão
    * @param {string} sessionId - ID da sessão
-   * @returns {Promise} - Promessa com o status da transcrição
+   * @param {string} content - Conteúdo completo da sessão
+   * @returns {Promise<Object>} Relatório gerado
    */
-  stopTranscription: async (sessionId) => {
+  async generateReport(sessionId, content) {
     try {
-      const response = await axios.post(`${API_URL}/api/ai/transcription/stop`, {
-        sessionId
-      });
+      const response = await api.post(`/ai/report/${sessionId}`, { content });
       return response.data;
     } catch (error) {
-      console.error('Erro ao parar transcrição:', error);
+      console.error('Erro ao gerar relatório:', error);
       throw error;
     }
   },
 
   /**
-   * Obter transcrição completa
+   * Adiciona transcrição à sessão
    * @param {string} sessionId - ID da sessão
-   * @returns {Promise} - Promessa com a transcrição completa
+   * @param {string} text - Texto da transcrição
+   * @returns {Promise<Object>} Confirmação do salvamento
    */
-  getTranscript: async (sessionId) => {
+  async addTranscription(sessionId, text) {
     try {
-      const response = await axios.get(`${API_URL}/api/ai/transcription/${sessionId}`);
+      const response = await api.post(`/ai/transcription/${sessionId}`, { text });
       return response.data;
     } catch (error) {
-      console.error('Erro ao obter transcrição:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Obter resumo da sessão
-   * @param {string} sessionId - ID da sessão
-   * @returns {Promise} - Promessa com o resumo da sessão
-   */
-  getSessionSummary: async (sessionId) => {
-    try {
-      const response = await axios.get(`${API_URL}/api/ai/summary/${sessionId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Erro ao obter resumo da sessão:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Salvar notas da sessão com análise de IA
-   * @param {string} sessionId - ID da sessão
-   * @param {string} notes - Notas da sessão
-   * @returns {Promise} - Promessa com as notas enriquecidas
-   */
-  processSessionNotes: async (sessionId, notes) => {
-    try {
-      const response = await axios.post(`${API_URL}/api/ai/notes`, {
-        sessionId,
-        notes
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Erro ao processar notas da sessão:', error);
+      console.error('Erro ao adicionar transcrição:', error);
       throw error;
     }
   }

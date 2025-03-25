@@ -21,6 +21,7 @@
     "@fullcalendar/interaction": "^6.1.15",
     "@fullcalendar/react": "^6.1.15",
     "@fullcalendar/timegrid": "^6.1.15",
+    "@jitsi/react-sdk": "^1.4.4",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.18.0",
     "axios": "^1.6.8",

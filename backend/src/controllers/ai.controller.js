@@ -1,5 +1,6 @@
 const prisma = require('../utils/prisma');
 const { validationResult } = require('express-validator');
+const openAIService = require('../services/ai/openai.service');
 
 /**
  * Controlador para operações relacionadas a IA
@@ -133,7 +134,7 @@ const aiController = {
   },
 
   /**
-   * Gerar insights para uma sessão (simulado)
+   * Gerar insights para uma sessão usando OpenAI
    * @param {string} sessionId - ID da sessão
    * @private
    */
@@ -151,15 +152,20 @@ const aiController = {
         return;
       }
 
-      // Simular a geração de insights a partir do texto
-      // Em um cenário real, isso chamaria uma API de IA
-      const content = "Baseado na conversa, observa-se um padrão de comunicação que pode ser explorado mais profundamente. Considere direcionar perguntas sobre as emoções associadas aos eventos mencionados.";
+      // Preparar o texto para análise
+      const transcriptText = recentTranscripts
+        .reverse()
+        .map(t => `${t.speaker}: ${t.content}`)
+        .join('\n');
+
+      // Gerar insights usando OpenAI
+      const analysis = await openAIService.analyzeText(transcriptText);
       
       // Criar o insight
       await prisma.aIInsight.create({
         data: {
           sessionId,
-          content,
+          content: analysis,
           type: 'ANALYSIS',
           keywords: 'emoções, padrão, comunicação'
         }
@@ -328,6 +334,165 @@ const aiController = {
     } catch (error) {
       console.error('Erro ao gerar resumo da sessão:', error);
       res.status(500).json({ message: 'Erro ao gerar resumo da sessão' });
+    }
+  },
+
+  /**
+   * Analisar uma sessão
+   * @param {Request} req - Requisição Express
+   * @param {Response} res - Resposta Express
+   */
+  analyzeSession: async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      
+      // Verificar se a sessão existe
+      const session = await prisma.session.findUnique({
+        where: { id: sessionId },
+        include: {
+          therapist: true,
+          transcripts: {
+            orderBy: { timestamp: 'asc' }
+          }
+        }
+      });
+
+      if (!session) {
+        return res.status(404).json({ message: 'Sessão não encontrada' });
+      }
+
+      // Apenas o terapeuta pode analisar a sessão
+      const userId = req.user.id;
+      if (session.therapist.userId !== userId) {
+        return res.status(403).json({ message: 'Apenas o terapeuta pode analisar a sessão' });
+      }
+
+      // Preparar o texto da sessão para análise
+      const sessionText = session.transcripts
+        .map(t => `${t.speaker}: ${t.content}`)
+        .join('\n');
+
+      // Analisar a sessão com OpenAI
+      const analysis = await openAIService.analyzeText(sessionText);
+
+      res.json({ analysis });
+    } catch (error) {
+      console.error('Erro ao analisar sessão:', error);
+      res.status(500).json({ message: 'Erro ao analisar sessão' });
+    }
+  },
+
+  /**
+   * Gerar sugestões em tempo real
+   * @param {Request} req - Requisição Express
+   * @param {Response} res - Resposta Express
+   */
+  generateSuggestions: async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      
+      // Verificar se a sessão existe e está ativa
+      const session = await prisma.session.findUnique({
+        where: { 
+          id: sessionId,
+          status: 'ACTIVE'
+        },
+        include: {
+          therapist: true,
+          transcripts: {
+            orderBy: { timestamp: 'desc' },
+            take: 5 // Últimas 5 transcrições para contexto
+          }
+        }
+      });
+
+      if (!session) {
+        return res.status(404).json({ message: 'Sessão não encontrada ou não está ativa' });
+      }
+
+      // Apenas o terapeuta pode receber sugestões
+      const userId = req.user.id;
+      if (session.therapist.userId !== userId) {
+        return res.status(403).json({ message: 'Apenas o terapeuta pode receber sugestões' });
+      }
+
+      // Preparar o contexto atual
+      const context = session.transcripts
+        .reverse()
+        .map(t => `${t.speaker}: ${t.content}`)
+        .join('\n');
+
+      // Gerar sugestões com OpenAI
+      const suggestions = await openAIService.generateSuggestions(context);
+
+      res.json({ suggestions });
+    } catch (error) {
+      console.error('Erro ao gerar sugestões:', error);
+      res.status(500).json({ message: 'Erro ao gerar sugestões' });
+    }
+  },
+
+  /**
+   * Gerar relatório da sessão
+   * @param {Request} req - Requisição Express
+   * @param {Response} res - Resposta Express
+   */
+  generateReport: async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      
+      // Verificar se a sessão existe e está finalizada
+      const session = await prisma.session.findUnique({
+        where: { 
+          id: sessionId,
+          status: 'COMPLETED'
+        },
+        include: {
+          therapist: true,
+          client: true,
+          transcripts: {
+            orderBy: { timestamp: 'asc' }
+          }
+        }
+      });
+
+      if (!session) {
+        return res.status(404).json({ message: 'Sessão não encontrada ou não está finalizada' });
+      }
+
+      // Apenas o terapeuta pode gerar relatórios
+      const userId = req.user.id;
+      if (session.therapist.userId !== userId) {
+        return res.status(403).json({ message: 'Apenas o terapeuta pode gerar relatórios' });
+      }
+
+      // Preparar o conteúdo completo da sessão
+      const sessionContent = `
+Sessão de Terapia
+Data: ${session.date}
+Terapeuta: ${session.therapist.name}
+Cliente: ${session.client.name}
+
+Transcrição:
+${session.transcripts.map(t => `${t.speaker}: ${t.content}`).join('\n')}
+      `.trim();
+
+      // Gerar relatório com OpenAI
+      const report = await openAIService.generateReport(sessionContent);
+
+      // Salvar o relatório
+      const savedReport = await prisma.sessionReport.create({
+        data: {
+          sessionId,
+          content: report,
+          generatedBy: 'AI'
+        }
+      });
+
+      res.json({ report: savedReport });
+    } catch (error) {
+      console.error('Erro ao gerar relatório:', error);
+      res.status(500).json({ message: 'Erro ao gerar relatório' });
     }
   }
 };

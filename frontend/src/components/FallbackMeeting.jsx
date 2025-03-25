@@ -1,11 +1,17 @@
 import React, { useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
+import AITools from './AITools';
+import './FallbackMeeting.css';
 
 export const FallbackMeeting = ({ 
   audioEnabled = true, 
   videoEnabled = true, 
   isFloating = false,
-  onPipModeChange
+  onPipModeChange,
+  onAnalyze,
+  onSuggest,
+  onReport,
+  isProcessing
 }) => {
   const jitsiContainerRef = useRef(null);
   const jitsiApiRef = useRef(null);
@@ -56,6 +62,12 @@ export const FallbackMeeting = ({
           hideConferenceTimer: true,
           disableInviteFunctions: true,
           readOnlyName: true,
+          startAsModerator: true,
+          role: 'moderator',
+          enableLobby: false,
+          p2p: {
+            enabled: true
+          },
           buttonsWithNotifyClick: [
             'camera',
             'microphone',
@@ -184,17 +196,27 @@ export const FallbackMeeting = ({
   }, [audioEnabled, videoEnabled]);
 
   return (
-    <div 
-      ref={jitsiContainerRef} 
-      className={`video-area ${isFloating ? 'pip-mode' : ''}`}
-      style={{ 
-        width: '100%', 
-        height: '100%',
-        display: isFloating ? 'block' : 'flex',
-        position: isFloating ? 'fixed' : 'relative',
-        zIndex: isFloating ? 2147483647 : 'auto'
-      }}
-    />
+    <div className="fallback-container">
+      <div 
+        ref={jitsiContainerRef} 
+        className={`video-area ${isFloating ? 'pip-mode' : ''}`}
+        style={{ 
+          width: '100%', 
+          height: '100%',
+          display: isFloating ? 'block' : 'flex',
+          position: isFloating ? 'fixed' : 'relative',
+          zIndex: isFloating ? 2147483647 : 'auto'
+        }}
+      />
+      {!isFloating && (
+        <AITools
+          onAnalyze={onAnalyze}
+          onSuggest={onSuggest}
+          onReport={onReport}
+          isProcessing={isProcessing}
+        />
+      )}
+    </div>
   );
 };
 
@@ -202,7 +224,11 @@ FallbackMeeting.propTypes = {
   audioEnabled: PropTypes.bool,
   videoEnabled: PropTypes.bool,
   isFloating: PropTypes.bool,
-  onPipModeChange: PropTypes.func
+  onPipModeChange: PropTypes.func,
+  onAnalyze: PropTypes.func,
+  onSuggest: PropTypes.func,
+  onReport: PropTypes.func,
+  isProcessing: PropTypes.bool
 };
 
 export default FallbackMeeting; 

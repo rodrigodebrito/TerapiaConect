@@ -3,15 +3,21 @@ import { useParams } from 'react-router-dom';
 import VideoArea from './VideoArea';
 import ToolsMenu from './ToolsMenu';
 import ActiveTools from './ActiveTools';
+import AIAssistant from '../../components/AIAssistant';
+import SessionTranscript from '../../components/SessionTranscript';
+import SessionReport from '../../components/SessionReport';
 import { SessionProvider } from '../../contexts/SessionContext';
 import { AIProvider } from '../../contexts/AIContext';
+import { useAuth } from '../../contexts/AuthContext';
 import '../SessionRoom.css';
 
 const SessionRoom = () => {
   const { sessionId } = useParams();
+  const { user } = useAuth();
   const [activeTool, setActiveTool] = useState(null);
   const [isFieldActive, setIsFieldActive] = useState(false);
   const [isVideoFloating, setIsVideoFloating] = useState(false);
+  const [showReport, setShowReport] = useState(false);
 
   const tools = [
     {
@@ -23,6 +29,11 @@ const SessionRoom = () => {
       id: 'ai',
       name: 'Assistente IA',
       icon: '🤖'
+    },
+    {
+      id: 'transcript',
+      name: 'Transcrição',
+      icon: '📝'
     }
   ];
 
@@ -54,19 +65,53 @@ const SessionRoom = () => {
     }
   };
 
+  // Verifica se o usuário é terapeuta
+  const isTherapist = user?.role === 'THERAPIST';
+
   return (
     <SessionProvider sessionId={sessionId}>
       <AIProvider>
         <div className="session-room">
           <VideoArea isFloating={isVideoFloating} />
+          
           <ToolsMenu 
             tools={tools} 
             activeTool={activeTool} 
             onToolClick={handleToolClick} 
           />
-          <ActiveTools 
-            activeTool={activeTool} 
-            isFieldActive={isFieldActive} 
+          
+          <div className="tools-container">
+            {activeTool === 'constellation' && (
+              <ActiveTools 
+                activeTool={activeTool} 
+                isFieldActive={isFieldActive} 
+              />
+            )}
+            
+            {activeTool === 'transcript' && (
+              <div className="transcript-container">
+                <SessionTranscript 
+                  sessionId={sessionId}
+                  isTherapist={isTherapist}
+                  onGenerateReport={() => setShowReport(true)}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Assistente IA (apenas para terapeutas) */}
+          {isTherapist && activeTool === 'ai' && (
+            <AIAssistant 
+              sessionId={sessionId}
+              isTherapist={true}
+            />
+          )}
+
+          {/* Modal do Relatório */}
+          <SessionReport
+            sessionId={sessionId}
+            open={showReport}
+            onClose={() => setShowReport(false)}
           />
         </div>
       </AIProvider>
