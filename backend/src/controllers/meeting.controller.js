@@ -2,18 +2,18 @@
  * Controlador para gerenciar videoconferências
  * 
  * Este controlador lida com a criação, configuração e gerenciamento
- * de sessões de videoconferência usando o serviço do Dyte
+ * de sessões de videoconferência usando o serviço do Jitsi
  */
 
-const dyteService = require('../services/dyte.service');
+const jitsiService = require('../services/jitsi.service');
 const prisma = require('../utils/prisma');
 
 /**
- * Controlador para gerenciar videoconferências com Dyte
+ * Controlador para gerenciar videoconferências com Jitsi
  */
 const meetingController = {
   /**
-   * Cria uma reunião/sessão no Dyte
+   * Cria uma reunião/sessão no Jitsi
    * @param {Request} req - Requisição Express
    * @param {Response} res - Resposta Express
    */
@@ -55,22 +55,21 @@ const meetingController = {
         return res.status(403).json({ message: 'Não autorizado a criar reunião para esta sessão' });
       }
 
-      // Criar a reunião no Dyte
+      // Criar a reunião no Jitsi
       const meetingTitle = title || `Sessão: ${session.therapist.user.name} - ${new Date().toLocaleDateString()}`;
-      const dyteResponse = await dyteService.createMeeting(meetingTitle);
+      const jitsiResponse = await jitsiService.createMeeting(meetingTitle);
 
-      // Salvar o ID da reunião Dyte na sessão usando SQL direto
-      // para evitar problemas com o schema do Prisma
+      // Salvar o ID da reunião Jitsi na sessão
       await prisma.$executeRawUnsafe(`
         UPDATE "Session"
-        SET "dyteMeetingId" = '${dyteResponse.data.id}',
-            "dyteRoomName" = '${dyteResponse.data.room_name || ''}'
+        SET "dyteMeetingId" = '${jitsiResponse.data.id}',
+            "dyteRoomName" = '${jitsiResponse.data.room_name || ''}'
         WHERE id = '${sessionId}'
       `);
 
       res.status(201).json({
         message: 'Reunião criada com sucesso',
-        meetingDetails: dyteResponse.data
+        meetingDetails: jitsiResponse.data
       });
     } catch (error) {
       console.error('Erro ao criar reunião:', error);
@@ -127,43 +126,28 @@ const meetingController = {
       }
 
       // Definir o papel com base em quem está entrando
-      const role = isTherapist ? 'group_call_host' : 'group_call_participant';
+      const role = isTherapist ? 'moderator' : 'participant';
       
-      // Adicionar o participante à reunião no Dyte
-      const participantResponse = await dyteService.addParticipant(
+      // Adicionar o participante à reunião no Jitsi
+      const participantResponse = await jitsiService.addParticipant(
         session.dyteMeetingId,
         currentUser.name,
         userId,
         role
       );
 
-      // Retornar informações adicionais para auxiliar na conexão HTTP
+      // Retornar informações para o frontend
       res.status(200).json({
         message: 'Token de participante gerado com sucesso',
         authToken: participantResponse.data.token,
         meetingId: session.dyteMeetingId,
         roomName: session.dyteRoomName,
-        apiEndpoint: process.env.DYTE_BASE_URL || 'https://api.dyte.io/v2',
-        clientConfig: {
-          // Forçar uso de HTTP em vez de WebSockets
-          transportMode: 'http',
-          // Configurações de HTTP Polling
-          httpPoll: {
-            enabled: true,
-            pollInterval: 2000
-          },
-          // Desabilitar WebSockets
-          websocket: {
-            enabled: false,
-            autoConnect: false
-          },
-          // Informações para debug
-          logLevel: 'debug'
-        },
+        domain: process.env.JITSI_DOMAIN || 'meet.jit.si',
         // Informações sobre o usuário
         userName: currentUser.name,
         userId: userId,
-        userRole: role
+        userRole: role,
+        isHost: participantResponse.data.isHost
       });
     } catch (error) {
       console.error('Erro ao entrar na reunião:', error);
@@ -206,11 +190,10 @@ const meetingController = {
         return res.status(403).json({ message: 'Apenas o terapeuta pode encerrar a reunião' });
       }
 
-      // Encerrar a reunião no Dyte
-      await dyteService.endMeeting(session.dyteMeetingId);
+      // Encerrar a reunião no Jitsi
+      await jitsiService.endMeeting(session.dyteMeetingId);
 
-      // Atualizar a sessão no banco de dados usando SQL direto
-      // para evitar problemas com o schema do Prisma
+      // Atualizar a sessão no banco de dados
       await prisma.$executeRawUnsafe(`
         UPDATE "Session"
         SET "dyteMeetingId" = NULL,
@@ -267,19 +250,16 @@ const meetingController = {
         });
       }
 
-      // Buscar informações da reunião no Dyte
-      const meetingInfo = await dyteService.getMeeting(session.dyteMeetingId);
-
+      // Verificar o status da reunião no Jitsi
+      const meetingInfo = await jitsiService.getMeeting(session.dyteMeetingId);
+      
       res.json({
-        active: true,
-        meetingId: session.dyteMeetingId,
-        roomName: session.dyteRoomName,
-        status: meetingInfo.data.status,
-        title: meetingInfo.data.title
+        active: meetingInfo.data.status === 'active',
+        meetingDetails: meetingInfo.data
       });
     } catch (error) {
-      console.error('Erro ao obter status da reunião:', error);
-      res.status(500).json({ message: 'Erro ao obter status da reunião' });
+      console.error('Erro ao verificar status da reunião:', error);
+      res.status(500).json({ message: 'Erro ao verificar status da reunião' });
     }
   }
 };

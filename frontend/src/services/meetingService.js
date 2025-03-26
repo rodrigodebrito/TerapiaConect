@@ -1,9 +1,9 @@
 /**
- * Serviço para gerenciar videoconferências usando Dyte
+ * Serviço para gerenciar videoconferências usando Jitsi Meet
  * 
  * Este serviço lida com a criação, configuração e gerenciamento
  * de sessões de videoconferência através da API do backend,
- * que se integra com a plataforma Dyte.io
+ * que se integra com a plataforma Jitsi Meet
  */
 
 import api from './api';

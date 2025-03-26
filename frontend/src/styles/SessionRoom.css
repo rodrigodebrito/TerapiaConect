@@ -1307,4 +1307,240 @@ body {
     padding: 6px 12px;
     font-size: 0.8rem;
   }
+}
+
+.session-room {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  background-color: #f8f9fa;
+  position: relative;
+  overflow: hidden;
+}
+
+.session-video-container {
+  width: 100%;
+  height: 75vh;
+  background-color: #1a1a1a;
+  position: relative;
+  overflow: hidden;
+  transition: none !important;
+  contain: layout size paint style;
+  will-change: transform;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  isolation: isolate;
+}
+
+.session-video-container.fullscreen {
+  height: 100vh;
+}
+
+.session-video-container.pip-mode {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 300px;
+  height: 200px;
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 1000;
+  background-color: #000;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s ease;
+}
+
+.video-controls {
+  position: absolute;
+  bottom: 100px; /* Mover para cima para não colidir com os botões de IA */
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  z-index: 1001;
+}
+
+.exit-button {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.2s ease;
+  opacity: 0.9;
+}
+
+.exit-button:hover {
+  background-color: #c82333;
+  transform: scale(1.05);
+  opacity: 1;
+}
+
+.pip-controls {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  z-index: 10;
+}
+
+.pip-controls button {
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.resizer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 15px;
+  height: 15px;
+  background-color: rgba(255, 255, 255, 0.5);
+  cursor: se-resize;
+  z-index: 20;
+}
+
+.session-info {
+  padding: 20px;
+  height: 25vh;
+  overflow-y: auto;
+  background-color: white;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  z-index: 1;
+}
+
+.session-info.hidden {
+  display: none;
+}
+
+.session-info h1 {
+  font-size: 1.5rem;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.session-info p {
+  margin-bottom: 8px;
+  color: #555;
+}
+
+.session-notes {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  border-left: 4px solid #4CAF50;
+}
+
+.session-notes h3 {
+  font-size: 1rem;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-size: 1.2rem;
+  color: #666;
+}
+
+.error-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  padding: 20px;
+  text-align: center;
+}
+
+.error-container h2 {
+  color: #dc3545;
+  margin-bottom: 15px;
+}
+
+.error-container button {
+  margin-top: 20px;
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.error-container button:hover {
+  background-color: #0069d9;
+}
+
+@media (max-width: 768px) {
+  .session-video-container {
+    height: 60vh;
+  }
+  
+  .session-info {
+    height: 40vh;
+  }
+  
+  .session-video-container.pip-mode {
+    width: 200px;
+    height: 150px;
+  }
+  
+  .video-controls {
+    bottom: 130px;
+  }
+}
+
+/* Evitar animações e transições que podem causar piscar */
+.meeting-root,
+.fallback-container,
+.video-area {
+  transition: none !important;
+  animation: none !important;
+  contain: layout size paint style;
+  will-change: transform;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  isolation: isolate;
+}
+
+/* Fix para erro de wake lock no Jitsi */
+.wake-lock-fix {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+  background: transparent;
+}
+
+/* AI Tools para sessão */
+.session-room .ai-tools-fixed {
+  position: fixed;
+  bottom: 105px;
+  left: 0;
+  width: 100%;
+  z-index: 9999999 !important;
+}
+
+.session-room .ai-toolbar {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
 } 

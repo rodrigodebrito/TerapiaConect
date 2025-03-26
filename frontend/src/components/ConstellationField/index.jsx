@@ -625,7 +625,7 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
   const modelRef = useRef();
   const { camera } = useThree();
   const { setRepresentativePosition, setDraggingState, showNames } = useContext(ConstellationContext);
-
+  
   // Referência única para informações de arrasto
   const dragInfo = useRef({
     isDragging: false,
@@ -771,7 +771,7 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
       REPRESENTATIVE_TYPES[key].id === type
     )]?.modelPath || REPRESENTATIVE_TYPES.MALE_ELDER.modelPath;
   }, [type]);
-
+  
   // Usar diretamente useGLTF com clone para garantir que cada instância seja independente
   const { scene: originalModel } = useGLTF(modelPath);
   
@@ -782,7 +782,7 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
     }
     return null;
   }, [originalModel]);
-
+  
   // Definir a escala baseada no tipo do representante
   const modelScale = useMemo(() => {
     if (type === 'male_child' || type === 'female_child') {
@@ -794,7 +794,7 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
     }
     return 0.75;
   }, [type]);
-
+  
   // Limpar quando o componente for desmontado
   useEffect(() => {
     return () => {
@@ -814,7 +814,7 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
       }
     };
   }, [model]);
-
+  
   // Aplicar a cor selecionada ao modelo
   useEffect(() => {
     if (model) {
@@ -837,7 +837,7 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
       });
     }
   }, [model, color, selected]);
-
+  
   // Ajustar escala do modelo
   useEffect(() => {
     if (modelRef.current) {
@@ -845,14 +845,14 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
       modelRef.current.rotation.y = rotation;
     }
   }, [rotation, modelScale]);
-
+  
   // Atualizar rotação no frame
   useFrame(() => {
     if (modelRef.current) {
       modelRef.current.rotation.y = rotation;
     }
   });
-
+  
   return (
     <group
       ref={modelRef}

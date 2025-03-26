@@ -47,4 +47,10 @@ router.post('/suggest/:sessionId', aiController.generateSuggestions);
 // Gerar relatório da sessão
 router.post('/report/:sessionId', aiController.generateReport);
 
+// Rotas para serviços de IA
+router.post('/transcript', aiController.saveTranscript);
+router.post('/analyze', aiController.analyzeSession);
+router.post('/suggest', aiController.generateSuggestions);
+router.post('/report', aiController.generateReport);
+
 module.exports = router; 

@@ -1,15 +1,42 @@
 import api from './api';
 
+/**
+ * Serviço para interações com a IA
+ */
 const aiService = {
   /**
-   * Analisa o conteúdo da sessão
+   * Enviar transcrição da sessão para o servidor
    * @param {string} sessionId - ID da sessão
-   * @param {string} content - Conteúdo para análise
-   * @returns {Promise<Object>} Resultado da análise
+   * @param {string} transcript - Texto da transcrição
+   * @param {Object} emotions - Objeto com as emoções detectadas
+   * @returns {Promise} Resposta da API
    */
-  async analyzeSession(sessionId, content) {
+  saveTranscript: async (sessionId, transcript, emotions = null) => {
     try {
-      const response = await api.post(`/ai/analyze/${sessionId}`, { content });
+      const response = await api.post('/api/ai/transcript', {
+        sessionId,
+        transcript,
+        emotions
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao salvar transcrição:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Solicitar análise da sessão
+   * @param {string} sessionId - ID da sessão
+   * @param {string} transcript - Transcrição opcional (pode ser obtida do servidor)
+   * @returns {Promise} Resposta da API com análise
+   */
+  analyzeSession: async (sessionId, transcript = null) => {
+    try {
+      const response = await api.post('/api/ai/analyze', {
+        sessionId,
+        transcript
+      });
       return response.data;
     } catch (error) {
       console.error('Erro ao analisar sessão:', error);
@@ -18,14 +45,17 @@ const aiService = {
   },
 
   /**
-   * Gera sugestões em tempo real
+   * Solicitar sugestões para a sessão
    * @param {string} sessionId - ID da sessão
-   * @param {string} context - Contexto atual da sessão
-   * @returns {Promise<Object>} Sugestões geradas
+   * @param {string} transcript - Transcrição opcional (pode ser obtida do servidor)
+   * @returns {Promise} Resposta da API com sugestões
    */
-  async generateSuggestions(sessionId, context) {
+  generateSuggestions: async (sessionId, transcript = null) => {
     try {
-      const response = await api.post(`/ai/suggest/${sessionId}`, { context });
+      const response = await api.post('/api/ai/suggest', {
+        sessionId,
+        transcript
+      });
       return response.data;
     } catch (error) {
       console.error('Erro ao gerar sugestões:', error);
@@ -34,33 +64,20 @@ const aiService = {
   },
 
   /**
-   * Gera relatório da sessão
+   * Solicitar relatório da sessão
    * @param {string} sessionId - ID da sessão
-   * @param {string} content - Conteúdo completo da sessão
-   * @returns {Promise<Object>} Relatório gerado
+   * @param {string} transcript - Transcrição opcional (pode ser obtida do servidor)
+   * @returns {Promise} Resposta da API com relatório
    */
-  async generateReport(sessionId, content) {
+  generateReport: async (sessionId, transcript = null) => {
     try {
-      const response = await api.post(`/ai/report/${sessionId}`, { content });
+      const response = await api.post('/api/ai/report', {
+        sessionId,
+        transcript
+      });
       return response.data;
     } catch (error) {
       console.error('Erro ao gerar relatório:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Adiciona transcrição à sessão
-   * @param {string} sessionId - ID da sessão
-   * @param {string} text - Texto da transcrição
-   * @returns {Promise<Object>} Confirmação do salvamento
-   */
-  async addTranscription(sessionId, text) {
-    try {
-      const response = await api.post(`/ai/transcription/${sessionId}`, { text });
-      return response.data;
-    } catch (error) {
-      console.error('Erro ao adicionar transcrição:', error);
       throw error;
     }
   }

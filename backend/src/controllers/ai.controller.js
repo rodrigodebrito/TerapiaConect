@@ -1,6 +1,12 @@
-const prisma = require('../utils/prisma');
+const { PrismaClient } = require('@prisma/client');
+const { OpenAI } = require('openai');
 const { validationResult } = require('express-validator');
-const openAIService = require('../services/ai/openai.service');
+const prisma = new PrismaClient();
+
+// Configurar o cliente OpenAI
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 /**
  * Controlador para operações relacionadas a IA
@@ -274,24 +280,23 @@ const aiController = {
   },
 
   /**
-   * Gerar resumo de sessão
-   * @param {Request} req - Requisição Express
+   * Salvar transcrição da sessão com detecção de emoções
+   * @param {Request} req - Requisição Express 
    * @param {Response} res - Resposta Express
    */
-  generateSessionSummary: async (req, res) => {
+  saveTranscript: async (req, res) => {
     try {
-      const { sessionId } = req.params;
-      
-      // Verificar se a sessão existe
+      const { sessionId, transcript, emotions } = req.body;
+      const userId = req.user.id;
+
+      // Verificar se a sessão existe e se o usuário tem acesso
       const session = await prisma.session.findUnique({
-        where: { id: sessionId },
+        where: {
+          id: sessionId,
+        },
         include: {
           therapist: true,
-          transcripts: {
-            orderBy: {
-              timestamp: 'asc'
-            }
-          }
+          client: true
         }
       });
 
@@ -299,61 +304,63 @@ const aiController = {
         return res.status(404).json({ message: 'Sessão não encontrada' });
       }
 
-      // Apenas o terapeuta pode gerar resumo
-      const userId = req.user.id;
-      if (session.therapist.userId !== userId) {
-        return res.status(403).json({ message: 'Apenas o terapeuta pode gerar resumo da sessão' });
+      // Verificar se o usuário é o terapeuta ou o cliente da sessão
+      const isTherapist = session.therapist?.userId === userId;
+      const isClient = session.client?.userId === userId;
+      
+      if (!isTherapist && !isClient) {
+        return res.status(403).json({ message: 'Acesso não autorizado a esta sessão' });
       }
 
-      // Verificar se tem transcrições suficientes
-      if (session.transcripts.length < 5) {
-        return res.status(400).json({ message: 'Não há transcrições suficientes para gerar um resumo' });
-      }
+      // Salvar ou atualizar a transcrição
+      const savedTranscript = await prisma.sessionTranscript.upsert({
+        where: {
+          sessionId_timestamp: {
+            sessionId,
+            timestamp: new Date()
+          }
+        },
+        update: {
+          content: transcript,
+          metadata: emotions ? JSON.stringify(emotions) : null,
+          speaker: isTherapist ? 'THERAPIST' : 'CLIENT'
+        },
+        create: {
+          sessionId,
+          content: transcript,
+          metadata: emotions ? JSON.stringify(emotions) : null,
+          speaker: isTherapist ? 'THERAPIST' : 'CLIENT',
+          timestamp: new Date()
+        }
+      });
 
-      // Simulação de resumo
-      // Em um cenário real, enviaria as transcrições para uma API de IA
-      const summary = {
-        title: session.title,
-        date: session.startTime,
-        duration: session.actualDuration || session.scheduledDuration,
-        mainTopics: ["Ansiedade", "Relacionamentos", "Trabalho"],
-        keyPoints: [
-          "Cliente relatou episódios de ansiedade no ambiente de trabalho",
-          "Discutidos padrões de comunicação em relacionamentos",
-          "Identificado gatilho relacionado a experiências passadas"
-        ],
-        nextSteps: [
-          "Explorar técnicas de gerenciamento de ansiedade",
-          "Trabalhar na identificação precoce de gatilhos",
-          "Desenvolver estratégias de comunicação assertiva"
-        ],
-        overallProgress: "Progresso significativo na identificação de padrões emocionais"
-      };
-
-      res.json(summary);
+      res.status(200).json({
+        message: 'Transcrição salva com sucesso',
+        data: savedTranscript
+      });
     } catch (error) {
-      console.error('Erro ao gerar resumo da sessão:', error);
-      res.status(500).json({ message: 'Erro ao gerar resumo da sessão' });
+      console.error('Erro ao salvar transcrição:', error);
+      res.status(500).json({ message: 'Erro ao processar solicitação', error: error.message });
     }
   },
 
   /**
-   * Analisar uma sessão
+   * Analisar sessão com base na transcrição
    * @param {Request} req - Requisição Express
    * @param {Response} res - Resposta Express
    */
   analyzeSession: async (req, res) => {
     try {
-      const { sessionId } = req.params;
-      
-      // Verificar se a sessão existe
+      const { sessionId, transcript } = req.body;
+      const userId = req.user.id;
+
+      // Verificar se a sessão existe e se o usuário tem acesso
       const session = await prisma.session.findUnique({
-        where: { id: sessionId },
+        where: {
+          id: sessionId,
+        },
         include: {
-          therapist: true,
-          transcripts: {
-            orderBy: { timestamp: 'asc' }
-          }
+          therapist: true
         }
       });
 
@@ -361,74 +368,178 @@ const aiController = {
         return res.status(404).json({ message: 'Sessão não encontrada' });
       }
 
-      // Apenas o terapeuta pode analisar a sessão
-      const userId = req.user.id;
-      if (session.therapist.userId !== userId) {
+      // Verificar se o usuário é o terapeuta da sessão (apenas terapeutas podem analisar)
+      if (session.therapist?.userId !== userId) {
         return res.status(403).json({ message: 'Apenas o terapeuta pode analisar a sessão' });
       }
 
-      // Preparar o texto da sessão para análise
-      const sessionText = session.transcripts
-        .map(t => `${t.speaker}: ${t.content}`)
-        .join('\n');
+      // Obter transcrição do banco de dados se não foi fornecida
+      let sessionTranscript = transcript;
+      if (!sessionTranscript) {
+        const transcriptRecords = await prisma.sessionTranscript.findMany({
+          where: {
+            sessionId,
+          },
+          orderBy: {
+            timestamp: 'asc'
+          },
+          take: 50
+        });
 
-      // Analisar a sessão com OpenAI
-      const analysis = await openAIService.analyzeText(sessionText);
+        if (transcriptRecords && transcriptRecords.length > 0) {
+          sessionTranscript = transcriptRecords
+            .map(record => `${record.speaker}: ${record.content}`)
+            .join('\n');
+        }
+      }
 
-      res.json({ analysis });
+      if (!sessionTranscript) {
+        return res.status(400).json({ message: 'Nenhuma transcrição disponível para análise' });
+      }
+
+      // Gerar análise usando OpenAI
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4-turbo",
+        messages: [
+          {
+            role: "system",
+            content: `Você é um assistente especializado em psicoterapia que ajuda terapeutas a analisar sessões. 
+            Analise a transcrição da sessão e forneça insights sobre:
+            1. Temas principais discutidos
+            2. Padrões emocionais observados
+            3. Possíveis questões subjacentes
+            4. Progresso em relação a sessões anteriores (se mencionado)
+            5. Pontos importantes para acompanhamento
+            
+            Formate a resposta de maneira clara, concisa e profissional.`
+          },
+          {
+            role: "user",
+            content: `Analise a seguinte transcrição de sessão de terapia:\n\n${sessionTranscript}`
+          }
+        ],
+        max_tokens: 1000,
+      });
+
+      // Salvar a análise no banco de dados
+      const savedAnalysis = await prisma.aIInsight.create({
+        data: {
+          sessionId,
+          content: completion.choices[0].message.content,
+          type: 'ANALYSIS',
+          keywords: 'temas, padrões, emoções, progresso, acompanhamento'
+        }
+      });
+
+      res.status(200).json({
+        message: 'Análise gerada com sucesso',
+        data: {
+          analysis: completion.choices[0].message.content,
+          id: savedAnalysis.id
+        }
+      });
     } catch (error) {
       console.error('Erro ao analisar sessão:', error);
-      res.status(500).json({ message: 'Erro ao analisar sessão' });
+      res.status(500).json({ message: 'Erro ao processar solicitação', error: error.message });
     }
   },
 
   /**
-   * Gerar sugestões em tempo real
+   * Gerar sugestões para sessão
    * @param {Request} req - Requisição Express
    * @param {Response} res - Resposta Express
    */
   generateSuggestions: async (req, res) => {
     try {
-      const { sessionId } = req.params;
-      
-      // Verificar se a sessão existe e está ativa
+      const { sessionId, transcript } = req.body;
+      const userId = req.user.id;
+
+      // Verificar se a sessão existe e se o usuário tem acesso
       const session = await prisma.session.findUnique({
-        where: { 
+        where: {
           id: sessionId,
-          status: 'ACTIVE'
         },
         include: {
-          therapist: true,
-          transcripts: {
-            orderBy: { timestamp: 'desc' },
-            take: 5 // Últimas 5 transcrições para contexto
-          }
+          therapist: true
         }
       });
 
       if (!session) {
-        return res.status(404).json({ message: 'Sessão não encontrada ou não está ativa' });
+        return res.status(404).json({ message: 'Sessão não encontrada' });
       }
 
-      // Apenas o terapeuta pode receber sugestões
-      const userId = req.user.id;
-      if (session.therapist.userId !== userId) {
-        return res.status(403).json({ message: 'Apenas o terapeuta pode receber sugestões' });
+      // Verificar se o usuário é o terapeuta da sessão
+      if (session.therapist?.userId !== userId) {
+        return res.status(403).json({ message: 'Apenas o terapeuta pode gerar sugestões' });
       }
 
-      // Preparar o contexto atual
-      const context = session.transcripts
-        .reverse()
-        .map(t => `${t.speaker}: ${t.content}`)
-        .join('\n');
+      // Obter transcrição do banco de dados se não foi fornecida
+      let sessionTranscript = transcript;
+      if (!sessionTranscript) {
+        const transcriptRecords = await prisma.sessionTranscript.findMany({
+          where: {
+            sessionId,
+          },
+          orderBy: {
+            timestamp: 'asc'
+          },
+          take: 50
+        });
 
-      // Gerar sugestões com OpenAI
-      const suggestions = await openAIService.generateSuggestions(context);
+        if (transcriptRecords && transcriptRecords.length > 0) {
+          sessionTranscript = transcriptRecords
+            .map(record => `${record.speaker}: ${record.content}`)
+            .join('\n');
+        }
+      }
 
-      res.json({ suggestions });
+      if (!sessionTranscript) {
+        return res.status(400).json({ message: 'Nenhuma transcrição disponível para gerar sugestões' });
+      }
+
+      // Gerar sugestões usando OpenAI
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4-turbo",
+        messages: [
+          {
+            role: "system",
+            content: `Você é um assistente especializado em psicoterapia que ajuda terapeutas a desenvolver planos de tratamento.
+            Com base na transcrição da sessão, forneça 5-7 sugestões práticas para:
+            1. Técnicas terapêuticas que poderiam ser aplicadas
+            2. Exercícios ou tarefas para o paciente
+            3. Tópicos a explorar na próxima sessão
+            4. Recursos adicionais que poderiam ser úteis
+            
+            Formate as sugestões de maneira clara, concisa e prática.`
+          },
+          {
+            role: "user",
+            content: `Gere sugestões para a seguinte transcrição de sessão de terapia:\n\n${sessionTranscript}`
+          }
+        ],
+        max_tokens: 800,
+      });
+
+      // Salvar as sugestões no banco de dados
+      const savedSuggestion = await prisma.aIInsight.create({
+        data: {
+          sessionId,
+          content: completion.choices[0].message.content,
+          type: 'SUGGESTION',
+          keywords: 'técnicas, exercícios, tópicos, recursos'
+        }
+      });
+
+      res.status(200).json({
+        message: 'Sugestões geradas com sucesso',
+        data: {
+          suggestions: completion.choices[0].message.content,
+          id: savedSuggestion.id
+        }
+      });
     } catch (error) {
       console.error('Erro ao gerar sugestões:', error);
-      res.status(500).json({ message: 'Erro ao gerar sugestões' });
+      res.status(500).json({ message: 'Erro ao processar solicitação', error: error.message });
     }
   },
 
@@ -439,60 +550,97 @@ const aiController = {
    */
   generateReport: async (req, res) => {
     try {
-      const { sessionId } = req.params;
-      
-      // Verificar se a sessão existe e está finalizada
+      const { sessionId, transcript } = req.body;
+      const userId = req.user.id;
+
+      // Verificar se a sessão existe e se o usuário tem acesso
       const session = await prisma.session.findUnique({
-        where: { 
+        where: {
           id: sessionId,
-          status: 'COMPLETED'
         },
         include: {
-          therapist: true,
-          client: true,
-          transcripts: {
-            orderBy: { timestamp: 'asc' }
-          }
+          therapist: true
         }
       });
 
       if (!session) {
-        return res.status(404).json({ message: 'Sessão não encontrada ou não está finalizada' });
+        return res.status(404).json({ message: 'Sessão não encontrada' });
       }
 
-      // Apenas o terapeuta pode gerar relatórios
-      const userId = req.user.id;
-      if (session.therapist.userId !== userId) {
+      // Verificar se o usuário é o terapeuta da sessão
+      if (session.therapist?.userId !== userId) {
         return res.status(403).json({ message: 'Apenas o terapeuta pode gerar relatórios' });
       }
 
-      // Preparar o conteúdo completo da sessão
-      const sessionContent = `
-Sessão de Terapia
-Data: ${session.date}
-Terapeuta: ${session.therapist.name}
-Cliente: ${session.client.name}
+      // Obter transcrição do banco de dados se não foi fornecida
+      let sessionTranscript = transcript;
+      if (!sessionTranscript) {
+        const transcriptRecords = await prisma.sessionTranscript.findMany({
+          where: {
+            sessionId,
+          },
+          orderBy: {
+            timestamp: 'asc'
+          },
+          take: 50
+        });
 
-Transcrição:
-${session.transcripts.map(t => `${t.speaker}: ${t.content}`).join('\n')}
-      `.trim();
+        if (transcriptRecords && transcriptRecords.length > 0) {
+          sessionTranscript = transcriptRecords
+            .map(record => `${record.speaker}: ${record.content}`)
+            .join('\n');
+        }
+      }
 
-      // Gerar relatório com OpenAI
-      const report = await openAIService.generateReport(sessionContent);
+      if (!sessionTranscript) {
+        return res.status(400).json({ message: 'Nenhuma transcrição disponível para gerar relatório' });
+      }
 
-      // Salvar o relatório
-      const savedReport = await prisma.sessionReport.create({
+      // Gerar relatório usando OpenAI
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4-turbo",
+        messages: [
+          {
+            role: "system",
+            content: `Você é um assistente especializado em psicoterapia que ajuda terapeutas a criar relatórios de sessão.
+            Elabore um relatório formal e profissional da sessão com as seguintes seções:
+            1. Resumo da Sessão
+            2. Temas Principais
+            3. Estado Emocional do Paciente
+            4. Intervenções Realizadas
+            5. Progresso Observado
+            6. Plano de Tratamento Contínuo
+            
+            Mantenha o tom profissional e use linguagem apropriada para documentação clínica.`
+          },
+          {
+            role: "user",
+            content: `Gere um relatório profissional para a seguinte transcrição de sessão de terapia:\n\n${sessionTranscript}`
+          }
+        ],
+        max_tokens: 1200,
+      });
+
+      // Salvar o relatório no banco de dados
+      const savedReport = await prisma.aIInsight.create({
         data: {
           sessionId,
-          content: report,
-          generatedBy: 'AI'
+          content: completion.choices[0].message.content,
+          type: 'REPORT',
+          keywords: 'resumo, temas, emoções, intervenções, progresso, plano'
         }
       });
 
-      res.json({ report: savedReport });
+      res.status(200).json({
+        message: 'Relatório gerado com sucesso',
+        data: {
+          report: completion.choices[0].message.content,
+          id: savedReport.id
+        }
+      });
     } catch (error) {
       console.error('Erro ao gerar relatório:', error);
-      res.status(500).json({ message: 'Erro ao gerar relatório' });
+      res.status(500).json({ message: 'Erro ao processar solicitação', error: error.message });
     }
   }
 };

@@ -24,6 +24,7 @@
     "@jitsi/react-sdk": "^1.4.4",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.18.0",
+    "@tensorflow/tfjs": "^4.22.0",
     "axios": "^1.6.8",
     "bootstrap": "^5.3.3",
     "date-fns": "^4.1.0",

@@ -222,3 +222,21 @@ model SessionReport {
   timestamp   DateTime  @default(now())
   session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
+
+model TrainingMaterial {
+  id        String   @id @default(uuid())
+  title     String
+  content   String   @db.Text
+  type      String   // aula, supervisao, etc
+  category  String   // categoria do material
+  insights  String?  @db.Text
+  status    String   @default("pending") // pending, processed, error
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([category])
+  @@index([status])
+}

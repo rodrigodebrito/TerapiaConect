@@ -1,240 +1,256 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { toast } from 'react-toastify';
 import PropTypes from 'prop-types';
-import { useSession } from './SessionContext';
-import aiService from '../services/ai.service';
-import websocketService from '../services/websocketService';
+import hybridAIService from '../services/hybridAI.service';
+import { initializeTensorFlow, isTfInitialized } from '../services/tfHelper';
 
-const AIContext = createContext({});
-
-export const useAI = () => {
-  const context = useContext(AIContext);
-  if (!context) {
-    throw new Error('useAI must be used within an AIProvider');
-  }
-  return context;
-};
+// Criar o contexto
+const AIContext = createContext();
 
 export const AIProvider = ({ children }) => {
-  const { session, status } = useSession();
-  const [transcripts, setTranscripts] = useState([]);
-  const [analysis, setAnalysis] = useState('');
-  const [suggestions, setSuggestions] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  // Inicializar o sistema de transcrição ao conectar
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const [emotions, setEmotions] = useState({});
+  const [localProcessing, setLocalProcessing] = useState(true);
+  const [anonymization, setAnonymization] = useState(true);
+  const [lastResult, setLastResult] = useState(null);
+  
+  // Inicializar o serviço
   useEffect(() => {
-    if (status === 'connected' && session?.id) {
-      startListening();
-      
-      // Registrar listener para transcrições
-      websocketService.on('transcription_update', handleTranscriptionUpdate);
-      websocketService.on('ai_insight', handleAiInsight);
-    } else if (status === 'ended' || status === 'error') {
-      stopListening();
-    }
-
-    return () => {
-      stopListening();
-      websocketService.off('transcription_update', handleTranscriptionUpdate);
-      websocketService.off('ai_insight', handleAiInsight);
+    const initialize = async () => {
+      try {
+        // Inicializar TensorFlow apenas uma vez
+        console.log('Inicializando TensorFlow...');
+        await initializeTensorFlow({ logLevel: 0 });
+        console.log('TensorFlow inicializado com sucesso!');
+        
+        // Configurar ouvintes de eventos
+        window.addEventListener('transcript-updated', handleTranscriptUpdate);
+        window.addEventListener('emotion-detected', handleEmotionDetected);
+        window.addEventListener('recording-started', () => setIsListening(true));
+        window.addEventListener('recording-stopped', () => setIsListening(false));
+        
+        setIsInitialized(true);
+        console.log('Contexto de IA inicializado com sucesso!');
+      } catch (error) {
+        console.error('Erro ao inicializar contexto de IA:', error);
+        toast.error('Erro ao inicializar recursos de IA');
+      }
     };
-  }, [status, session]);
-
-  // Handler para atualizações de transcrição
-  const handleTranscriptionUpdate = (data) => {
-    if (data && data.text) {
-      setTranscripts(prev => [...prev, data]);
-    }
-  };
-
-  // Handler para insights de IA
-  const handleAiInsight = (data) => {
-    if (data && data.insight) {
-      setAnalysis(data.insight);
-      setLoading(false);
-    }
-  };
-
-  // Função para adicionar uma transcrição
-  const addTranscription = useCallback(async (data) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await aiService.addTranscription(data);
-      setTranscripts(prev => [...prev, response]);
-      return response;
-    } catch (error) {
-      console.error('Erro ao adicionar transcrição:', error);
-      setError('Não foi possível adicionar a transcrição');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
+    
+    initialize();
+    
+    // Limpar ouvintes de eventos ao desmontar
+    return () => {
+      window.removeEventListener('transcript-updated', handleTranscriptUpdate);
+      window.removeEventListener('emotion-detected', handleEmotionDetected);
+      window.removeEventListener('recording-started', () => setIsListening(true));
+      window.removeEventListener('recording-stopped', () => setIsListening(false));
+    };
   }, []);
-
-  // Função para buscar transcrições
-  const fetchTranscripts = useCallback(async (sessionId) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await aiService.getSessionTranscripts(sessionId);
-      setTranscripts(response.data);
-      return response.data;
-    } catch (error) {
-      console.error('Erro ao buscar transcrições:', error);
-      setError('Não foi possível carregar as transcrições');
-      throw error;
-    } finally {
-      setLoading(false);
+  
+  // Manipuladores de eventos
+  const handleTranscriptUpdate = (event) => {
+    setTranscript(event.detail.fullText);
+  };
+  
+  const handleEmotionDetected = (event) => {
+    setEmotions(event.detail.accumulated);
+  };
+  
+  // Funções para iniciar/parar reconhecimento de voz
+  const startListening = () => {
+    if (hybridAIService.startRecording()) {
+      setIsListening(true);
+      toast.info('Reconhecimento de voz iniciado', { autoClose: 2000 });
+      return true;
     }
-  }, []);
-
-  // Função para analisar a sessão
-  const analyzeSession = useCallback(async (sessionId) => {
+    toast.error('Não foi possível iniciar o reconhecimento de voz');
+    return false;
+  };
+  
+  const stopListening = () => {
+    if (hybridAIService.stopRecording()) {
+      setIsListening(false);
+      toast.info('Reconhecimento de voz finalizado', { autoClose: 2000 });
+      return true;
+    }
+    toast.error('Não foi possível finalizar o reconhecimento de voz');
+    return false;
+  };
+  
+  // Função de análise
+  const analyze = async (sessionId, text = transcript) => {
     try {
-      setLoading(true);
-      setError(null);
-      const response = await aiService.analyzeSession(sessionId);
-      setAnalysis(response.analysis);
-      return response.analysis;
+      setIsProcessing(true);
+      toast.info('Analisando sessão...', { autoClose: 2000 });
+      
+      console.log(`[AIContext] Iniciando análise para sessão: ${sessionId}`);
+      console.log(`[AIContext] Texto para análise: ${text.substring(0, 50)}...`);
+      
+      const result = await hybridAIService.analyzeText(text);
+      console.log('[AIContext] Resultado da análise:', result);
+      
+      setLastResult(result);
+      toast.success('Análise concluída!');
+      return result;
     } catch (error) {
       console.error('Erro ao analisar sessão:', error);
-      setError('Não foi possível analisar a sessão');
+      toast.error(`Erro ao analisar sessão: ${error.message}`);
       throw error;
     } finally {
-      setLoading(false);
+      setIsProcessing(false);
     }
-  }, []);
-
+  };
+  
   // Função para gerar sugestões
-  const generateSuggestions = useCallback(async (sessionId) => {
+  const suggest = async (sessionId, text = transcript) => {
     try {
-      setLoading(true);
-      setError(null);
-      const response = await aiService.generateSuggestions(sessionId);
-      setSuggestions(response.suggestions);
-      return response.suggestions;
+      setIsProcessing(true);
+      toast.info('Gerando sugestões...', { autoClose: 2000 });
+      
+      console.log(`[AIContext] Iniciando sugestões para sessão: ${sessionId}`);
+      console.log(`[AIContext] Texto para sugestões: ${text.substring(0, 50)}...`);
+      
+      const result = await hybridAIService.generateSuggestions(text);
+      console.log('[AIContext] Resultado das sugestões:', result);
+      
+      setLastResult(result);
+      toast.success('Sugestões geradas!');
+      return result;
     } catch (error) {
       console.error('Erro ao gerar sugestões:', error);
-      setError('Não foi possível gerar sugestões');
+      toast.error(`Erro ao gerar sugestões: ${error.message}`);
       throw error;
     } finally {
-      setLoading(false);
+      setIsProcessing(false);
     }
-  }, []);
-
+  };
+  
   // Função para gerar relatório
-  const generateReport = useCallback(async (sessionId) => {
+  const report = async (sessionId, text = transcript) => {
     try {
-      setLoading(true);
-      setError(null);
-      const response = await aiService.generateReport(sessionId);
-      return response.report;
+      setIsProcessing(true);
+      toast.info('Gerando relatório...', { autoClose: 2000 });
+      
+      console.log(`[AIContext] Iniciando relatório para sessão: ${sessionId}`);
+      console.log(`[AIContext] Texto para relatório: ${text.substring(0, 50)}...`);
+      
+      if (!text || text.trim().length < 10) {
+        console.warn('[AIContext] Texto insuficiente para gerar relatório');
+        toast.warning('Texto insuficiente para gerar relatório. Aguarde mais conversa.');
+        setIsProcessing(false);
+        return { error: 'Texto insuficiente' };
+      }
+      
+      const result = await hybridAIService.generateReport(text);
+      console.log('[AIContext] Resultado do relatório:', result);
+      
+      setLastResult(result);
+      toast.success('Relatório gerado com sucesso!');
+      
+      if (result.content) {
+        // Mostrar o relatório na tela
+        window.dispatchEvent(new CustomEvent('report-generated', { 
+          detail: { result } 
+        }));
+      }
+      
+      return result;
     } catch (error) {
       console.error('Erro ao gerar relatório:', error);
-      setError('Não foi possível gerar o relatório');
+      toast.error(`Erro ao gerar relatório: ${error.message}`);
       throw error;
     } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Função para limpar erros
-  const clearError = useCallback(() => {
-    setError(null);
-  }, []);
-
-  // Função para iniciar a captura de áudio
-  const startListening = async () => {
-    if (!session?.id) return;
-    
-    try {
-      setLoading(true);
-      
-      // Iniciar transcrição no servidor
-      await aiService.startTranscription(session.id)
-        .catch(() => {
-          // Simulação - quando o backend estiver pronto, remover essa parte
-          simulateTranscription();
-        });
-    } catch (err) {
-      console.error('Erro ao iniciar transcrição:', err);
-      setError('Falha ao iniciar o sistema de transcrição');
-      setLoading(false);
+      setIsProcessing(false);
     }
   };
-
-  // Simulação para desenvolvimento
-  const simulateTranscription = () => {
-    const interval = setInterval(() => {
-      const mockSpeech = {
-        speaker: Math.random() > 0.5 ? 'THERAPIST' : 'CLIENT',
-        text: getSampleText(),
-        timestamp: new Date().toISOString()
-      };
-      
-      setTranscripts(prev => [...prev, mockSpeech]);
-      
-      // A cada 5 transcrições, gerar um insight
-      if (transcripts.length > 0 && transcripts.length % 5 === 0) {
-        analyzeSession(session.id);
-      }
-    }, 10000); // A cada 10 segundos
-
-    return () => clearInterval(interval);
+  
+  // Funções para configuração
+  const toggleLocalProcessing = () => {
+    const newValue = !localProcessing;
+    hybridAIService.setLocalProcessing(newValue);
+    setLocalProcessing(newValue);
+    toast.info(`Processamento local ${newValue ? 'ativado' : 'desativado'}`, { autoClose: 2000 });
   };
-
-  // Parar a captura de áudio
-  const stopListening = async () => {
-    if (!session?.id || loading) return;
-    
-    try {
-      await aiService.stopTranscription(session.id)
-        .catch(() => {
-          // Simulação
-          console.log('Transcrição parada (simulação)');
-        });
-      
-      setLoading(false);
-    } catch (err) {
-      console.error('Erro ao parar transcrição:', err);
-    }
+  
+  const toggleAnonymization = () => {
+    const newValue = !anonymization;
+    hybridAIService.setAnonymization(newValue);
+    setAnonymization(newValue);
+    toast.info(`Anonimização ${newValue ? 'ativada' : 'desativada'}`, { autoClose: 2000 });
   };
-
-  // Textos de exemplo para simulação
-  const getSampleText = () => {
-    const sampleTexts = [
-      "Tenho sentido muita ansiedade ultimamente, principalmente ao pensar no trabalho.",
-      "Poderia me contar mais sobre quando esse sentimento começou?",
-      "Acho que começou após a promoção, sinto que não estou à altura.",
-      "É interessante notar como sua percepção mudou nesse momento de transição.",
-      "Sim, antes eu me sentia confiante, agora tenho dúvidas constantes.",
-      "Vamos explorar essas dúvidas para entender melhor o que está acontecendo."
-    ];
-    
-    return sampleTexts[Math.floor(Math.random() * sampleTexts.length)];
+  
+  // Verificar compatibilidade
+  const isCompatible = () => {
+    return hybridAIService.isSpeechRecognitionSupported();
   };
-
-  const value = {
-    transcripts,
-    analysis,
-    suggestions,
-    loading,
-    error,
-    addTranscription,
-    fetchTranscripts,
-    analyzeSession,
-    generateSuggestions,
-    generateReport,
-    clearError
+  
+  // Limpar transcrição
+  const clearTranscript = () => {
+    setTranscript('');
+    setEmotions({});
   };
-
-  return <AIContext.Provider value={value}>{children}</AIContext.Provider>;
+  
+  // Contexto para compartilhar
+  const contextValue = {
+    isInitialized,
+    isProcessing,
+    isListening,
+    transcript,
+    emotions,
+    localProcessing,
+    anonymization,
+    lastResult,
+    startListening,
+    stopListening,
+    analyze,
+    suggest,
+    report,
+    toggleLocalProcessing,
+    toggleAnonymization,
+    isCompatible,
+    clearTranscript
+  };
+  
+  // Exportar para o window para permitir acesso fora do React
+  if (typeof window !== 'undefined') {
+    window.__AI_CONTEXT = contextValue;
+    // Disparar evento sempre que houver uma mudança no isProcessing ou emotions
+    useEffect(() => {
+      window.dispatchEvent(new CustomEvent('ai-context-updated', { 
+        detail: { 
+          isProcessing,
+          emotions,
+          transcript,
+          lastResult
+        } 
+      }));
+    }, [isProcessing, emotions, transcript, lastResult]);
+  }
+  
+  return (
+    <AIContext.Provider value={contextValue}>
+      {children}
+    </AIContext.Provider>
+  );
 };
 
 AIProvider.propTypes = {
-  children: PropTypes.node.isRequired,
+  children: PropTypes.node.isRequired
+};
+
+// Hook personalizado para usar o contexto
+export const useAI = () => {
+  const context = useContext(AIContext);
+  
+  if (!context) {
+    throw new Error('useAI deve ser usado dentro de um AIProvider');
+  }
+  
+  return context;
 };
 
 export default AIContext; 
