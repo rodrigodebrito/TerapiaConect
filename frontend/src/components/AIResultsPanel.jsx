@@ -86,6 +86,20 @@ const AIResultsPanel = () => {
                 </div>
               )}
               
+              {resultData.data && resultData.data.referencedMaterials && resultData.data.referencedMaterials.length > 0 && (
+                <div className="ai-results-section">
+                  <h4>Materiais de Referência</h4>
+                  <div className="referenced-materials">
+                    {resultData.data.referencedMaterials.map((material, index) => (
+                      <div key={index} className="material-item">
+                        <h5>{material.title}</h5>
+                        <p className="material-insights">{material.insights}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
               {resultData.suggestions && (
                 <div className="ai-results-section">
                   <h4>Sugestões</h4>
@@ -94,6 +108,20 @@ const AIResultsPanel = () => {
                       <li key={i}>{item}</li>
                     ))}
                   </ul>
+                </div>
+              )}
+              
+              {resultData.data && resultData.data.referencedMaterials && resultData.data.referencedMaterials.length > 0 && (
+                <div className="ai-results-section">
+                  <h4>Materiais de Referência</h4>
+                  <div className="referenced-materials">
+                    {resultData.data.referencedMaterials.map((material, index) => (
+                      <div key={index} className="material-item">
+                        <h5>{material.title}</h5>
+                        <p className="material-insights">{material.insights}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
               

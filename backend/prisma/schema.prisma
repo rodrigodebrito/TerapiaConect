@@ -47,9 +47,9 @@ model Therapist {
   zipCode             String?
   appointments        Appointment[]
   availability        Availability[]
+  sessions            Session[]
   user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   tools               TherapistTool[]
-  sessions            Session[]
 }
 
 model Client {
@@ -102,11 +102,9 @@ model Appointment {
   status      String    @default("SCHEDULED")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  
   client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   therapist   Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
   tool        Tool      @relation(fields: [toolId], references: [id])
-  
   sessions    Session[]
 }
 
@@ -144,6 +142,83 @@ model TherapistTool {
   @@id([therapistId, toolId])
 }
 
+model Session {
+  id                      String              @id @default(uuid())
+  appointmentId           String
+  therapistId             String
+  clientId                String
+  title                   String?
+  status                  SessionStatus       @default(SCHEDULED)
+  startTime               DateTime?
+  endTime                 DateTime?
+  scheduledDuration       Int
+  actualDuration          Int?
+  notes                   String?
+  shareInsightsWithClient Boolean             @default(true)
+  toolsUsed               Json?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  dyteMeetingId           String?
+  dyteRoomName            String?
+  insights                AIInsight[]
+  appointment             Appointment         @relation(fields: [appointmentId], references: [id])
+  client                  Client              @relation(fields: [clientId], references: [id])
+  therapist               Therapist           @relation(fields: [therapistId], references: [id])
+  reports                 SessionReport[]
+  transcripts             SessionTranscript[]
+}
+
+model SessionTranscript {
+  id        String   @id @default(uuid())
+  sessionId String
+  speaker   String
+  content   String
+  timestamp DateTime @default(now())
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model AIInsight {
+  id        String   @id @default(uuid())
+  sessionId String
+  content   String
+  type      String
+  keywords  String?
+  timestamp DateTime @default(now())
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model SessionReport {
+  id          String   @id @default(uuid())
+  sessionId   String
+  content     String
+  generatedBy String
+  timestamp   DateTime @default(now())
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model TrainingMaterial {
+  id                   String   @id @default(uuid())
+  title                String
+  content              String
+  type                 String
+  categories           String[]
+  videoUrl             String?
+  isVideoTranscription Boolean  @default(false)
+  documentPath         String?
+  documentName         String?
+  documentType         String?
+  insights             String?
+  status               String   @default("pending")
+  userId               String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([userId])
+  @@index([categories])
+  @@index([status])
+  @@index([type])
+}
+
 enum UserRole {
   ADMIN
   THERAPIST
@@ -163,79 +238,4 @@ enum SessionStatus {
   PAUSED
   COMPLETED
   CANCELLED
-}
-
-model Session {
-  id                     String              @id @default(uuid())
-  appointmentId          String
-  therapistId            String
-  clientId               String
-  title                  String?
-  status                 SessionStatus       @default(SCHEDULED)
-  startTime              DateTime?
-  endTime                DateTime?
-  scheduledDuration      Int
-  actualDuration         Int?
-  notes                  String?
-  shareInsightsWithClient Boolean             @default(true)
-  toolsUsed              Json?
-  createdAt              DateTime            @default(now())
-  updatedAt              DateTime            @updatedAt
-  dyteMeetingId          String?             // ID da reunião no Dyte
-  dyteRoomName           String?             // Nome da sala no Dyte
-
-  // Relacionamentos
-  therapist              Therapist           @relation(fields: [therapistId], references: [id])
-  client                 Client              @relation(fields: [clientId], references: [id])
-  appointment            Appointment         @relation(fields: [appointmentId], references: [id])
-  transcripts            SessionTranscript[]
-  insights               AIInsight[]
-  reports                SessionReport[]
-}
-
-model SessionTranscript {
-  id          String    @id @default(uuid())
-  sessionId   String
-  speaker     String
-  content     String    @db.Text
-  timestamp   DateTime  @default(now())
-  
-  session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-}
-
-model AIInsight {
-  id          String    @id @default(uuid())
-  sessionId   String
-  content     String    @db.Text
-  type        String
-  keywords    String?
-  timestamp   DateTime  @default(now())
-  
-  session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-}
-
-model SessionReport {
-  id          String    @id @default(uuid())
-  sessionId   String
-  content     String    @db.Text
-  generatedBy String    // AI, THERAPIST
-  timestamp   DateTime  @default(now())
-  session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-}
-
-model TrainingMaterial {
-  id        String   @id @default(uuid())
-  title     String
-  content   String   @db.Text
-  type      String   // aula, supervisao, etc
-  category  String   // categoria do material
-  insights  String?  @db.Text
-  status    String   @default("pending") // pending, processed, error
-  userId    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId])
-  @@index([category])
-  @@index([status])
 }

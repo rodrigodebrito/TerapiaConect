@@ -187,80 +187,33 @@ const aiService = {
    */
   generateReport: async (sessionId, transcript = null) => {
     try {
-      console.log('AI Service: Solicitando relatório para sessão', sessionId);
+      console.log(`aiService: Gerando relatório para sessão ${sessionId}`);
       
-      const payload = {
-        sessionId,
-        transcript
-      };
+      // Preparar dados para enviar à API
+      const payload = transcript 
+        ? { sessionId, transcript } 
+        : { sessionId };
+      console.log(`aiService: Enviando payload para API:`, payload);
       
-      console.log('AI Service: Enviando payload para relatório:', payload);
-      
+      // Fazer chamada à API - remover o prefixo '/api'
       const response = await api.post('/ai/report', payload);
       
-      // Resposta completa para depuração
-      console.log('AI Service: Resposta completa:', JSON.stringify(response.data));
-      
-      // Se houver um erro explícito na resposta
-      if (response.data && response.data.error) {
-        console.error('AI Service: Erro recebido na resposta:', response.data.error);
-        return {
-          type: 'report',
-          error: response.data.error,
-          report: `Erro ao gerar relatório: ${response.data.error || 'Erro desconhecido'}`
-        };
+      // Verificar e logar a resposta
+      console.log(`aiService: Resposta da API:`, response);
+      if (!response || !response.data) {
+        console.error('aiService: Resposta vazia ou inválida da API');
+        return { error: 'Resposta vazia ou inválida da API' };
       }
       
-      // Extrair exatamente o que está vindo no data.report
-      if (response.data && response.data.report) {
-        console.log('AI Service: Campo report encontrado diretamente na resposta');
-        return {
-          type: 'report',
-          report: response.data.report
-        };
-      }
-      
-      // Tentar extrair de data.data.report
-      if (response.data && response.data.data && response.data.data.report) {
-        console.log('AI Service: Campo report encontrado em data.data');
-        return {
-          type: 'report',
-          report: response.data.data.report
-        };
-      }
-      
-      // Verificar o campo content - pode conter o relatório completo
-      if (response.data && response.data.content && response.data.content.length > 100) {
-        console.log('AI Service: Usando campo content como relatório');
-        return {
-          type: 'report',
-          report: response.data.content
-        };
-      }
-      
-      // Último caso - pegar qualquer campo de string que pareça conter um relatório
-      for (const key in response.data) {
-        if (typeof response.data[key] === 'string' && response.data[key].length > 200) {
-          console.log('AI Service: Encontrado texto longo em campo:', key);
-          return {
-            type: 'report',
-            report: response.data[key]
-          };
-        }
-      }
-      
-      // Se chegamos aqui, retornamos uma mensagem padrão
-      console.warn('AI Service: Não foi possível extrair um relatório da resposta');
-      return {
-        type: 'report',
-        report: 'Não foi possível extrair o relatório da resposta. Por favor, tente novamente mais tarde.'
-      };
+      // Retornar dados
+      console.log(`aiService: Retornando dados do relatório:`, response.data);
+      return response.data;
     } catch (error) {
-      console.error('Erro ao gerar relatório:', error);
-      return {
-        type: 'report',
-        error: 'Erro ao conectar com o serviço de IA',
-        report: 'Ocorreu um erro ao tentar conectar com o serviço de IA. Por favor, verifique sua conexão e tente novamente.'
+      console.error('aiService: Erro ao gerar relatório:', error);
+      return { 
+        error: error.message, 
+        status: error.response?.status,
+        details: error.response?.data
       };
     }
   }

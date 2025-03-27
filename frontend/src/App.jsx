@@ -27,6 +27,7 @@ import TherapistAvailabilitySimple from './pages/TherapistAvailabilitySimple';
 import SessionRoom from './pages/SessionRoom';
 import './App.css';
 import { Toaster } from 'react-hot-toast';
+import AdminLogin from './pages/AdminLogin';
 
 // Importar o componente de Constelação
 import ConstellationField from './components/ConstellationField/index';
@@ -163,6 +164,9 @@ function App() {
                   path="/admin/dashboard" 
                   element={<ProtectedRoute element={<AdminDashboard />} allowedRoles={['ADMIN']} />} 
                 />
+                
+                {/* Página de login administrativo (sem header) */}
+                <Route path="/admin/login" element={<AdminLogin />} />
                 
                 {/* Rota de teste para o Campo de Constelação */}
                 <Route 

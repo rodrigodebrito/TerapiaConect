@@ -1,6 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const { OpenAI } = require('openai');
 const { validationResult } = require('express-validator');
+const trainingService = require('../services/ai/training.service');
 const prisma = new PrismaClient();
 
 // Configurar o cliente OpenAI
@@ -432,32 +433,130 @@ const aiController = {
 
       try {
         console.log('AI Controller: Gerando análise via OpenAI');
-        // Gerar análise usando OpenAI
-        const completion = await openai.chat.completions.create({
-          model: "gpt-4-turbo",
+        
+        // Extrair temas principais da transcrição para identificar materiais relevantes
+        console.log('AI Controller: Extraindo temas da transcrição para buscar materiais relevantes');
+        const themesCompletion = await openai.chat.completions.create({
+          model: "gpt-3.5-turbo",
           messages: [
             {
               role: "system",
-              content: `Você é um assistente especializado em psicoterapia que ajuda terapeutas a analisar sessões. 
-              Analise a transcrição da sessão e forneça insights sobre:
-              1. Temas principais discutidos
-              2. Padrões emocionais observados
-              3. Possíveis questões subjacentes
-              4. Progresso em relação a sessões anteriores (se mencionado)
-              5. Pontos importantes para acompanhamento
-              
-              Formate a resposta de maneira clara, concisa e profissional.`
+              content: "Extraia os principais temas e conceitos da transcrição da sessão. Retorne apenas uma lista de palavras-chave separadas por vírgula, sem explicações adicionais."
             },
             {
               role: "user",
-              content: `Analise a seguinte transcrição de sessão de terapia:\n\n${sessionTranscript}`
+              content: `Extraia os temas principais desta transcrição de sessão terapêutica:\n\n${sessionTranscript}`
             }
           ],
-          max_tokens: 1000,
+          max_tokens: 100,
         });
+        
+        // Extrair os temas como uma array
+        const keywords = themesCompletion.choices[0].message.content.split(',').map(k => k.trim());
+        console.log('AI Controller: Temas identificados:', keywords);
+        
+        // Buscar materiais de treinamento relevantes para esses temas
+        let allMaterials = [];
+        try {
+          // Buscar materiais para cada palavra-chave identificada
+          const materialPromises = keywords.map(keyword => 
+            prisma.trainingMaterial.findMany({
+              where: {
+                OR: [
+                  { title: { contains: keyword, mode: 'insensitive' } },
+                  { content: { contains: keyword, mode: 'insensitive' } },
+                  { insights: { contains: keyword, mode: 'insensitive' } },
+                  { category: { contains: keyword, mode: 'insensitive' } }
+                ],
+                status: 'processed'
+              },
+              select: {
+                id: true,
+                title: true,
+                insights: true,
+                category: true
+              }
+            })
+          );
+          
+          const materialsArrays = await Promise.all(materialPromises);
+          // Juntar todos os resultados e remover duplicatas por ID
+          const materialsMap = new Map();
+          materialsArrays.flat().forEach(m => {
+            if (!materialsMap.has(m.id)) {
+              materialsMap.set(m.id, m);
+            }
+          });
+          
+          allMaterials = Array.from(materialsMap.values());
+          console.log(`AI Controller: Encontrados ${allMaterials.length} materiais relevantes`);
+        } catch (materialError) {
+          console.error('AI Controller: Erro ao buscar materiais de treinamento:', materialError);
+          // Continuar mesmo se falhar a busca de materiais
+          allMaterials = [];
+        }
+        
+        let analysisText;
+        let usedMaterials = [];
+        
+        // Se encontramos materiais relevantes, use o TrainingService para enriquecer a análise
+        if (allMaterials.length > 0) {
+          console.log('AI Controller: Usando TrainingService para enriquecer análise com materiais');
+          
+          try {
+            // Extrair categorias dos materiais para usar no enhanceSessionAnalysis
+            const categories = [...new Set(allMaterials.map(m => m.category))];
+            
+            // Usar o TrainingService para enriquecer a análise
+            analysisText = await trainingService.enhanceSessionAnalysis(
+              sessionTranscript, 
+              categories
+            );
+            
+            // Guardar os materiais usados para incluir na resposta
+            usedMaterials = allMaterials.map(m => ({
+              title: m.title,
+              insights: m.insights ? m.insights.substring(0, 200) + "..." : "Sem insights disponíveis"
+            }));
+            
+            console.log('AI Controller: Análise enriquecida com sucesso');
+          } catch (enhanceError) {
+            console.error('AI Controller: Erro ao enriquecer análise:', enhanceError);
+            // Se falhar o enhancement, voltamos para a análise padrão
+            analysisText = null;
+          }
+        }
+        
+        // Se não encontrou materiais ou falhou o enhancement, fazer análise padrão
+        if (!analysisText) {
+          console.log('AI Controller: Realizando análise padrão sem materiais de treinamento');
+          const completion = await openai.chat.completions.create({
+            model: "gpt-4-turbo",
+            messages: [
+              {
+                role: "system",
+                content: `Você é um assistente especializado em psicoterapia que ajuda terapeutas a analisar sessões. 
+                Analise a transcrição da sessão e forneça insights sobre:
+                1. Temas principais discutidos
+                2. Padrões emocionais observados
+                3. Possíveis questões subjacentes
+                4. Progresso em relação a sessões anteriores (se mencionado)
+                5. Pontos importantes para acompanhamento
+                
+                Formate a resposta de maneira clara, concisa e profissional.`
+              },
+              {
+                role: "user",
+                content: `Analise a seguinte transcrição de sessão de terapia:\n\n${sessionTranscript}`
+              }
+            ],
+            max_tokens: 1000,
+          });
+          
+          analysisText = completion.choices[0].message.content;
+        }
 
-        console.log('AI Controller: Resposta recebida do OpenAI');
-        const analysisText = completion.choices[0].message.content;
+        console.log('AI Controller: Resposta gerada com sucesso');
         
         // Salvar a análise no banco de dados
         const savedAnalysis = await prisma.aIInsight.create({
@@ -465,7 +564,7 @@ const aiController = {
             sessionId,
             content: analysisText,
             type: 'ANALYSIS',
-            keywords: 'temas, padrões, emoções, progresso, acompanhamento'
+            keywords: keywords.join(', ')
           }
         });
 
@@ -477,7 +576,8 @@ const aiController = {
           analysis: analysisText,
           data: {
             analysis: analysisText,
-            id: savedAnalysis.id
+            id: savedAnalysis.id,
+            referencedMaterials: usedMaterials.length > 0 ? usedMaterials : null
           }
         });
       } catch (openaiError) {
@@ -567,84 +667,185 @@ const aiController = {
       }
 
       if (!sessionTranscript) {
-        console.log('AI Controller: Sem transcrição disponível');
+        console.log('AI Controller: Sem transcrição disponível para sugestões');
         return res.status(400).json({ 
-          message: 'Nenhuma transcrição disponível para gerar sugestões',
+          message: 'Nenhuma transcrição disponível para sugestões',
           type: 'suggestions',
-          suggestions: ['Não há transcrição disponível. Inicie uma conversa primeiro.'] 
-        });
-      }
-
-      // Verificar se a API OpenAI está configurada
-      if (!process.env.OPENAI_API_KEY) {
-        console.error('AI Controller: API OpenAI não configurada');
-        return res.status(500).json({
-          message: 'Erro de configuração do serviço de IA',
-          error: 'API OpenAI não configurada',
-          type: 'suggestions',
-          suggestions: [
-            'O serviço de IA não está configurado corretamente.',
-            'Entre em contato com o administrador do sistema.'
-          ]
+          suggestions: ['Não há transcrição disponível para analisar. Inicie uma conversa primeiro.'] 
         });
       }
 
       try {
         console.log('AI Controller: Gerando sugestões via OpenAI');
-        // Gerar sugestões usando OpenAI
-        const completion = await openai.chat.completions.create({
-          model: "gpt-4-turbo",
+        
+        // Extrair temas principais da transcrição para identificar materiais relevantes
+        console.log('AI Controller: Extraindo temas da transcrição para buscar materiais relevantes');
+        const themesCompletion = await openai.chat.completions.create({
+          model: "gpt-3.5-turbo",
           messages: [
             {
               role: "system",
-              content: `Você é um assistente especializado em psicoterapia que ajuda terapeutas a desenvolver planos de tratamento.
-              Com base na transcrição da sessão, forneça 5-7 sugestões práticas para:
-              1. Técnicas terapêuticas que poderiam ser aplicadas
-              2. Exercícios ou tarefas para o paciente
-              3. Tópicos a explorar na próxima sessão
-              4. Recursos adicionais que poderiam ser úteis
-              
-              Formate as sugestões de maneira clara, concisa e prática.`
+              content: "Extraia os principais temas e conceitos da transcrição da sessão. Retorne apenas uma lista de palavras-chave separadas por vírgula, sem explicações adicionais."
             },
             {
               role: "user",
-              content: `Gere sugestões para a seguinte transcrição de sessão de terapia:\n\n${sessionTranscript}`
+              content: `Extraia os temas principais desta transcrição de sessão terapêutica:\n\n${sessionTranscript}`
             }
           ],
-          max_tokens: 800,
+          max_tokens: 100,
         });
-
-        console.log('AI Controller: Resposta recebida do OpenAI');
-        const suggestionsText = completion.choices[0].message.content;
         
-        // Processar texto em sugestões individuais
-        const suggestionLines = suggestionsText
-          .split(/\n+/)
-          .map(line => line.trim())
-          .filter(line => line.length > 0)
-          .filter(line => !line.match(/^[0-9]+\./) && !line.match(/^[A-Z]+:/)); // Remover numeração e títulos
+        // Extrair os temas como uma array
+        const keywords = themesCompletion.choices[0].message.content.split(',').map(k => k.trim());
+        console.log('AI Controller: Temas identificados para sugestões:', keywords);
         
-        console.log('AI Controller: Sugestões processadas:', suggestionLines.length);
-
-        // Salvar as sugestões no banco de dados
-        const savedSuggestion = await prisma.aIInsight.create({
-          data: {
-            sessionId,
-            content: suggestionsText,
-            type: 'SUGGESTION',
-            keywords: 'técnicas, exercícios, tópicos, recursos'
+        // Buscar materiais de treinamento relevantes para esses temas
+        let allMaterials = [];
+        try {
+          // Buscar materiais para cada palavra-chave identificada
+          const materialPromises = keywords.map(keyword => 
+            prisma.trainingMaterial.findMany({
+              where: {
+                OR: [
+                  { title: { contains: keyword, mode: 'insensitive' } },
+                  { content: { contains: keyword, mode: 'insensitive' } },
+                  { insights: { contains: keyword, mode: 'insensitive' } },
+                  { category: { contains: keyword, mode: 'insensitive' } }
+                ],
+                status: 'processed'
+              },
+              select: {
+                id: true,
+                title: true,
+                insights: true,
+                category: true
+              }
+            })
+          );
+          
+          const materialsArrays = await Promise.all(materialPromises);
+          // Juntar todos os resultados e remover duplicatas por ID
+          const materialsMap = new Map();
+          materialsArrays.flat().forEach(m => {
+            if (!materialsMap.has(m.id)) {
+              materialsMap.set(m.id, m);
+            }
+          });
+          
+          allMaterials = Array.from(materialsMap.values());
+          console.log(`AI Controller: Encontrados ${allMaterials.length} materiais relevantes para sugestões`);
+        } catch (materialError) {
+          console.error('AI Controller: Erro ao buscar materiais de treinamento:', materialError);
+          // Continuar mesmo se falhar a busca de materiais
+          allMaterials = [];
+        }
+        
+        let suggestionsResponse;
+        let usedMaterials = [];
+        
+        // Se encontramos materiais relevantes, use o TrainingService para gerar sugestões enriquecidas
+        if (allMaterials.length > 0) {
+          console.log('AI Controller: Usando materiais para enriquecer sugestões');
+          
+          try {
+            // Combinar insights dos materiais para usar na geração de sugestões
+            const materialsContext = allMaterials
+              .slice(0, 5) // Limitar para 5 materiais para não exceder o limite de tokens
+              .map(m => `Título: ${m.title}\nInsights: ${m.insights || 'Sem insights disponíveis'}\n`)
+              .join('\n\n');
+            
+            // Gerar sugestões usando os materiais
+            const completion = await openai.chat.completions.create({
+              model: "gpt-4-turbo",
+              messages: [
+                {
+                  role: "system",
+                  content: `Você é um assistente especializado em psicoterapia que ajuda terapeutas com sugestões práticas.
+                  Use os insights dos materiais de treinamento para fornecer sugestões mais específicas e contextualizadas.`
+                },
+                {
+                  role: "user",
+                  content: `Com base na transcrição da sessão e nos materiais de treinamento, forneça 5-7 sugestões práticas 
+                  que o terapeuta pode aplicar para melhorar a eficácia da terapia neste caso específico.
+                  
+                  Materiais de Referência:
+                  ${materialsContext}
+                  
+                  Transcrição da Sessão:
+                  ${sessionTranscript}
+                  
+                  Formate as sugestões como uma lista de recomendações claras e acionáveis.`
+                }
+              ],
+              max_tokens: 1000,
+            });
+            
+            // Processar a resposta e transformar em um array de sugestões
+            const suggestionsText = completion.choices[0].message.content;
+            
+            // Extrair sugestões numeradas (1. Sugestão, 2. Sugestão, etc.) ou em listas com pontos (• Sugestão, - Sugestão)
+            const suggestionLines = suggestionsText.split('\n')
+              .filter(line => line.trim().match(/^(\d+\.|\-|\•|\*)\s+.+/))
+              .map(line => line.replace(/^(\d+\.|\-|\•|\*)\s+/, '').trim());
+            
+            suggestionsResponse = suggestionLines.length > 0 ? suggestionLines : [suggestionsText];
+            
+            // Guardar os materiais usados para incluir na resposta
+            usedMaterials = allMaterials.slice(0, 5).map(m => ({
+              title: m.title,
+              insights: m.insights ? m.insights.substring(0, 200) + "..." : "Sem insights disponíveis"
+            }));
+            
+            console.log('AI Controller: Sugestões enriquecidas geradas com sucesso');
+          } catch (enhanceError) {
+            console.error('AI Controller: Erro ao enriquecer sugestões:', enhanceError);
+            // Se falhar o enhancement, voltamos para as sugestões padrão
+            suggestionsResponse = null;
           }
-        });
+        }
+        
+        // Se não encontrou materiais ou falhou o enhancement, fazer sugestões padrão
+        if (!suggestionsResponse) {
+          console.log('AI Controller: Realizando sugestões padrão sem materiais de treinamento');
+          const completion = await openai.chat.completions.create({
+            model: "gpt-4-turbo",
+            messages: [
+              {
+                role: "system",
+                content: `Você é um assistente especializado em psicoterapia que ajuda terapeutas durante sessões.
+                Forneça sugestões práticas e relevantes com base na transcrição da sessão.`
+              },
+              {
+                role: "user",
+                content: `Com base na seguinte transcrição de uma sessão de terapia, forneça 5-7 sugestões
+                específicas que possam ajudar o terapeuta a conduzir a sessão de forma mais eficaz:
+                
+                ${sessionTranscript}`
+              }
+            ],
+            max_tokens: 1000,
+          });
+          
+          // Processar a resposta e transformar em um array de sugestões
+          const suggestionsText = completion.choices[0].message.content;
+          
+          // Extrair sugestões numeradas ou em listas
+          const suggestionLines = suggestionsText.split('\n')
+            .filter(line => line.trim().match(/^(\d+\.|\-|\•|\*)\s+.+/))
+            .map(line => line.replace(/^(\d+\.|\-|\•|\*)\s+/, '').trim());
+          
+          suggestionsResponse = suggestionLines.length > 0 ? suggestionLines : [suggestionsText];
+        }
 
-        console.log('AI Controller: Retornando resposta estruturada');
+        console.log('AI Controller: Retornando sugestões estruturadas');
         res.status(200).json({
           message: 'Sugestões geradas com sucesso',
           type: 'suggestions',
-          content: 'Sugestões baseadas na análise da sessão atual',
-          suggestions: suggestionLines.length > 0 ? suggestionLines : [suggestionsText],
+          content: 'Sugestões baseadas na transcrição da sessão atual',
+          suggestions: suggestionsResponse,
           data: {
-            suggestions: suggestionsText,
-            id: savedSuggestion.id
+            suggestions: suggestionsResponse,
+            referencedMaterials: usedMaterials.length > 0 ? usedMaterials : null
           }
         });
       } catch (openaiError) {
@@ -676,166 +877,172 @@ const aiController = {
    * @param {Response} res - Resposta Express
    */
   generateReport: async (req, res) => {
-    try {
-      console.log('AI Controller: Iniciando geração de relatório');
-      const { sessionId, transcript } = req.body;
-      const userId = req.user?.id;
-      
-      console.log(`AI Controller: Processando relatório para sessão ${sessionId}, usuário ${userId}`);
+    const { sessionId } = req.params.sessionId ? req.params : req.body;
+    let { transcript } = req.body;
 
-      // Verificar se a sessão existe e se o usuário tem acesso
+    console.log(`AI Controller: Solicitação de relatório para sessão ${sessionId}`);
+    
+    try {
+      // Verificar se a sessão existe e se o usuário tem acesso a ela
       const session = await prisma.session.findUnique({
-        where: {
-          id: sessionId,
-        },
+        where: { id: sessionId },
         include: {
-          therapist: true
+          appointment: {
+            include: {
+              therapist: true,
+              patient: true
+            }
+          }
         }
       });
 
       if (!session) {
-        console.log('AI Controller: Sessão não encontrada');
-        return res.status(404).json({ 
-          message: 'Sessão não encontrada',
-          type: 'report',
-          report: 'A sessão solicitada não foi encontrada no sistema.',
-          content: 'A sessão solicitada não foi encontrada no sistema.'
+        console.error(`AI Controller: Sessão ${sessionId} não encontrada`);
+        return res.status(404).json({
+          error: 'Sessão não encontrada',
+          success: false
         });
       }
 
-      // Para testes ou desenvolvimento, permitir acesso mais amplo
-      const isDevMode = process.env.NODE_ENV === 'development';
-      const isTesting = process.env.TESTING === 'true';
-      
-      // Verificar se o usuário é o terapeuta da sessão
-      if (!isDevMode && !isTesting && session.therapist?.userId !== userId) {
-        console.log(`AI Controller: Acesso não autorizado. Terapeuta: ${session.therapist?.userId}, Usuário: ${userId}`);
-        return res.status(403).json({ 
-          message: 'Apenas o terapeuta pode gerar relatórios',
-          type: 'report',
-          report: 'Você não tem permissão para gerar relatórios para esta sessão.',
-          content: 'Você não tem permissão para gerar relatórios para esta sessão.'
+      // Verificar se o usuário atual tem acesso a esta sessão
+      const userId = req.user.id;
+      const isTherapist = session.appointment.therapist.userId === userId;
+      const isPatient = session.appointment.patient.userId === userId;
+
+      if (!isTherapist && !isPatient) {
+        console.error(`AI Controller: Usuário ${userId} não tem acesso à sessão ${sessionId}`);
+        return res.status(403).json({
+          error: 'Você não tem acesso a esta sessão',
+          success: false
         });
       }
 
-      // Obter transcrição do banco de dados se não foi fornecida
-      let sessionTranscript = transcript;
-      if (!sessionTranscript) {
-        const transcriptRecords = await prisma.sessionTranscript.findMany({
+      // Se o transcript não foi fornecido, buscar do banco de dados
+      if (!transcript) {
+        console.log(`AI Controller: Transcript não fornecido, buscando do banco de dados`);
+        
+        // Buscar a transcrição completa da sessão
+        const messages = await prisma.message.findMany({
           where: {
-            sessionId,
+            sessionId: sessionId
           },
           orderBy: {
             timestamp: 'asc'
-          },
-          take: 50
-        });
-
-        if (transcriptRecords && transcriptRecords.length > 0) {
-          sessionTranscript = transcriptRecords
-            .map(record => `${record.speaker}: ${record.content}`)
-            .join('\n');
-        }
-      }
-
-      if (!sessionTranscript) {
-        console.log('AI Controller: Sem transcrição disponível');
-        return res.status(400).json({ 
-          message: 'Nenhuma transcrição disponível para gerar relatório',
-          type: 'report',
-          report: 'Não há transcrição disponível. Inicie uma conversa primeiro para gerar um relatório.',
-          content: 'Não há transcrição disponível. Inicie uma conversa primeiro para gerar um relatório.'
-        });
-      }
-
-      // Verificar se a API OpenAI está configurada
-      if (!process.env.OPENAI_API_KEY) {
-        console.error('AI Controller: API OpenAI não configurada');
-        return res.status(500).json({
-          message: 'Erro de configuração do serviço de IA',
-          error: 'API OpenAI não configurada',
-          type: 'report',
-          report: 'O serviço de IA não está configurado corretamente. Entre em contato com o administrador do sistema.',
-          content: 'O serviço de IA não está configurado corretamente.'
-        });
-      }
-
-      try {
-        console.log('AI Controller: Gerando relatório via OpenAI');
-        // Gerar relatório usando OpenAI
-        const completion = await openai.chat.completions.create({
-          model: "gpt-4-turbo",
-          messages: [
-            {
-              role: "system",
-              content: `Você é um assistente especializado em psicoterapia que ajuda terapeutas a criar relatórios de sessão.
-              Elabore um relatório formal e profissional da sessão com as seguintes seções:
-              1. Resumo da Sessão
-              2. Temas Principais
-              3. Estado Emocional do Paciente
-              4. Intervenções Realizadas
-              5. Progresso Observado
-              6. Plano de Tratamento Contínuo
-              
-              Mantenha o tom profissional e use linguagem apropriada para documentação clínica.`
-            },
-            {
-              role: "user",
-              content: `Gere um relatório profissional para a seguinte transcrição de sessão de terapia:\n\n${sessionTranscript}`
-            }
-          ],
-          max_tokens: 1200,
-        });
-
-        console.log('AI Controller: Resposta recebida do OpenAI');
-        const reportText = completion.choices[0].message.content;
-        
-        // Registrar o tamanho do relatório para depuração
-        console.log(`AI Controller: Relatório gerado com ${reportText.length} caracteres`);
-        console.log('AI Controller: Primeiros 100 caracteres:', reportText.substring(0, 100));
-        
-        // Salvar o relatório no banco de dados
-        const savedReport = await prisma.aIInsight.create({
-          data: {
-            sessionId,
-            content: reportText,
-            type: 'REPORT',
-            keywords: 'resumo, temas, emoções, intervenções, progresso, plano'
           }
         });
 
-        console.log('AI Controller: Retornando resposta estruturada');
-        // Colocar o relatório em TODOS os campos possíveis para garantir que o frontend possa acessá-lo
-        res.status(200).json({
-          message: 'Relatório gerado com sucesso',
-          type: 'report',
-          content: reportText,
-          report: reportText,
-          data: {
-            report: reportText,
-            id: savedReport.id
-          },
-          text: reportText, // Campo adicional para garantir
-          reportText: reportText // Campo adicional para garantir
-        });
-      } catch (openaiError) {
-        console.error('AI Controller: Erro na chamada da API OpenAI:', openaiError);
-        return res.status(500).json({
-          message: 'Erro ao processar com a IA',
-          error: openaiError.message,
-          type: 'report',
-          report: 'Ocorreu um erro ao gerar o relatório com a IA. Tente novamente em alguns instantes.',
-          content: 'Ocorreu um erro ao gerar o relatório com a IA. Tente novamente em alguns instantes.'
+        if (!messages || messages.length === 0) {
+          console.error(`AI Controller: Nenhuma mensagem encontrada para a sessão ${sessionId}`);
+          return res.status(400).json({
+            error: 'Não há mensagens na sessão para gerar um relatório',
+            success: false
+          });
+        }
+
+        // Montar o transcript a partir das mensagens
+        transcript = messages.map(msg => {
+          const sender = msg.sender === 'THERAPIST' ? 'Terapeuta' : 'Paciente';
+          return `${sender}: ${msg.content}`;
+        }).join('\n');
+      }
+
+      // Se o transcript é muito curto, retornar erro
+      if (!transcript || transcript.length < 50) {
+        console.error(`AI Controller: Transcript muito curto (${transcript?.length || 0} caracteres)`);
+        return res.status(400).json({
+          error: 'Conteúdo insuficiente para gerar um relatório',
+          success: false,
+          report: 'A sessão não possui conteúdo suficiente para gerar um relatório detalhado.'
         });
       }
+
+      console.log(`AI Controller: Enviando solicitação para o OpenAI, transcript com ${transcript.length} caracteres`);
+
+      // Verificar a configuração da API
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        console.error('AI Controller: Chave da API OpenAI não configurada');
+        return res.status(500).json({
+          error: 'Configuração do serviço de IA ausente',
+          success: false
+        });
+      }
+
+      // Usar OpenAI para gerar relatório
+      const openAIClient = new OpenAI({
+        apiKey: apiKey
+      });
+
+      // Criar um prompt estruturado para o modelo
+      const prompt = `
+        Você é um assistente especializado em psicologia e terapia. Gere um relatório profissional e completo
+        com base na seguinte transcrição de uma sessão terapêutica. O relatório deve ser usado pelo terapeuta
+        para documentar a sessão.
+        
+        O relatório deve incluir:
+        - Um resumo das principais questões discutidas
+        - Observações sobre o comportamento e estado emocional do paciente
+        - Temas principais que emergiram durante a sessão
+        - Progressos observados ou desafios identificados
+        - Análise dos padrões de pensamento e comportamento
+        
+        Utilize uma linguagem profissional, objetiva e baseada em evidências. Organize o relatório em seções
+        com títulos claros. Evite julgamentos e mantenha um tom respeitoso.
+        
+        IMPORTANTE: O relatório deve ser baseado EXCLUSIVAMENTE no conteúdo da transcrição fornecida. 
+        NÃO INVENTE informações ou detalhes que não estejam presentes na transcrição.
+        Se a transcrição for muito curta ou não contiver informações suficientes para um relatório detalhado,
+        mencione isso no relatório e forneça apenas as informações que puderem ser extraídas diretamente da transcrição.
+        
+        Transcrição da sessão:
+        ${transcript}
+      `;
+
+      const completion = await openAIClient.chat.completions.create({
+        messages: [
+          { role: "system", content: "Você é um assistente especializado em psicologia e terapia." },
+          { role: "user", content: prompt }
+        ],
+        model: "gpt-4-turbo",
+        temperature: 0.7,
+        max_tokens: 3000
+      });
+
+      // Extrair o texto do relatório da resposta da API
+      const reportText = completion.choices[0].message.content;
+      
+      if (!reportText || reportText.length < 100) {
+        console.error(`AI Controller: Resposta da OpenAI muito curta ou vazia (${reportText?.length || 0} caracteres)`);
+        return res.status(500).json({
+          error: 'A resposta da IA foi insuficiente',
+          success: false,
+          report: 'Não foi possível gerar um relatório detalhado para esta sessão. Por favor, tente novamente mais tarde.'
+        });
+      }
+
+      console.log(`AI Controller: Relatório gerado com sucesso, ${reportText.length} caracteres`);
+
+      // Salvar o relatório no banco de dados
+      const report = await prisma.report.create({
+        data: {
+          content: reportText,
+          sessionId: sessionId,
+          createdById: userId
+        }
+      });
+
+      // Retornar a resposta com o relatório
+      return res.status(200).json({
+        success: true,
+        report: reportText,
+        reportId: report.id
+      });
+
     } catch (error) {
-      console.error('Erro ao gerar relatório:', error);
-      res.status(500).json({ 
-        message: 'Erro ao processar solicitação', 
-        error: error.message,
-        type: 'report',
-        report: 'Ocorreu um erro inesperado. Tente novamente mais tarde.',
-        content: 'Ocorreu um erro inesperado. Tente novamente mais tarde.'
+      console.error('AI Controller: Erro ao gerar relatório:', error);
+      return res.status(500).json({
+        error: 'Erro ao gerar relatório: ' + error.message,
+        success: false
       });
     }
   },

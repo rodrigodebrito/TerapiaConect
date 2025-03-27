@@ -31,4 +31,8 @@ app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Rotas da API
-app.use(routes); 
+app.use('/api/auth', routes.authRoutes);
+app.use('/api/training', routes.trainingRoutes);
+app.use('/api/ai', routes.aiRoutes);
+app.use('/api/transcription', routes.transcriptionRoutes);
+app.use(routes.routes); 

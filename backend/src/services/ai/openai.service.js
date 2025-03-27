@@ -1,5 +1,7 @@
 const OpenAI = require('openai');
 require('dotenv').config();
+const fs = require('fs');
+const logger = require('../../utils/logger');
 
 // Configuração do cliente OpenAI
 const openai = new OpenAI({
@@ -156,6 +158,41 @@ const openAIService = {
         } catch (error) {
             console.error('Erro ao gerar relatório com OpenAI:', error);
             throw error;
+        }
+    },
+
+    /**
+     * Transcreve um arquivo de áudio/vídeo usando a API Whisper do OpenAI
+     * @param {string} filePath - Caminho para o arquivo de áudio/vídeo
+     * @param {string} language - Código ISO do idioma (pt, en, es, etc.)
+     * @returns {Promise<string>} Texto transcrito
+     */
+    async transcribeAudioVideo(filePath, language = 'pt') {
+        try {
+            logger.info(`Iniciando transcrição de arquivo: ${filePath}`);
+            
+            // Criar um ReadStream do arquivo
+            const file = fs.createReadStream(filePath);
+            
+            // Configurar o modelo Whisper com o idioma correto
+            const transcriptionOptions = {
+                file: file,
+                model: 'whisper-1',
+            };
+            
+            // Adicionar o idioma se for especificado
+            if (language) {
+                transcriptionOptions.language = language;
+            }
+            
+            // Realizar a transcrição
+            const response = await openai.audio.transcriptions.create(transcriptionOptions);
+            
+            logger.info(`Transcrição concluída para arquivo: ${filePath}`);
+            return response.text;
+        } catch (error) {
+            logger.error(`Erro ao transcrever áudio/vídeo: ${filePath}`, error);
+            throw new Error(`Falha na transcrição: ${error.message}`);
         }
     }
 };

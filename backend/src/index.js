@@ -30,13 +30,21 @@ const transcriptRoutes = require('./routes/transcript.routes');
 const insightRoutes = require('./routes/insight.routes');
 const meetingRoutes = require('./routes/meeting.routes');
 const trainingRoutes = require('./routes/training.routes');
+const transcriptionRoutes = require('./routes/transcription.routes');
 
 // Configuração da aplicação
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://terapiaconect.com', 'https://www.terapiaconect.com'] 
+    : ['http://localhost:3001', 'http://localhost:5173'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(bodyParser.json({ limit: '10mb' }));
@@ -60,6 +68,7 @@ app.use('/api/transcripts', transcriptRoutes);
 app.use('/api/insights', insightRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/training', trainingRoutes);
+app.use('/api/transcription', transcriptionRoutes);
 
 // Rota padrão
 app.get('/', (req, res) => {

@@ -225,3 +225,19 @@ model AIInsight {
   // Relações
   session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
+
+// Modelo para Materiais de Treinamento da IA
+model TrainingMaterial {
+  id                  String   @id @default(uuid())
+  title               String
+  content             String   @db.Text
+  type                String   // Tipo de material (artigo, vídeo, etc)
+  categories          String[] // Categorias às quais o material pertence
+  keywords            String?  // Palavras-chave para busca
+  videoUrl            String?  // URL para vídeos (YouTube, Vimeo)
+  isVideoTranscription Boolean @default(false) // Indica se é uma transcrição de vídeo
+  insights            String?  @db.Text // Insights extraídos via IA
+  processed           Boolean  @default(false) // Indica se o material foi processado
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}

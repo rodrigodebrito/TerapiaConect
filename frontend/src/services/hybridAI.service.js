@@ -12,15 +12,20 @@ class HybridAIService {
   constructor() {
     console.log('HybridAI: Inicializando serviço...');
     
-    // Estado inicial
+    // Estado
     this.isInitialized = false;
     this.isRecording = false;
-    this.transcript = '';
-    this.interimTranscript = '';
-    this.useLocalProcessing = true;
+    this.useLocalProcessing = false;
     this.useAnonymization = true;
     
-    // Inicialização de contagens de emoções
+    // Texto e transcrição
+    this.transcript = '';
+    this.interimTranscript = '';
+    
+    // Objeto de reconhecimento de voz será criado no método setupSpeechRecognition
+    this.recognition = null;
+    
+    // Emoções detectadas
     this.emotions = {
       happiness: 0,
       sadness: 0,
@@ -30,59 +35,15 @@ class HybridAIService {
       neutral: 1
     };
     
-    // Palavras-chave para detecção de emoções
-    this.emotionKeywords = {
-      // Palavras em português que indicam emoções
-      'feliz': 'happiness',
-      'felicidade': 'happiness',
-      'alegre': 'happiness',
-      'alegria': 'happiness',
-      'contente': 'happiness',
-      'satisfeito': 'happiness',
-      
-      'triste': 'sadness',
-      'tristeza': 'sadness',
-      'deprimido': 'sadness',
-      'depressão': 'sadness',
-      'melancólico': 'sadness',
-      'infeliz': 'sadness',
-      
-      'raiva': 'anger',
-      'irritado': 'anger',
-      'bravo': 'anger',
-      'furioso': 'anger',
-      'revoltado': 'anger',
-      'nervoso': 'anger',
-      
-      'medo': 'fear',
-      'assustado': 'fear',
-      'tenso': 'fear',
-      'ansioso': 'fear',
-      'preocupado': 'fear',
-      'apreensivo': 'fear',
-      
-      'surpresa': 'surprise',
-      'surpreso': 'surprise',
-      'chocado': 'surprise',
-      'espantado': 'surprise',
-      'impressionado': 'surprise',
-      
-      'nojo': 'disgust',
-      'repulsa': 'disgust',
-      'repugnante': 'disgust',
-      'aversão': 'disgust',
-      
-      'calmo': 'neutral',
-      'tranquilo': 'neutral',
-      'neutro': 'neutral',
-      'normal': 'neutral'
-    };
-    
-    // Palavras sensíveis para anonimização
+    // Lista de palavras sensíveis que devem ser removidas
     this.sensitiveWords = [
-      'endereço', 'telefone', 'celular', 'cpf', 'rg', 'identidade',
-      'cartão', 'senha', 'conta', 'banco', 'email', 'numero', 'número'
+      'senha', 'password', 'cartão', 'card', 'crédito', 'credit',
+      'conta', 'account', 'banco', 'bank', 'endereço', 'address',
+      'cpf', 'rg', 'documento', 'identidade', 'identity'
     ];
+    
+    // Dicionário de emoções será carregado posteriormente
+    this.emotionKeywords = null;
     
     // Verificar suporte a API de reconhecimento de voz
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -148,10 +109,12 @@ class HybridAIService {
     if (this.isInitialized) return true;
     
     try {
-      await initializeTensorFlow();
+      // Configurar reconhecimento de voz
+      this.setupSpeechRecognition();
       
-      this.isInitialized = true;
-      console.log('Serviço de IA híbrida inicializado');
+      // Carregar dicionário de emoções
+      await this.loadEmotionKeywords();
+      
       return true;
     } catch (error) {
       console.error('Erro ao inicializar serviço de IA híbrida:', error);
@@ -166,7 +129,22 @@ class HybridAIService {
     // Verificar se já está em execução
     if (this.isRecording) {
       console.log('HybridAI: Reconhecimento de voz já está em execução');
-      return true;
+      
+      // Parar e reiniciar o reconhecimento para evitar o erro de "recognition has already started"
+      try {
+        console.log('HybridAI: Tentando reiniciar o reconhecimento já ativo');
+        this.stopRecording();
+        
+        // Um pequeno atraso antes de tentar iniciar novamente
+        setTimeout(() => {
+          this.startRecording();
+        }, 300);
+        
+        return true;
+      } catch (error) {
+        console.error('HybridAI: Erro ao tentar reiniciar reconhecimento:', error);
+        this.isRecording = false; // Resetar o estado para tentar iniciar novamente
+      }
     }
     
     // Verificar se o navegador é compatível
@@ -177,6 +155,9 @@ class HybridAIService {
     
     try {
       console.log('HybridAI: Iniciando reconhecimento de voz');
+      
+      // Resetar o objeto de reconhecimento para garantir um estado limpo
+      this.setupSpeechRecognition();
       
       // Configurar reconhecimento
       this.recognition.continuous = true;
@@ -209,6 +190,89 @@ class HybridAIService {
     } catch (error) {
       console.error('HybridAI: Erro ao iniciar reconhecimento de voz:', error);
       this.isRecording = false;
+      return false;
+    }
+  }
+
+  // Método para recriar o objeto de reconhecimento de voz
+  setupSpeechRecognition() {
+    try {
+      // Limpar o objeto anterior se existir
+      if (this.recognition) {
+        try {
+          // Remover todos os event listeners antigos
+          this.recognition.onresult = null;
+          this.recognition.onstart = null;
+          this.recognition.onend = null;
+          this.recognition.onerror = null;
+          
+          // Tentar parar se estiver rodando
+          if (this.isRecording) {
+            try {
+              this.recognition.stop();
+            } catch (stopError) {
+              console.warn('HybridAI: Erro ao parar reconhecimento antigo:', stopError);
+            }
+          }
+        } catch (e) {
+          console.warn('HybridAI: Erro ao limpar objeto de reconhecimento:', e);
+        }
+      }
+      
+      // Criar novo objeto de reconhecimento
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        console.error('HybridAI: API de reconhecimento de voz não suportada pelo navegador');
+        return false;
+      }
+      
+      this.recognition = new SpeechRecognition();
+      
+      // Configurar handlers de eventos
+      this.recognition.onresult = this.handleSpeechResult.bind(this);
+      
+      this.recognition.onstart = () => {
+        console.log('HybridAI: Reconhecimento de voz iniciado pelo navegador');
+        this.isRecording = true;
+      };
+      
+      this.recognition.onend = () => {
+        console.log('HybridAI: Reconhecimento de voz finalizado pelo navegador');
+        
+        // Se ainda estiver marcado como gravando, reiniciar automaticamente
+        if (this.isRecording) {
+          console.log('HybridAI: Tentando reiniciar reconhecimento após finalização automática');
+          setTimeout(() => {
+            try {
+              this.recognition.start();
+            } catch (error) {
+              console.error('HybridAI: Erro ao reiniciar reconhecimento:', error);
+              this.isRecording = false;
+              
+              // Notificar outros componentes que a gravação parou
+              window.dispatchEvent(new CustomEvent('recording-stopped'));
+            }
+          }, 300);
+        }
+      };
+      
+      this.recognition.onerror = (event) => {
+        console.error('HybridAI: Erro no reconhecimento de voz:', event.error);
+        
+        // Notificar erro
+        window.dispatchEvent(new CustomEvent('speech-error', {
+          detail: { error: event.error }
+        }));
+        
+        // Se for um erro de não permitido, marcar como não gravando
+        if (event.error === 'not-allowed') {
+          this.isRecording = false;
+        }
+      };
+      
+      return true;
+    } catch (error) {
+      console.error('HybridAI: Erro ao configurar reconhecimento de voz:', error);
       return false;
     }
   }
@@ -285,16 +349,34 @@ class HybridAIService {
 
   // Extrair ID da sessão da URL atual
   extractSessionId() {
-    if (window && window.location && window.location.pathname) {
-      const path = window.location.pathname;
-      const matches = path.match(/\/session\/([^\/]+)/);
-      if (matches && matches[1]) {
-        return matches[1];
+    try {
+      if (window && window.location && window.location.pathname) {
+        const path = window.location.pathname;
+        console.log('HybridAI: Extraindo sessionId do path:', path);
+        
+        // Verificar se estamos em uma rota de sessão
+        const matches = path.match(/\/session\/([a-zA-Z0-9-_]+)/);
+        if (matches && matches[1] && matches[1].length > 0 && matches[1].length < 50) {
+          console.log('HybridAI: SessionId extraído:', matches[1]);
+          return matches[1];
+        }
+        
+        // Verificar se estamos em uma rota de reunião
+        const meetingMatches = path.match(/\/meeting\/([a-zA-Z0-9-_]+)/);
+        if (meetingMatches && meetingMatches[1] && meetingMatches[1].length > 0 && meetingMatches[1].length < 50) {
+          console.log('HybridAI: MeetingId extraído:', meetingMatches[1]);
+          return meetingMatches[1];
+        }
       }
+      
+      // Se não encontrarmos um ID válido, usar um ID temporário único
+      const tempId = 'temp-' + Date.now();
+      console.log('HybridAI: Nenhum sessionId encontrado, usando ID temporário:', tempId);
+      return tempId;
+    } catch (error) {
+      console.error('HybridAI: Erro ao extrair sessionId:', error);
+      return 'error-' + Date.now();
     }
-    
-    // Se não encontrar na URL, usar sessão temporária
-    return 'temp-session';
   }
 
   // Processar emoções no texto
@@ -354,11 +436,19 @@ class HybridAIService {
   async sendTranscriptToServer() {
     try {
       // Ignorar texto muito curto
-      if (this.transcript.length < 10) return;
+      if (!this.transcript || this.transcript.length < 10) {
+        console.log('HybridAI: Transcrição muito curta para enviar ao servidor');
+        return;
+      }
       
       // Obter ID da sessão da URL
       const sessionId = this.extractSessionId();
-      if (!sessionId) return;
+      
+      // Verificar se temos um ID válido
+      if (!sessionId || sessionId.length > 50) {
+        console.error('HybridAI: ID de sessão inválido para envio de transcrição:', sessionId);
+        return;
+      }
       
       // Enviar para o servidor
       console.log(`HybridAI: Enviando transcrição para a sessão ${sessionId}`);
@@ -390,6 +480,17 @@ class HybridAIService {
       
       // Obter ID da sessão da URL
       const sessionId = this.extractSessionId();
+      
+      // Verificar se temos um ID válido
+      if (!sessionId || sessionId.length > 50) {
+        console.error('HybridAI: ID de sessão inválido para análise:', sessionId);
+        return { 
+          type: 'analysis',
+          error: 'ID de sessão inválido',
+          analysis: 'Não foi possível identificar corretamente a sessão atual.',
+          content: 'Recarregue a página ou verifique a URL da sessão.'
+        };
+      }
       
       console.log(`HybridAI: Analisando texto para sessão ${sessionId}`);
       
@@ -465,6 +566,17 @@ class HybridAIService {
       // Obter ID da sessão da URL
       const sessionId = this.extractSessionId();
       
+      // Verificar se temos um ID válido
+      if (!sessionId || sessionId.length > 50) {
+        console.error('HybridAI: ID de sessão inválido para sugestões:', sessionId);
+        return { 
+          type: 'suggestions',
+          error: 'ID de sessão inválido',
+          suggestions: ['Não foi possível identificar corretamente a sessão atual.'],
+          content: 'Recarregue a página ou verifique a URL da sessão.'
+        };
+      }
+      
       console.log(`HybridAI: Gerando sugestões para sessão ${sessionId}`);
       
       // Enviar para o servidor para sugestões
@@ -526,13 +638,44 @@ class HybridAIService {
         return { 
           type: 'report',
           error: 'Texto insuficiente para relatório',
-          report: 'É necessário mais conteúdo na sessão para gerar um relatório útil.',
+          report: `**Texto insuficiente para gerar um relatório completo**
+
+Para gerar um relatório detalhado, é necessário mais conteúdo da sessão.
+Continue a sessão e tente novamente quando houver mais diálogo entre terapeuta e cliente.
+
+*Recomendações:*
+- Certifique-se de que o microfone está ativo durante a sessão
+- Verifique se a transcrição está funcionando corretamente
+- Sessões com pelo menos 15-20 minutos de diálogo geralmente produzem melhores relatórios`,
           content: 'Continue a sessão para capturar mais dados para o relatório.'
         };
       }
       
       // Obter ID da sessão da URL
       const sessionId = this.extractSessionId();
+      
+      // Verificar se temos um ID válido
+      if (!sessionId || sessionId.length > 50) {
+        console.error('HybridAI: ID de sessão inválido para relatório:', sessionId);
+        return { 
+          type: 'report',
+          error: 'ID de sessão inválido',
+          report: `**Não foi possível gerar o relatório**
+
+O sistema não conseguiu identificar corretamente a sessão atual.
+
+*Possíveis razões:*
+- URL da sessão incorreta ou malformada
+- Problema na identificação da sessão no sistema
+- Erro temporário no serviço
+
+*Recomendações:*
+- Recarregue a página
+- Verifique se você está na URL correta da sessão
+- Se o problema persistir, tente criar uma nova sessão`,
+          content: 'Não foi possível identificar corretamente a sessão atual.'
+        };
+      }
       
       console.log(`HybridAI: Gerando relatório para sessão ${sessionId}`);
       
@@ -543,12 +686,26 @@ class HybridAIService {
         console.log('HybridAI: Resultado do relatório recebido:', result);
       } catch (apiError) {
         console.error('HybridAI: Erro na chamada da API:', apiError);
-        // Criar resposta de fallback
-        result = {
+        // Criar resposta de fallback mais útil
+        return {
           type: 'report',
           error: 'Falha na comunicação com o servidor',
           message: apiError.message,
-          report: 'Não foi possível gerar o relatório devido a um erro técnico.',
+          report: `**Não foi possível conectar ao serviço de relatórios**
+
+O sistema encontrou um problema ao tentar gerar o relatório desta sessão.
+
+*Possíveis causas:*
+- Problemas de conectividade com o servidor
+- Sobrecarga temporária do sistema
+- Limitações da API do serviço de IA
+
+*Recomendações:*
+- Verifique sua conexão com a internet
+- Aguarde alguns minutos e tente novamente
+- Se o problema persistir, entre em contato com o suporte técnico
+
+Detalhes técnicos: ${apiError.message || 'Erro de comunicação com o servidor'}`,
           content: 'O servidor está temporariamente indisponível.'
         };
       }
@@ -556,11 +713,57 @@ class HybridAIService {
       // Verificar se o resultado contém dados
       if (!result || (Object.keys(result).length === 0)) {
         console.warn('HybridAI: Resultado vazio ou inválido recebido');
-        result = {
+        return {
           type: 'report',
-          report: 'Não foi possível gerar um relatório específico neste momento.',
+          report: `**Relatório não disponível**
+
+Não foi possível gerar um relatório específico para esta sessão no momento.
+
+*Possíveis causas:*
+- A sessão pode ser muito curta
+- A qualidade do áudio pode estar comprometida
+- Pode haver poucos elementos terapêuticos para análise
+
+*Recomendações:*
+- Continue a sessão por mais tempo
+- Verifique se o microfone está funcionando corretamente
+- Tente novamente após mais interações terapeuta-cliente`,
           content: 'Continue a sessão para obter resultados mais completos.'
         };
+      }
+      
+      // Verificar se há um relatório válido no resultado
+      if (result.report && typeof result.report === 'string') {
+        // Verificar se o conteúdo é genérico demais
+        if (result.report.includes('Não foi possível gerar conteúdo específico') || 
+            result.report.trim().length < 100) {
+          
+          console.warn('HybridAI: Conteúdo do relatório parece genérico ou muito curto');
+          return {
+            type: 'report',
+            report: `**Relatório parcial da sessão**
+
+O sistema não conseguiu gerar um relatório detalhado para esta sessão específica.
+
+*Possíveis razões:*
+- Poucos dados de transcrição disponíveis
+- Limitações temporárias do modelo de IA
+- Problemas no processamento do contexto da sessão
+
+*Sugestões para o terapeuta:*
+1. Verifique a qualidade da transcrição da sessão
+2. Tente solicitar o relatório novamente após mais diálogo
+3. Considere fazer anotações manuais complementares
+
+*Observações gerais para sessões terapêuticas:*
+- Mantenha uma comunicação clara e empática
+- Observe as reações e sinais não-verbais do paciente
+- Faça perguntas abertas para explorar sentimentos e pensamentos
+- Valide as experiências e emoções do paciente
+- Estabeleça metas claras para o tratamento`,
+            content: 'Relatório parcial com recomendações gerais para o terapeuta.'
+          };
+        }
       }
       
       // Garantir que o tipo está definido
@@ -568,27 +771,28 @@ class HybridAIService {
         result.type = 'report';
       }
       
-      // Garantir que há conteúdo de relatório
-      if (!result.report && !result.content && !result.error) {
-        // Se temos alguma resposta do servidor, mas sem relatório específico
-        if (result.data && result.data.report) {
-          result.report = result.data.report;
-          result.content = 'Relatório baseado na transcrição da sessão atual';
-        } else {
-          result.report = 'Baseado na conversa atual, não foi possível gerar um relatório detalhado.';
-          result.content = 'A transcrição não contém informações suficientes para um relatório completo.';
-        }
+      // Verificar se há conteúdo significativo
+      if (result.report && result.report.length < 200) {
+        console.warn('HybridAI: Relatório parece muito curto:', result.report);
       }
       
       return result;
     } catch (error) {
       console.error('HybridAI: Erro ao gerar relatório:', error);
-      return { 
-        type: 'report', 
-        error: 'Erro ao gerar relatório', 
-        message: error.message,
-        report: 'Ocorreu um erro ao processar o relatório da sessão.',
-        content: 'Tente novamente em alguns instantes.'
+      return {
+        type: 'report',
+        error: 'Erro durante processamento do relatório',
+        report: `**Erro ao gerar relatório**
+
+Ocorreu um erro inesperado durante a geração do relatório.
+
+*Detalhes técnicos:* ${error.message || 'Erro desconhecido'}
+
+*Recomendações:*
+- Recarregue a página e tente novamente
+- Verifique se a sessão está ativa
+- Se o problema persistir, entre em contato com o suporte`,
+        content: 'Ocorreu um erro inesperado. Por favor, tente novamente.'
       };
     }
   }
@@ -614,11 +818,16 @@ class HybridAIService {
     // Parar primeiro, se estiver em execução
     if (this.isRecording) {
       try {
-        this.recognition.stop();
+        this.stopRecording();
       } catch (error) {
         console.warn('HybridAI: Erro ao parar reconhecimento antes de reiniciar:', error);
+        // Forçar o estado para não gravando para garantir que tentaremos iniciar
+        this.isRecording = false;
       }
     }
+    
+    // Recriar o objeto de reconhecimento
+    this.setupSpeechRecognition();
     
     // Aguardar um breve momento
     setTimeout(() => {
@@ -644,6 +853,65 @@ class HybridAIService {
           }));
         });
     }, 500);
+  }
+
+  // Carregar dicionário de emoções
+  async loadEmotionKeywords() {
+    try {
+      // Palavras-chave para detecção de emoções
+      this.emotionKeywords = {
+        // Palavras em português que indicam emoções
+        'feliz': 'happiness',
+        'felicidade': 'happiness',
+        'alegre': 'happiness',
+        'alegria': 'happiness',
+        'contente': 'happiness',
+        'satisfeito': 'happiness',
+        
+        'triste': 'sadness',
+        'tristeza': 'sadness',
+        'deprimido': 'sadness',
+        'depressão': 'sadness',
+        'melancólico': 'sadness',
+        'infeliz': 'sadness',
+        
+        'raiva': 'anger',
+        'irritado': 'anger',
+        'bravo': 'anger',
+        'furioso': 'anger',
+        'revoltado': 'anger',
+        'nervoso': 'anger',
+        
+        'medo': 'fear',
+        'assustado': 'fear',
+        'tenso': 'fear',
+        'ansioso': 'fear',
+        'preocupado': 'fear',
+        'apreensivo': 'fear',
+        
+        'surpresa': 'surprise',
+        'surpreso': 'surprise',
+        'chocado': 'surprise',
+        'espantado': 'surprise',
+        'impressionado': 'surprise',
+        
+        'nojo': 'disgust',
+        'repulsa': 'disgust',
+        'repugnante': 'disgust',
+        'aversão': 'disgust',
+        
+        'calmo': 'neutral',
+        'tranquilo': 'neutral',
+        'neutro': 'neutral',
+        'normal': 'neutral'
+      };
+      
+      console.log('HybridAI: Dicionário de emoções carregado com sucesso');
+      return true;
+    } catch (error) {
+      console.error('HybridAI: Erro ao carregar dicionário de emoções:', error);
+      return false;
+    }
   }
 }
 

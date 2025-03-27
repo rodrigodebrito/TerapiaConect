@@ -128,6 +128,13 @@ export const AIProvider = ({ children }) => {
         };
       }
       
+      // Processar materiais referenciados se existirem
+      if (result.data && result.data.referencedMaterials && result.data.referencedMaterials.length > 0) {
+        console.log('[AIContext] Análise inclui materiais de referência:', result.data.referencedMaterials.length);
+      } else {
+        console.log('[AIContext] Análise não inclui materiais de referência');
+      }
+      
       // Garantir que há conteúdo de análise
       if (!result.analysis && !result.content && !result.error) {
         result.analysis = 'Não foram identificados padrões significativos na conversa atual.';
@@ -208,6 +215,13 @@ export const AIProvider = ({ children }) => {
           ...result,
           type: 'suggestions'
         };
+      }
+      
+      // Processar materiais referenciados se existirem
+      if (result.data && result.data.referencedMaterials && result.data.referencedMaterials.length > 0) {
+        console.log('[AIContext] Sugestões incluem materiais de referência:', result.data.referencedMaterials.length);
+      } else {
+        console.log('[AIContext] Sugestões não incluem materiais de referência');
       }
       
       // Garantir que existem sugestões mesmo sem conteúdo da API
