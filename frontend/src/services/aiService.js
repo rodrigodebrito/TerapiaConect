@@ -29,21 +29,29 @@ const aiService = {
    * Solicitar análise da sessão
    * @param {string} sessionId - ID da sessão
    * @param {string} transcript - Transcrição opcional (pode ser obtida do servidor)
+   * @param {boolean} useAdvancedAnalysis - Se deve usar análise avançada
    * @returns {Promise} Resposta da API com análise
    */
-  analyzeSession: async (sessionId, transcript = null) => {
+  analyzeSession: async (sessionId, transcript = null, useAdvancedAnalysis = false) => {
     try {
       console.log('AI Service: Solicitando análise para sessão', sessionId);
       console.log('AI Service: Transcript:', transcript ? transcript.substring(0, 100) + '...' : 'Não fornecido');
+      console.log('AI Service: Usar análise avançada:', useAdvancedAnalysis);
       
       const payload = {
         sessionId,
-        transcript
+        transcript,
+        useAdvancedAnalysis
       };
       
       console.log('AI Service: Enviando payload para análise:', payload);
       
-      const response = await api.post('/ai/analyze', payload);
+      // Usar o endpoint correto com base no tipo de análise
+      const endpoint = useAdvancedAnalysis 
+        ? '/ai/analyze-session/advanced' 
+        : '/ai/analyze-session';
+      
+      const response = await api.post(endpoint, payload);
       
       console.log('AI Service: Resposta da análise recebida:', response.data);
       
@@ -57,26 +65,7 @@ const aiService = {
         };
       }
       
-      // Verificar formato da resposta
-      const responseData = response.data;
-      
-      if (responseData.data && responseData.data.analysis) {
-        // Formatar resposta no formato esperado pelo frontend
-        console.log('AI Service: Formatando resposta de análise do OpenAI');
-        return {
-          type: 'analysis',
-          analysis: responseData.data.analysis,
-          content: 'Análise baseada na transcrição da sessão atual'
-        };
-      }
-      
-      // Se não houver análise, adicionar uma mensagem padrão
-      if (!responseData.analysis && !responseData.error) {
-        responseData.analysis = 'Não foram identificados padrões específicos nesta conversa.';
-        responseData.content = 'Continue a sessão para obter insights mais específicos.';
-      }
-      
-      return responseData;
+      return response.data;
     } catch (error) {
       console.error('Erro ao analisar sessão:', error);
       console.error('Detalhes do erro:', {

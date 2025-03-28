@@ -2,6 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const { OpenAI } = require('openai');
 const { validationResult } = require('express-validator');
 const trainingService = require('../services/ai/training.service');
+const advancedAnalysisService = require('../services/ai/advanced-analysis.service');
 const prisma = new PrismaClient();
 
 // Configurar o cliente OpenAI
@@ -457,41 +458,25 @@ const aiController = {
   },
 
   /**
-   * Analisar sessão de terapia
+   * Analisar uma sessão
    * @param {Request} req - Requisição Express
    * @param {Response} res - Resposta Express
    */
   analyzeSession: async (req, res) => {
     try {
       console.log('AI Controller: Iniciando análise de sessão');
-      
-      // Obter sessionId do parâmetro de rota ou do corpo da requisição
-      let sessionId;
-      if (req.params.sessionId) {
-        sessionId = req.params.sessionId;
-      } else if (req.body.sessionId) {
-        sessionId = req.body.sessionId;
-      } else {
-        console.error('AI Controller: sessionId não fornecido na requisição');
-        return res.status(400).json({
-          message: 'sessionId é obrigatório',
-          success: false
-        });
-      }
-      
-      const { transcript } = req.body;
+      const { sessionId, transcript, useAdvancedAnalysis } = req.body;
       const userId = req.user?.id;
       
-      console.log(`AI Controller: Processando análise para sessão ${sessionId}, usuário ${userId}`);
+      console.log(`AI Controller: Processando sessão ${sessionId}, usuário ${userId}, análise avançada: ${useAdvancedAnalysis || false}`);
 
       // Verificar se a sessão existe e se o usuário tem acesso
       const session = await prisma.session.findUnique({
         where: {
-          id: sessionId
+          id: sessionId,
         },
         include: {
-          therapist: true,
-          client: true
+          therapist: true
         }
       });
 
@@ -499,7 +484,6 @@ const aiController = {
         console.log('AI Controller: Sessão não encontrada');
         return res.status(404).json({ 
           message: 'Sessão não encontrada',
-          success: false,
           type: 'analysis',
           analysis: 'A sessão solicitada não foi encontrada no sistema.' 
         });
@@ -514,128 +498,115 @@ const aiController = {
         console.log(`AI Controller: Acesso não autorizado. Terapeuta: ${session.therapist?.userId}, Usuário: ${userId}`);
         return res.status(403).json({ 
           message: 'Apenas o terapeuta pode analisar sessões',
-          success: false,
           type: 'analysis',
           analysis: 'Você não tem permissão para analisar esta sessão.' 
         });
       }
 
-      // Construir ou buscar transcrição
+      // Obter transcrição do banco de dados se não foi fornecida
       let processedTranscript = transcript;
       if (!processedTranscript) {
-        console.log(`AI Controller: Transcript não fornecido, buscando mensagens do banco de dados`);
-        
-        // Se não foi fornecido, tentar obter do banco
-        let messages = [];
-        
-        try {
-          // Tentar buscar de diferentes modelos possíveis
-          try {
-            messages = await prisma.message.findMany({
-              where: {
-                sessionId: sessionId
-              },
-              orderBy: {
-                timestamp: 'asc'
-              }
-            });
-          } catch (err) {
-            console.log(`AI Controller: Erro ao buscar de Message, tentando SessionTranscript`);
-            
-            const transcripts = await prisma.sessionTranscript.findMany({
-              where: {
-                sessionId: sessionId
-              },
-              orderBy: {
-                timestamp: 'asc'
-              }
-            });
-            
-            messages = transcripts.map(t => ({
-              sender: t.speaker,
-              content: t.content,
-              timestamp: t.timestamp
-            }));
-          }
-          
-          if (!messages || messages.length === 0) {
-            console.error(`AI Controller: Nenhuma mensagem encontrada para a sessão ${sessionId}`);
-            return res.status(400).json({
-              error: 'Não há mensagens na sessão para analisar',
-              success: false,
-              type: 'analysis',
-              analysis: 'Não há mensagens registradas nesta sessão para analisar.'
-            });
-          }
-          
-          // Montar o transcript a partir das mensagens
-          processedTranscript = messages.map(msg => {
-            // Determinar quem é o sender (pode variar dependendo do modelo)
-            let sender;
-            if (typeof msg.sender === 'string') {
-              sender = msg.sender.toUpperCase() === 'THERAPIST' || 
-                      msg.sender.toUpperCase() === 'TERAPEUTA' ? 
-                      'Terapeuta' : 'Paciente';
-            } else {
-              sender = 'Participante';
-            }
-            
-            return `${sender}: ${msg.content}`;
-          }).join('\n');
-          
-        } catch (dbError) {
-          console.error(`AI Controller: Erro ao buscar transcrições do banco: ${dbError.message}`);
-          return res.status(500).json({
-            error: 'Erro ao buscar transcrições da sessão',
-            success: false,
-            type: 'analysis',
-            analysis: 'Ocorreu um erro ao buscar o histórico da sessão. Tente novamente mais tarde.'
-          });
+        const transcriptRecords = await prisma.sessionTranscript.findMany({
+          where: {
+            sessionId,
+          },
+          orderBy: {
+            timestamp: 'asc'
+          },
+          take: 50
+        });
+
+        if (transcriptRecords && transcriptRecords.length > 0) {
+          processedTranscript = transcriptRecords
+            .map(record => `${record.speaker}: ${record.content}`)
+            .join('\n');
         }
       }
 
-      if (!processedTranscript || processedTranscript.length < 100) {
-        console.error(`AI Controller: Transcript muito curto (${processedTranscript?.length || 0} caracteres)`);
-        return res.status(400).json({
-          error: 'Conteúdo insuficiente para análise',
-          success: false,
+      if (!processedTranscript) {
+        console.log('AI Controller: Sem transcrição disponível para análise');
+        return res.status(400).json({ 
+          message: 'Nenhuma transcrição disponível para análise',
           type: 'analysis',
-          analysis: 'A sessão não possui conteúdo suficiente para uma análise detalhada.'
+          analysis: 'Não há transcrição disponível para analisar. Inicie uma conversa primeiro.' 
         });
       }
 
       // NOVO: Pré-processar a transcrição se for muito longa
       processedTranscript = await preprocessLongTranscript(processedTranscript, 6000);
 
-      // Gerar análise da sessão usando OpenAI
+      // NOVO: Usar análise avançada se solicitado
+      if (useAdvancedAnalysis) {
+        try {
+          console.log('AI Controller: Utilizando serviço de análise avançada');
+          
+          // Processar a sessão usando o novo serviço de análise avançada
+          const advancedAnalysisResult = await advancedAnalysisService.analyzeSession(processedTranscript);
+          
+          // Salvar a análise no banco de dados
+          const savedAnalysis = await prisma.aIInsight.create({
+            data: {
+              sessionId,
+              content: JSON.stringify(advancedAnalysisResult),
+              type: 'ADVANCED_ANALYSIS',
+              keywords: advancedAnalysisResult.thematicAnalysis
+                .map(item => item.theme)
+                .join(', ')
+            }
+          });
+          
+          console.log('AI Controller: Análise avançada gerada com sucesso');
+          
+          // Retornar a resposta estruturada
+          return res.status(200).json({
+            message: 'Análise avançada gerada com sucesso',
+            type: 'analysis',
+            content: 'Análise estruturada baseada na transcrição da sessão',
+            analysis: advancedAnalysisResult.overview,
+            data: {
+              id: savedAnalysis.id,
+              structuredAnalysis: advancedAnalysisResult,
+              referencedMaterials: advancedAnalysisResult.referencedMaterials
+            }
+          });
+        } catch (advancedError) {
+          console.error('AI Controller: Erro na análise avançada:', advancedError);
+          // Se falhar a análise avançada, voltar para a análise padrão
+          console.log('AI Controller: Fallback para análise padrão');
+        }
+      }
+
+      // Continuar com a análise padrão (existente)
       try {
-        console.log('AI Controller: Gerando análise via OpenAI');
+        console.log('AI Controller: Extraindo palavras-chave para busca de materiais');
         
-        // Extrair temas principais da transcrição para identificar materiais relevantes
-        console.log('AI Controller: Extraindo temas da transcrição para buscar materiais relevantes');
-        const themesCompletion = await openai.chat.completions.create({
+        // Extrair keywords da transcrição
+        const keywordsCompletion = await openai.chat.completions.create({
           model: "gpt-3.5-turbo",
           messages: [
             {
               role: "system",
-              content: "Extraia os principais temas e conceitos da transcrição da sessão. Retorne apenas uma lista de palavras-chave separadas por vírgula, sem explicações adicionais."
+              content: "Extraia até 10 palavras-chave da transcrição da sessão terapêutica. Retorne apenas palavras-chave relacionadas a temas terapêuticos, separadas por vírgula, sem explicações adicionais."
             },
             {
               role: "user",
-              content: `Extraia os temas principais desta transcrição de sessão terapêutica:\n\n${processedTranscript}`
+              content: processedTranscript
             }
           ],
-          max_tokens: 100,
+          max_tokens: 50,
         });
         
-        // Extrair os temas como uma array
-        const keywords = themesCompletion.choices[0].message.content.split(',').map(k => k.trim());
-        console.log('AI Controller: Temas identificados:', keywords);
+        const keywordsText = keywordsCompletion.choices[0].message.content;
+        const keywords = keywordsText.split(',').map(k => k.trim());
         
-        // Buscar materiais de treinamento relevantes para esses temas
+        console.log(`AI Controller: Palavras-chave extraídas: ${keywords.join(', ')}`);
+        
+        // Buscar materiais relevantes para essas keywords
         let allMaterials = [];
         try {
-          // Buscar materiais para cada palavra-chave identificada
+          console.log('AI Controller: Buscando materiais de treinamento relevantes');
+          
+          // Criar promessas para buscar materiais para cada keyword
           const materialPromises = keywords.map(keyword => 
             prisma.trainingMaterial.findMany({
               where: {
@@ -643,15 +614,16 @@ const aiController = {
                   { title: { contains: keyword, mode: 'insensitive' } },
                   { content: { contains: keyword, mode: 'insensitive' } },
                   { insights: { contains: keyword, mode: 'insensitive' } },
-                  { category: { contains: keyword, mode: 'insensitive' } }
+                  { categories: { has: keyword } }
                 ],
                 status: 'processed'
               },
+              take: 3,
               select: {
                 id: true,
                 title: true,
                 insights: true,
-                category: true
+                categories: true
               }
             })
           );
@@ -682,7 +654,7 @@ const aiController = {
           
           try {
             // Extrair categorias dos materiais para usar no enhanceSessionAnalysis
-            const categories = [...new Set(allMaterials.map(m => m.category))];
+            const categories = [...new Set(allMaterials.map(m => m.categories).flat())];
             
             // Usar o TrainingService para enriquecer a análise
             analysisText = await trainingService.enhanceSessionAnalysis(
@@ -691,9 +663,11 @@ const aiController = {
             );
             
             // Guardar os materiais usados para incluir na resposta
-            usedMaterials = allMaterials.map(m => ({
+            usedMaterials = allMaterials.slice(0, 5).map(m => ({
+              id: m.id,
               title: m.title,
-              insights: m.insights ? m.insights.substring(0, 200) + "..." : "Sem insights disponíveis"
+              insights: m.insights ? m.insights.substring(0, 200) + "..." : "Sem insights disponíveis",
+              categories: m.categories || []
             }));
             
             console.log('AI Controller: Análise enriquecida com sucesso');
@@ -890,7 +864,7 @@ const aiController = {
                   { title: { contains: keyword, mode: 'insensitive' } },
                   { content: { contains: keyword, mode: 'insensitive' } },
                   { insights: { contains: keyword, mode: 'insensitive' } },
-                  { category: { contains: keyword, mode: 'insensitive' } }
+                  { categories: { has: keyword } }
                 ],
                 status: 'processed'
               },
@@ -898,7 +872,7 @@ const aiController = {
                 id: true,
                 title: true,
                 insights: true,
-                category: true
+                categories: true
               }
             })
           );
@@ -972,8 +946,10 @@ const aiController = {
             
             // Guardar os materiais usados para incluir na resposta
             usedMaterials = allMaterials.slice(0, 5).map(m => ({
+              id: m.id,
               title: m.title,
-              insights: m.insights ? m.insights.substring(0, 200) + "..." : "Sem insights disponíveis"
+              insights: m.insights ? m.insights.substring(0, 200) + "..." : "Sem insights disponíveis",
+              categories: m.categories || []
             }));
             
             console.log('AI Controller: Sugestões enriquecidas geradas com sucesso');
@@ -1204,16 +1180,16 @@ const aiController = {
               clientId: session.clientId,
               status: 'COMPLETED',
               id: { not: sessionId },
-              date: { lt: session.date }
+              startTime: { lt: session.startTime }
             },
             orderBy: {
-              date: 'desc'
+              startTime: 'desc'
             },
             take: 5
           });
           
           if (previousSessions && previousSessions.length > 0) {
-            previousSessionsInfo = `Existem ${previousSessions.length} sessões anteriores registradas com este paciente. A última sessão ocorreu em ${new Date(previousSessions[0].date).toLocaleDateString()}.`;
+            previousSessionsInfo = `Existem ${previousSessions.length} sessões anteriores registradas com este paciente. A última sessão ocorreu em ${new Date(previousSessions[0].startTime).toLocaleDateString()}.`;
           }
         } catch (prevSessionsError) {
           console.error('Erro ao buscar sessões anteriores:', prevSessionsError);
@@ -1233,7 +1209,7 @@ const aiController = {
               Informações importantes:
               - Nome do paciente: ${patientName}
               - Nome do terapeuta: ${therapistName}
-              - Data da sessão: ${new Date(session.date).toLocaleDateString()}
+              - Data da sessão: ${session.startTime ? new Date(session.startTime).toLocaleDateString() : 'Data não disponível'}
               - ${previousSessionsInfo}
               
               O relatório deve incluir as seguintes seções:

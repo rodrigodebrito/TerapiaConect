@@ -7,6 +7,7 @@ const path = require('path');
 const mammoth = require('mammoth');
 const pdf = require('pdf-parse');
 const { PDFDocument } = require('pdf-lib');
+const embeddingService = require('./embedding.service');
 
 class TrainingService {
   constructor() {
@@ -302,6 +303,16 @@ class TrainingService {
       
       logger.info(`Material ${materialId} atualizado com insights e marcado como processado`);
 
+      // Gerar embedding para o material processado
+      try {
+        logger.info(`Gerando embedding para o material ${materialId}`);
+        await embeddingService.updateMaterialEmbedding(materialId);
+        logger.info(`Embedding gerado com sucesso para o material ${materialId}`);
+      } catch (embeddingError) {
+        logger.error(`Erro ao gerar embedding para o material ${materialId}:`, embeddingError);
+        // Continuar mesmo se houver erro no embedding
+      }
+
       return insights;
     } catch (error) {
       logger.error(`Erro geral ao processar material ${materialId}:`, error);
@@ -448,9 +459,8 @@ class TrainingService {
       
       return await prisma.trainingMaterial.findMany({
         where: {
-          category: {
-            contains: category,
-            mode: 'insensitive'
+          categories: {
+            has: category
           },
           status: 'processed'
         },
@@ -460,6 +470,28 @@ class TrainingService {
       });
     } catch (error) {
       console.error('TrainingService: Erro ao buscar materiais:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Realiza uma busca semântica por materiais relevantes ao texto fornecido
+   * @param {string} text - Texto para buscar materiais relevantes
+   * @param {number} limit - Número máximo de resultados
+   * @returns {Promise<Array>} Materiais relevantes
+   */
+  async searchSemanticMaterials(text, limit = 5) {
+    try {
+      logger.info(`TrainingService: Iniciando busca semântica para texto: "${text.substring(0, 50)}..."`);
+      
+      // Usar o serviço de embeddings para realizar a busca semântica
+      const results = await embeddingService.searchSimilarMaterials(text, limit, 0.65);
+      
+      logger.info(`TrainingService: Busca semântica retornou ${results.length} resultados`);
+      return results;
+    } catch (error) {
+      logger.error('TrainingService: Erro na busca semântica:', error);
+      // Retornar array vazio em caso de erro
       return [];
     }
   }
@@ -475,8 +507,63 @@ class TrainingService {
       
       // Verificar se temos categorias
       if (!categories || categories.length === 0) {
-        console.log('TrainingService: Nenhuma categoria especificada, retornando análise padrão');
-        return this.generateFallbackAnalysis(sessionContent);
+        console.log('TrainingService: Nenhuma categoria especificada, tentando busca semântica');
+        
+        // Se não temos categorias, tentar busca semântica
+        const semanticResults = await this.searchSemanticMaterials(sessionContent, 5);
+        
+        if (semanticResults.length > 0) {
+          console.log(`TrainingService: Busca semântica encontrou ${semanticResults.length} materiais relevantes`);
+          
+          // Combina insights dos materiais com o conteúdo da sessão
+          const materialsContext = semanticResults
+            .map(m => `Título: ${m.title}\nInsights: ${m.insights || 'Sem insights disponíveis'}\nRelevância: ${Math.round(m.similarity * 100)}%\n`)
+            .join('\n\n');
+
+          console.log(`TrainingService: Gerando análise com ${semanticResults.length} materiais da busca semântica`);
+          
+          const prompt = `
+            Analise a seguinte sessão considerando os insights dos materiais de treinamento:
+            
+            Materiais Relevantes Encontrados via Busca Semântica:
+            ${materialsContext}
+            
+            Conteúdo da Sessão:
+            ${sessionContent}
+            
+            Forneça uma análise detalhada da sessão, considerando:
+            1. Temas principais discutidos
+            2. Padrões emocionais observados
+            3. Possíveis questões subjacentes
+            4. Progresso em relação a sessões anteriores (se mencionado)
+            5. Pontos importantes para acompanhamento
+            6. Aplicação de conceitos e técnicas dos materiais de referência
+            
+            Formate a resposta de maneira clara, estruturada e profissional.
+          `;
+
+          const completion = await this.openai.chat.completions.create({
+            model: "gpt-4-turbo",
+            messages: [
+              {
+                role: "system",
+                content: "Você é um especialista em análise de sessões terapêuticas com conhecimento profundo dos materiais de treinamento."
+              },
+              {
+                role: "user",
+                content: prompt
+              }
+            ],
+            temperature: 0.7,
+            max_tokens: 1000
+          });
+
+          console.log('TrainingService: Análise enriquecida gerada com sucesso via busca semântica');
+          return completion.choices[0].message.content;
+        } else {
+          console.log('TrainingService: Busca semântica não encontrou materiais, retornando análise padrão');
+          return this.generateFallbackAnalysis(sessionContent);
+        }
       }
       
       // Busca materiais relevantes para todas as categorias
@@ -498,10 +585,66 @@ class TrainingService {
       
       console.log(`TrainingService: Encontrados ${relevantMaterials.length} materiais relevantes`);
       
-      // Se não encontrou materiais, retornar análise padrão
+      // Se não encontrou materiais por categoria, tentar busca semântica
       if (relevantMaterials.length === 0) {
-        console.log('TrainingService: Nenhum material relevante encontrado, retornando análise padrão');
-        return this.generateFallbackAnalysis(sessionContent);
+        console.log('TrainingService: Nenhum material encontrado por categoria, tentando busca semântica');
+        
+        const semanticResults = await this.searchSemanticMaterials(sessionContent, 5);
+        
+        if (semanticResults.length > 0) {
+          console.log(`TrainingService: Busca semântica encontrou ${semanticResults.length} materiais relevantes`);
+          
+          // Combina insights dos materiais com o conteúdo da sessão
+          const materialsContext = semanticResults
+            .map(m => `Título: ${m.title}\nInsights: ${m.insights || 'Sem insights disponíveis'}\nRelevância: ${Math.round(m.similarity * 100)}%\n`)
+            .join('\n\n');
+
+          console.log(`TrainingService: Gerando análise com ${semanticResults.length} materiais da busca semântica`);
+          
+          const prompt = `
+            Analise a seguinte sessão considerando os insights dos materiais de treinamento:
+            
+            Categorias da Sessão: ${categories.join(', ')}
+            
+            Materiais Relevantes Encontrados via Busca Semântica:
+            ${materialsContext}
+            
+            Conteúdo da Sessão:
+            ${sessionContent}
+            
+            Forneça uma análise detalhada da sessão, considerando:
+            1. Temas principais discutidos
+            2. Padrões emocionais observados
+            3. Possíveis questões subjacentes
+            4. Progresso em relação a sessões anteriores (se mencionado)
+            5. Pontos importantes para acompanhamento
+            6. Aplicação de conceitos e técnicas dos materiais de referência
+            
+            Formate a resposta de maneira clara, estruturada e profissional.
+          `;
+
+          const completion = await this.openai.chat.completions.create({
+            model: "gpt-4-turbo",
+            messages: [
+              {
+                role: "system",
+                content: "Você é um especialista em análise de sessões terapêuticas com conhecimento profundo dos materiais de treinamento."
+              },
+              {
+                role: "user",
+                content: prompt
+              }
+            ],
+            temperature: 0.7,
+            max_tokens: 1000
+          });
+
+          console.log('TrainingService: Análise enriquecida gerada com sucesso via busca semântica');
+          return completion.choices[0].message.content;
+        } else {
+          console.log('TrainingService: Não foram encontrados materiais via busca semântica, retornando análise padrão');
+          return this.generateFallbackAnalysis(sessionContent);
+        }
       }
       
       // Limitar o número de materiais para não exceder o limite de tokens
@@ -538,7 +681,7 @@ class TrainingService {
       `;
 
       const completion = await this.openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: "gpt-4-turbo",
         messages: [
           {
             role: "system",

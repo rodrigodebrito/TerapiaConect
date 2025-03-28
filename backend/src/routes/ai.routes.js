@@ -100,4 +100,36 @@ if (typeof aiController.checkOpenAI === 'function') {
     router.get('/openai-test', aiController.checkOpenAI);
 }
 
+/**
+ * @route POST /api/ai/analyze-session
+ * @desc Analisar uma sessão terapêutica
+ * @access Private
+ */
+router.post('/analyze-session', 
+  authenticate,
+  [
+    body('sessionId').not().isEmpty().withMessage('ID da sessão é obrigatório'),
+    body('useAdvancedAnalysis').optional().isBoolean()
+  ],
+  aiController.analyzeSession
+);
+
+/**
+ * @route POST /api/ai/analyze-session/advanced
+ * @desc Analisar uma sessão com análise avançada (sempre usa análise avançada)
+ * @access Private
+ */
+router.post('/analyze-session/advanced', 
+  authenticate,
+  [
+    body('sessionId').not().isEmpty().withMessage('ID da sessão é obrigatório'),
+    body('transcript').optional().isString()
+  ],
+  (req, res) => {
+    // Forçar o uso da análise avançada
+    req.body.useAdvancedAnalysis = true;
+    return aiController.analyzeSession(req, res);
+  }
+);
+
 module.exports = router; 

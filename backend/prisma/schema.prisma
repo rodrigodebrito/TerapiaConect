@@ -208,6 +208,7 @@ model TrainingMaterial {
   documentName         String?
   documentType         String?
   insights             String?
+  embedding            Json?
   status               String   @default("pending")
   userId               String
   createdAt            DateTime @default(now())

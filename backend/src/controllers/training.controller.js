@@ -1,4 +1,5 @@
 const trainingService = require('../services/ai/training.service');
+const embeddingService = require('../services/ai/embedding.service');
 const prisma = require('../utils/prisma');
 const logger = require('../utils/logger');
 const fs = require('fs');
@@ -395,6 +396,87 @@ const trainingController = {
     } catch (error) {
       logger.error('Erro ao buscar todos os materiais:', error);
       res.status(500).json({ error: 'Erro ao buscar materiais de treinamento' });
+    }
+  },
+
+  /**
+   * Gera ou atualiza embeddings para um material específico
+   */
+  generateEmbedding: async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Verificar se o material existe
+      const material = await prisma.trainingMaterial.findUnique({
+        where: { id }
+      });
+
+      if (!material) {
+        return res.status(404).json({ error: 'Material não encontrado' });
+      }
+
+      // Gerar embedding
+      const embedding = await embeddingService.updateMaterialEmbedding(id);
+      
+      res.status(200).json({ 
+        message: 'Embedding gerado com sucesso',
+        materialId: id,
+        embeddingSize: embedding.length
+      });
+    } catch (error) {
+      logger.error('Erro ao gerar embedding:', error);
+      res.status(500).json({ error: 'Erro ao gerar embedding para o material' });
+    }
+  },
+
+  /**
+   * Gera embeddings para todos os materiais processados sem embedding
+   */
+  generateAllEmbeddings: async (req, res) => {
+    try {
+      // Iniciar o processo de atualização em segundo plano
+      res.status(202).json({ 
+        message: 'Processo de geração de embeddings iniciado em segundo plano',
+        background: true
+      });
+
+      // Continuar o processamento após enviar a resposta
+      try {
+        await embeddingService.updateAllEmbeddings();
+        logger.info('Embeddings atualizados com sucesso para todos os materiais');
+      } catch (error) {
+        logger.error('Erro ao atualizar todos os embeddings:', error);
+      }
+    } catch (error) {
+      logger.error('Erro ao iniciar geração de embeddings:', error);
+      res.status(500).json({ error: 'Erro ao iniciar processo de geração de embeddings' });
+    }
+  },
+
+  /**
+   * Busca materiais semanticamente similares ao texto fornecido
+   */
+  searchSemantic: async (req, res) => {
+    try {
+      const { query } = req.body;
+      
+      if (!query || query.trim().length < 10) {
+        return res.status(400).json({ 
+          error: 'Consulta muito curta. Forneça pelo menos 10 caracteres para busca.' 
+        });
+      }
+
+      // Realizar busca semântica
+      const results = await trainingService.searchSemanticMaterials(query);
+      
+      res.status(200).json({
+        message: 'Busca semântica realizada com sucesso',
+        results,
+        count: results.length
+      });
+    } catch (error) {
+      logger.error('Erro ao realizar busca semântica:', error);
+      res.status(500).json({ error: 'Erro ao realizar busca semântica' });
     }
   }
 };
