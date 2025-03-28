@@ -309,15 +309,45 @@ export const AIProvider = ({ children }) => {
         };
       }
       
-      // Garantir que há conteúdo de relatório
-      if (!result.report && !result.content && !result.error) {
-        if (result.data && result.data.report) {
-          result.report = result.data.report;
-          result.content = 'Relatório baseado na transcrição da sessão atual';
-        } else {
-          result.report = 'Não foi possível gerar um relatório detalhado para esta sessão.';
-          result.content = 'A transcrição não contém informações suficientes.';
+      // Garantir que há conteúdo de relatório e extrair o campo 'report' se estiver aninhado
+      if (result.success && result.report) {
+        // O relatório veio diretamente no campo report (formato ideal)
+        result.content = 'Relatório baseado na transcrição da sessão atual';
+      } else if (result.data && result.data.report) {
+        // O relatório está aninhado em data.report
+        result.report = result.data.report;
+        result.content = 'Relatório baseado na transcrição da sessão atual';
+      } else if (result.success && !result.report) {
+        // Sucesso mas o relatório não está em um campo padrão
+        if (result.data) {
+          // Tentar encontrar o relatório em alguma propriedade de data
+          const possibleReportFields = ['content', 'text', 'analysis', 'result', 'reportText'];
+          for (const field of possibleReportFields) {
+            if (result.data[field]) {
+              result.report = result.data[field];
+              break;
+            }
+          }
         }
+        // Se ainda não encontrou, verificar campos raiz
+        if (!result.report) {
+          const possibleReportFields = ['content', 'text', 'analysis', 'result', 'reportText'];
+          for (const field of possibleReportFields) {
+            if (result[field]) {
+              result.report = result[field];
+              break;
+            }
+          }
+        }
+        // Se ainda não tiver um relatório
+        if (!result.report) {
+          result.report = 'Não foi possível extrair um relatório detalhado da resposta.';
+          result.content = 'Houve um problema na formatação do relatório.';
+        }
+      } else if (!result.report && !result.content && !result.error) {
+        // Não há campos válidos para o relatório
+        result.report = 'Não foi possível gerar um relatório detalhado para esta sessão.';
+        result.content = 'A transcrição não contém informações suficientes.';
       }
       
       // Adicionar tipo para identificação no painel de resultados

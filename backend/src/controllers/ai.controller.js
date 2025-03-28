@@ -391,32 +391,80 @@ const aiController = {
         });
       }
 
-      // Obter transcrição do banco de dados se não foi fornecida
-      let sessionTranscript = transcript;
-      if (!sessionTranscript) {
-        const transcriptRecords = await prisma.sessionTranscript.findMany({
-          where: {
-            sessionId,
-          },
-          orderBy: {
-            timestamp: 'asc'
-          },
-          take: 50
-        });
-
-        if (transcriptRecords && transcriptRecords.length > 0) {
-          sessionTranscript = transcriptRecords
-            .map(record => `${record.speaker}: ${record.content}`)
-            .join('\n');
+      // Se o transcript não foi fornecido, buscar do banco de dados
+      if (!transcript) {
+        console.log(`AI Controller: Transcript não fornecido, buscando do banco de dados`);
+        
+        let messages = [];
+        
+        // Tentar buscar de diferentes modelos possíveis no banco de dados
+        try {
+          // Verificar se existe o modelo Message
+          messages = await prisma.message.findMany({
+            where: {
+              sessionId: sessionId
+            },
+            orderBy: {
+              timestamp: 'asc'
+            }
+          });
+        } catch (err) {
+          console.log(`AI Controller: Erro ao buscar de Message, tentando SessionTranscript: ${err.message}`);
+          
+          // Se não existir Message, tentar SessionTranscript
+          try {
+            const transcripts = await prisma.sessionTranscript.findMany({
+              where: {
+                sessionId: sessionId
+              },
+              orderBy: {
+                timestamp: 'asc'
+              }
+            });
+            
+            // Converter do formato SessionTranscript para um formato similar a Message
+            messages = transcripts.map(t => ({
+              sender: t.speaker,
+              content: t.content,
+              timestamp: t.timestamp
+            }));
+          } catch (err2) {
+            console.error(`AI Controller: Erro ao buscar transcrições: ${err2.message}`);
+          }
         }
+
+        if (!messages || messages.length === 0) {
+          console.error(`AI Controller: Nenhuma mensagem encontrada para a sessão ${sessionId}`);
+          return res.status(400).json({
+            error: 'Não há mensagens na sessão para gerar um relatório',
+            success: false
+          });
+        }
+
+        // Montar o transcript a partir das mensagens
+        transcript = messages.map(msg => {
+          // Determinar quem é o sender (pode variar dependendo do modelo)
+          let sender;
+          if (typeof msg.sender === 'string') {
+            // Se já for uma string, tentar padronizar
+            sender = msg.sender.toUpperCase() === 'THERAPIST' || 
+                     msg.sender.toUpperCase() === 'TERAPEUTA' ? 
+                     'Terapeuta' : 'Paciente';
+          } else {
+            // Caso contrário, usar um valor padrão
+            sender = 'Participante';
+          }
+          
+          return `${sender}: ${msg.content}`;
+        }).join('\n');
       }
 
-      if (!sessionTranscript) {
-        console.log('AI Controller: Sem transcrição disponível');
-        return res.status(400).json({ 
-          message: 'Nenhuma transcrição disponível para análise',
-          type: 'analysis',
-          analysis: 'Não há transcrição disponível para analisar. Inicie uma conversa primeiro.' 
+      if (!transcript || transcript.length < 50) {
+        console.error(`AI Controller: Transcript muito curto (${transcript?.length || 0} caracteres)`);
+        return res.status(400).json({
+          error: 'Conteúdo insuficiente para gerar um relatório',
+          success: false,
+          report: 'A sessão não possui conteúdo suficiente para gerar um relatório detalhado.'
         });
       }
 
@@ -445,7 +493,7 @@ const aiController = {
             },
             {
               role: "user",
-              content: `Extraia os temas principais desta transcrição de sessão terapêutica:\n\n${sessionTranscript}`
+              content: `Extraia os temas principais desta transcrição de sessão terapêutica:\n\n${transcript}`
             }
           ],
           max_tokens: 100,
@@ -509,7 +557,7 @@ const aiController = {
             
             // Usar o TrainingService para enriquecer a análise
             analysisText = await trainingService.enhanceSessionAnalysis(
-              sessionTranscript, 
+              transcript, 
               categories
             );
             
@@ -547,7 +595,7 @@ const aiController = {
               },
               {
                 role: "user",
-                content: `Analise a seguinte transcrição de sessão de terapia:\n\n${sessionTranscript}`
+                content: `Analise a seguinte transcrição de sessão de terapia:\n\n${transcript}`
               }
             ],
             max_tokens: 1000,
@@ -877,10 +925,33 @@ const aiController = {
    * @param {Response} res - Resposta Express
    */
   generateReport: async (req, res) => {
-    const { sessionId } = req.params.sessionId ? req.params : req.body;
+    let sessionId;
+    
+    // Corrigir a obtenção do sessionId que estava causando erro
+    if (req.params.sessionId) {
+      sessionId = req.params.sessionId;
+    } else if (req.body.sessionId) {
+      sessionId = req.body.sessionId;
+    } else {
+      console.error('AI Controller: sessionId não fornecido na requisição');
+      return res.status(400).json({
+        error: 'sessionId é obrigatório',
+        success: false
+      });
+    }
+    
     let { transcript } = req.body;
 
     console.log(`AI Controller: Solicitação de relatório para sessão ${sessionId}`);
+    
+    // Verificar se sessionId é válido
+    if (!sessionId || sessionId === 'undefined' || sessionId === 'null') {
+      console.error('AI Controller: sessionId inválido:', sessionId);
+      return res.status(400).json({
+        error: 'sessionId inválido',
+        success: false
+      });
+    }
     
     try {
       // Verificar se a sessão existe e se o usuário tem acesso a ela
@@ -890,7 +961,7 @@ const aiController = {
           appointment: {
             include: {
               therapist: true,
-              patient: true
+              client: true
             }
           }
         }
@@ -906,10 +977,49 @@ const aiController = {
 
       // Verificar se o usuário atual tem acesso a esta sessão
       const userId = req.user.id;
-      const isTherapist = session.appointment.therapist.userId === userId;
-      const isPatient = session.appointment.patient.userId === userId;
-
-      if (!isTherapist && !isPatient) {
+      
+      // Verificar acesso baseado na estrutura de dados que pode existir
+      let hasAccess = false;
+      let therapistId = null;
+      let clientId = null;
+      
+      // Verificar estrutura padrão
+      if (session.appointment?.therapist?.userId) {
+        therapistId = session.appointment.therapist.userId;
+        if (therapistId === userId) {
+          hasAccess = true;
+        }
+      }
+      
+      if (session.appointment?.client?.userId) {
+        clientId = session.appointment.client.userId;
+        if (clientId === userId) {
+          hasAccess = true;
+        }
+      }
+      
+      // Verificar estrutura alternativa (para compatibilidade)
+      if (session.therapist?.userId) {
+        therapistId = session.therapist.userId;
+        if (therapistId === userId) {
+          hasAccess = true;
+        }
+      }
+      
+      if (session.client?.userId) {
+        clientId = session.client.userId;
+        if (clientId === userId) {
+          hasAccess = true;
+        }
+      }
+      
+      // Caso debug esteja habilitado, permitir acesso (apenas em ambiente de desenvolvimento)
+      if (process.env.NODE_ENV === 'development' && process.env.DEBUG_SKIP_AUTH === 'true') {
+        console.warn(`AI Controller: Ignorando verificação de acesso em ambiente de desenvolvimento`);
+        hasAccess = true;
+      }
+      
+      if (!hasAccess) {
         console.error(`AI Controller: Usuário ${userId} não tem acesso à sessão ${sessionId}`);
         return res.status(403).json({
           error: 'Você não tem acesso a esta sessão',
@@ -921,15 +1031,43 @@ const aiController = {
       if (!transcript) {
         console.log(`AI Controller: Transcript não fornecido, buscando do banco de dados`);
         
-        // Buscar a transcrição completa da sessão
-        const messages = await prisma.message.findMany({
-          where: {
-            sessionId: sessionId
-          },
-          orderBy: {
-            timestamp: 'asc'
+        let messages = [];
+        
+        // Tentar buscar de diferentes modelos possíveis no banco de dados
+        try {
+          // Verificar se existe o modelo Message
+          messages = await prisma.message.findMany({
+            where: {
+              sessionId: sessionId
+            },
+            orderBy: {
+              timestamp: 'asc'
+            }
+          });
+        } catch (err) {
+          console.log(`AI Controller: Erro ao buscar de Message, tentando SessionTranscript: ${err.message}`);
+          
+          // Se não existir Message, tentar SessionTranscript
+          try {
+            const transcripts = await prisma.sessionTranscript.findMany({
+              where: {
+                sessionId: sessionId
+              },
+              orderBy: {
+                timestamp: 'asc'
+              }
+            });
+            
+            // Converter do formato SessionTranscript para um formato similar a Message
+            messages = transcripts.map(t => ({
+              sender: t.speaker,
+              content: t.content,
+              timestamp: t.timestamp
+            }));
+          } catch (err2) {
+            console.error(`AI Controller: Erro ao buscar transcrições: ${err2.message}`);
           }
-        });
+        }
 
         if (!messages || messages.length === 0) {
           console.error(`AI Controller: Nenhuma mensagem encontrada para a sessão ${sessionId}`);
@@ -941,7 +1079,18 @@ const aiController = {
 
         // Montar o transcript a partir das mensagens
         transcript = messages.map(msg => {
-          const sender = msg.sender === 'THERAPIST' ? 'Terapeuta' : 'Paciente';
+          // Determinar quem é o sender (pode variar dependendo do modelo)
+          let sender;
+          if (typeof msg.sender === 'string') {
+            // Se já for uma string, tentar padronizar
+            sender = msg.sender.toUpperCase() === 'THERAPIST' || 
+                     msg.sender.toUpperCase() === 'TERAPEUTA' ? 
+                     'Terapeuta' : 'Paciente';
+          } else {
+            // Caso contrário, usar um valor padrão
+            sender = 'Participante';
+          }
+          
           return `${sender}: ${msg.content}`;
         }).join('\n');
       }
@@ -968,11 +1117,9 @@ const aiController = {
         });
       }
 
-      // Usar OpenAI para gerar relatório
-      const openAIClient = new OpenAI({
-        apiKey: apiKey
-      });
-
+      // Usar a instância de OpenAI já criada no topo do arquivo
+      // ao invés de criar uma nova
+      
       // Criar um prompt estruturado para o modelo
       const prompt = `
         Você é um assistente especializado em psicologia e terapia. Gere um relatório profissional e completo
@@ -998,7 +1145,8 @@ const aiController = {
         ${transcript}
       `;
 
-      const completion = await openAIClient.chat.completions.create({
+      // Consumir a API do OpenAI para gerar o relatório
+      const completion = await openai.chat.completions.create({
         messages: [
           { role: "system", content: "Você é um assistente especializado em psicologia e terapia." },
           { role: "user", content: prompt }
@@ -1023,23 +1171,33 @@ const aiController = {
       console.log(`AI Controller: Relatório gerado com sucesso, ${reportText.length} caracteres`);
 
       // Salvar o relatório no banco de dados
-      const report = await prisma.report.create({
-        data: {
-          content: reportText,
-          sessionId: sessionId,
-          createdById: userId
-        }
-      });
+      let reportId = null;
+      try {
+        // Usar o modelo SessionReport que existe no schema
+        const report = await prisma.sessionReport.create({
+          data: {
+            sessionId: sessionId,
+            content: reportText,
+            generatedBy: 'AI',  // O modelo usa generatedBy em vez de createdById
+            timestamp: new Date()
+          }
+        });
+        reportId = report.id;
+      } catch (dbError) {
+        // Logar o erro e continuar sem salvar no banco de dados
+        console.error('AI Controller: Erro ao salvar relatório no banco:', dbError);
+        console.log('AI Controller: Continuando sem salvar no banco de dados');
+      }
 
-      // Retornar a resposta com o relatório
+      // Retornar a resposta com o relatório, mesmo se não conseguir salvar no banco
       return res.status(200).json({
         success: true,
         report: reportText,
-        reportId: report.id
+        reportId: reportId
       });
 
     } catch (error) {
-      console.error('AI Controller: Erro ao gerar relatório:', error);
+      console.error('Erro ao gerar relatório:', error);
       return res.status(500).json({
         error: 'Erro ao gerar relatório: ' + error.message,
         success: false
