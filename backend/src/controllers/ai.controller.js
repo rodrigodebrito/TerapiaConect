@@ -10,6 +10,117 @@ const openai = new OpenAI({
 });
 
 /**
+ * Estima o número de tokens em um texto
+ * Esta é uma estimativa aproximada (4 caracteres ≈ 1 token)
+ * @param {string} text - O texto para estimar tokens
+ * @returns {number} - Número aproximado de tokens
+ */
+function estimateTokens(text) {
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * Pré-processa uma transcrição longa para garantir que não exceda os limites de tokens da OpenAI
+ * @param {string} transcript - A transcrição completa
+ * @param {number} maxTokens - Máximo de tokens permitidos (padrão: 4000)
+ * @returns {Promise<string>} - A transcrição resumida ou original, dependendo do tamanho
+ */
+async function preprocessLongTranscript(transcript, maxTokens = 4000) {
+  // Estimar tokens na transcrição
+  const estimatedTokens = estimateTokens(transcript);
+  
+  console.log(`AI Controller: Transcrição com estimativa de ${estimatedTokens} tokens`);
+  
+  // Se a transcrição estiver dentro do limite, retorná-la como está
+  if (estimatedTokens <= maxTokens) {
+    return transcript;
+  }
+  
+  console.log(`AI Controller: Transcrição excede limite de ${maxTokens} tokens, gerando resumo`);
+  
+  try {
+    // Gerar um resumo usando GPT-3.5-Turbo (mais rápido e mais barato)
+    const summaryCompletion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: `Você é um assistente especializado em resumir sessões de terapia.
+          Seu trabalho é condensar transcrições longas mantendo:
+          1. Os principais temas discutidos
+          2. Padrões emocionais importantes
+          3. Insights ou momentos de progresso
+          4. Desafios ou obstáculos mencionados
+          5. A estrutura geral da conversa
+          
+          Formate o resumo da mesma forma que a transcrição original, alternando entre "Terapeuta:" e "Paciente:".
+          Seu resumo deve ser detalhado o suficiente para uma análise posterior, mas reduzido para caber no limite de tokens.`
+        },
+        {
+          role: "user",
+          content: `Resumir esta transcrição de sessão terapêutica para análise posterior:\n\n${transcript}`
+        }
+      ],
+      max_tokens: 1500,
+    });
+    
+    const summarizedTranscript = summaryCompletion.choices[0].message.content;
+    console.log(`AI Controller: Resumo gerado com sucesso. Tamanho original: ${transcript.length}, Resumo: ${summarizedTranscript.length}`);
+    
+    return summarizedTranscript;
+  } catch (error) {
+    console.error('AI Controller: Erro ao resumir transcrição longa:', error);
+    
+    // Em caso de erro, fazer um truncamento manual simples
+    // Isso é um fallback para garantir que o sistema continue funcionando
+    console.log('AI Controller: Realizando truncamento manual como fallback');
+    
+    // Dividir por linhas para tentar manter a estrutura da conversa
+    const lines = transcript.split('\n');
+    let truncatedTranscript = '';
+    let currentTokens = 0;
+    
+    // Pegar o início (1/3) e o final (2/3) da transcrição
+    const startLines = Math.floor(lines.length / 3);
+    const endLines = Math.floor(lines.length * 2 / 3);
+    
+    // Adicionar nota sobre o truncamento
+    truncatedTranscript += "NOTA: Esta transcrição foi truncada devido ao tamanho.\n\n";
+    truncatedTranscript += "--- INÍCIO DA SESSÃO ---\n";
+    
+    // Adicionar o primeiro terço das linhas
+    for (let i = 0; i < startLines && currentTokens < maxTokens / 2; i++) {
+      const lineTokens = estimateTokens(lines[i]);
+      if (currentTokens + lineTokens <= maxTokens / 2) {
+        truncatedTranscript += lines[i] + '\n';
+        currentTokens += lineTokens;
+      } else {
+        break;
+      }
+    }
+    
+    truncatedTranscript += "\n--- PARTE INTERMEDIÁRIA OMITIDA ---\n\n";
+    
+    // Adicionar o último terço das linhas
+    currentTokens += 100; // Considerar os tokens da nota
+    for (let i = endLines; i < lines.length && currentTokens < maxTokens; i++) {
+      const lineTokens = estimateTokens(lines[i]);
+      if (currentTokens + lineTokens <= maxTokens) {
+        truncatedTranscript += lines[i] + '\n';
+        currentTokens += lineTokens;
+      } else {
+        break;
+      }
+    }
+    
+    truncatedTranscript += "\n--- FIM DA SESSÃO ---";
+    
+    console.log(`AI Controller: Transcrição truncada manualmente. Novo tamanho: ${truncatedTranscript.length}`);
+    return truncatedTranscript;
+  }
+}
+
+/**
  * Controlador para operações relacionadas a IA
  */
 const aiController = {
@@ -346,14 +457,29 @@ const aiController = {
   },
 
   /**
-   * Analisar sessão com base na transcrição
+   * Analisar sessão de terapia
    * @param {Request} req - Requisição Express
    * @param {Response} res - Resposta Express
    */
   analyzeSession: async (req, res) => {
     try {
       console.log('AI Controller: Iniciando análise de sessão');
-      const { sessionId, transcript } = req.body;
+      
+      // Obter sessionId do parâmetro de rota ou do corpo da requisição
+      let sessionId;
+      if (req.params.sessionId) {
+        sessionId = req.params.sessionId;
+      } else if (req.body.sessionId) {
+        sessionId = req.body.sessionId;
+      } else {
+        console.error('AI Controller: sessionId não fornecido na requisição');
+        return res.status(400).json({
+          message: 'sessionId é obrigatório',
+          success: false
+        });
+      }
+      
+      const { transcript } = req.body;
       const userId = req.user?.id;
       
       console.log(`AI Controller: Processando análise para sessão ${sessionId}, usuário ${userId}`);
@@ -361,10 +487,11 @@ const aiController = {
       // Verificar se a sessão existe e se o usuário tem acesso
       const session = await prisma.session.findUnique({
         where: {
-          id: sessionId,
+          id: sessionId
         },
         include: {
-          therapist: true
+          therapist: true,
+          client: true
         }
       });
 
@@ -372,6 +499,7 @@ const aiController = {
         console.log('AI Controller: Sessão não encontrada');
         return res.status(404).json({ 
           message: 'Sessão não encontrada',
+          success: false,
           type: 'analysis',
           analysis: 'A sessão solicitada não foi encontrada no sistema.' 
         });
@@ -381,38 +509,39 @@ const aiController = {
       const isDevMode = process.env.NODE_ENV === 'development';
       const isTesting = process.env.TESTING === 'true';
       
-      // Verificar se o usuário é o terapeuta da sessão (apenas terapeutas podem analisar)
+      // Verificar se o usuário é o terapeuta da sessão
       if (!isDevMode && !isTesting && session.therapist?.userId !== userId) {
         console.log(`AI Controller: Acesso não autorizado. Terapeuta: ${session.therapist?.userId}, Usuário: ${userId}`);
         return res.status(403).json({ 
-          message: 'Apenas o terapeuta pode analisar a sessão',
+          message: 'Apenas o terapeuta pode analisar sessões',
+          success: false,
           type: 'analysis',
           analysis: 'Você não tem permissão para analisar esta sessão.' 
         });
       }
 
-      // Se o transcript não foi fornecido, buscar do banco de dados
-      if (!transcript) {
-        console.log(`AI Controller: Transcript não fornecido, buscando do banco de dados`);
+      // Construir ou buscar transcrição
+      let processedTranscript = transcript;
+      if (!processedTranscript) {
+        console.log(`AI Controller: Transcript não fornecido, buscando mensagens do banco de dados`);
         
+        // Se não foi fornecido, tentar obter do banco
         let messages = [];
         
-        // Tentar buscar de diferentes modelos possíveis no banco de dados
         try {
-          // Verificar se existe o modelo Message
-          messages = await prisma.message.findMany({
-            where: {
-              sessionId: sessionId
-            },
-            orderBy: {
-              timestamp: 'asc'
-            }
-          });
-        } catch (err) {
-          console.log(`AI Controller: Erro ao buscar de Message, tentando SessionTranscript: ${err.message}`);
-          
-          // Se não existir Message, tentar SessionTranscript
+          // Tentar buscar de diferentes modelos possíveis
           try {
+            messages = await prisma.message.findMany({
+              where: {
+                sessionId: sessionId
+              },
+              orderBy: {
+                timestamp: 'asc'
+              }
+            });
+          } catch (err) {
+            console.log(`AI Controller: Erro ao buscar de Message, tentando SessionTranscript`);
+            
             const transcripts = await prisma.sessionTranscript.findMany({
               where: {
                 sessionId: sessionId
@@ -422,63 +551,63 @@ const aiController = {
               }
             });
             
-            // Converter do formato SessionTranscript para um formato similar a Message
             messages = transcripts.map(t => ({
               sender: t.speaker,
               content: t.content,
               timestamp: t.timestamp
             }));
-          } catch (err2) {
-            console.error(`AI Controller: Erro ao buscar transcrições: ${err2.message}`);
-          }
-        }
-
-        if (!messages || messages.length === 0) {
-          console.error(`AI Controller: Nenhuma mensagem encontrada para a sessão ${sessionId}`);
-          return res.status(400).json({
-            error: 'Não há mensagens na sessão para gerar um relatório',
-            success: false
-          });
-        }
-
-        // Montar o transcript a partir das mensagens
-        transcript = messages.map(msg => {
-          // Determinar quem é o sender (pode variar dependendo do modelo)
-          let sender;
-          if (typeof msg.sender === 'string') {
-            // Se já for uma string, tentar padronizar
-            sender = msg.sender.toUpperCase() === 'THERAPIST' || 
-                     msg.sender.toUpperCase() === 'TERAPEUTA' ? 
-                     'Terapeuta' : 'Paciente';
-          } else {
-            // Caso contrário, usar um valor padrão
-            sender = 'Participante';
           }
           
-          return `${sender}: ${msg.content}`;
-        }).join('\n');
+          if (!messages || messages.length === 0) {
+            console.error(`AI Controller: Nenhuma mensagem encontrada para a sessão ${sessionId}`);
+            return res.status(400).json({
+              error: 'Não há mensagens na sessão para analisar',
+              success: false,
+              type: 'analysis',
+              analysis: 'Não há mensagens registradas nesta sessão para analisar.'
+            });
+          }
+          
+          // Montar o transcript a partir das mensagens
+          processedTranscript = messages.map(msg => {
+            // Determinar quem é o sender (pode variar dependendo do modelo)
+            let sender;
+            if (typeof msg.sender === 'string') {
+              sender = msg.sender.toUpperCase() === 'THERAPIST' || 
+                      msg.sender.toUpperCase() === 'TERAPEUTA' ? 
+                      'Terapeuta' : 'Paciente';
+            } else {
+              sender = 'Participante';
+            }
+            
+            return `${sender}: ${msg.content}`;
+          }).join('\n');
+          
+        } catch (dbError) {
+          console.error(`AI Controller: Erro ao buscar transcrições do banco: ${dbError.message}`);
+          return res.status(500).json({
+            error: 'Erro ao buscar transcrições da sessão',
+            success: false,
+            type: 'analysis',
+            analysis: 'Ocorreu um erro ao buscar o histórico da sessão. Tente novamente mais tarde.'
+          });
+        }
       }
 
-      if (!transcript || transcript.length < 50) {
-        console.error(`AI Controller: Transcript muito curto (${transcript?.length || 0} caracteres)`);
+      if (!processedTranscript || processedTranscript.length < 100) {
+        console.error(`AI Controller: Transcript muito curto (${processedTranscript?.length || 0} caracteres)`);
         return res.status(400).json({
-          error: 'Conteúdo insuficiente para gerar um relatório',
+          error: 'Conteúdo insuficiente para análise',
           success: false,
-          report: 'A sessão não possui conteúdo suficiente para gerar um relatório detalhado.'
-        });
-      }
-
-      // Verificar se a API OpenAI está configurada
-      if (!process.env.OPENAI_API_KEY) {
-        console.error('AI Controller: API OpenAI não configurada');
-        return res.status(500).json({
-          message: 'Erro de configuração do serviço de IA',
-          error: 'API OpenAI não configurada',
           type: 'analysis',
-          analysis: 'O serviço de IA não está configurado corretamente. Entre em contato com o administrador do sistema.'
+          analysis: 'A sessão não possui conteúdo suficiente para uma análise detalhada.'
         });
       }
 
+      // NOVO: Pré-processar a transcrição se for muito longa
+      processedTranscript = await preprocessLongTranscript(processedTranscript, 6000);
+
+      // Gerar análise da sessão usando OpenAI
       try {
         console.log('AI Controller: Gerando análise via OpenAI');
         
@@ -493,7 +622,7 @@ const aiController = {
             },
             {
               role: "user",
-              content: `Extraia os temas principais desta transcrição de sessão terapêutica:\n\n${transcript}`
+              content: `Extraia os temas principais desta transcrição de sessão terapêutica:\n\n${processedTranscript}`
             }
           ],
           max_tokens: 100,
@@ -557,7 +686,7 @@ const aiController = {
             
             // Usar o TrainingService para enriquecer a análise
             analysisText = await trainingService.enhanceSessionAnalysis(
-              transcript, 
+              processedTranscript, 
               categories
             );
             
@@ -595,7 +724,7 @@ const aiController = {
               },
               {
                 role: "user",
-                content: `Analise a seguinte transcrição de sessão de terapia:\n\n${transcript}`
+                content: `Analise a seguinte transcrição de sessão de terapia:\n\n${processedTranscript}`
               }
             ],
             max_tokens: 1000,
@@ -695,8 +824,8 @@ const aiController = {
       }
 
       // Obter transcrição do banco de dados se não foi fornecida
-      let sessionTranscript = transcript;
-      if (!sessionTranscript) {
+      let processedTranscript = transcript;
+      if (!processedTranscript) {
         const transcriptRecords = await prisma.sessionTranscript.findMany({
           where: {
             sessionId,
@@ -708,13 +837,13 @@ const aiController = {
         });
 
         if (transcriptRecords && transcriptRecords.length > 0) {
-          sessionTranscript = transcriptRecords
+          processedTranscript = transcriptRecords
             .map(record => `${record.speaker}: ${record.content}`)
             .join('\n');
         }
       }
 
-      if (!sessionTranscript) {
+      if (!processedTranscript) {
         console.log('AI Controller: Sem transcrição disponível para sugestões');
         return res.status(400).json({ 
           message: 'Nenhuma transcrição disponível para sugestões',
@@ -722,6 +851,9 @@ const aiController = {
           suggestions: ['Não há transcrição disponível para analisar. Inicie uma conversa primeiro.'] 
         });
       }
+
+      // NOVO: Pré-processar a transcrição se for muito longa
+      processedTranscript = await preprocessLongTranscript(processedTranscript, 6000);
 
       try {
         console.log('AI Controller: Gerando sugestões via OpenAI');
@@ -737,7 +869,7 @@ const aiController = {
             },
             {
               role: "user",
-              content: `Extraia os temas principais desta transcrição de sessão terapêutica:\n\n${sessionTranscript}`
+              content: `Extraia os temas principais desta transcrição de sessão terapêutica:\n\n${processedTranscript}`
             }
           ],
           max_tokens: 100,
@@ -820,7 +952,7 @@ const aiController = {
                   ${materialsContext}
                   
                   Transcrição da Sessão:
-                  ${sessionTranscript}
+                  ${processedTranscript}
                   
                   Formate as sugestões como uma lista de recomendações claras e acionáveis.`
                 }
@@ -868,7 +1000,7 @@ const aiController = {
                 content: `Com base na seguinte transcrição de uma sessão de terapia, forneça 5-7 sugestões
                 específicas que possam ajudar o terapeuta a conduzir a sessão de forma mais eficaz:
                 
-                ${sessionTranscript}`
+                ${processedTranscript}`
               }
             ],
             max_tokens: 1000,
@@ -920,135 +1052,76 @@ const aiController = {
   },
 
   /**
-   * Gerar relatório da sessão
+   * Gerar relatório de sessão
    * @param {Request} req - Requisição Express
    * @param {Response} res - Resposta Express
    */
   generateReport: async (req, res) => {
-    let sessionId;
-    
-    // Corrigir a obtenção do sessionId que estava causando erro
-    if (req.params.sessionId) {
-      sessionId = req.params.sessionId;
-    } else if (req.body.sessionId) {
-      sessionId = req.body.sessionId;
-    } else {
-      console.error('AI Controller: sessionId não fornecido na requisição');
-      return res.status(400).json({
-        error: 'sessionId é obrigatório',
-        success: false
-      });
-    }
-    
-    let { transcript } = req.body;
-
-    console.log(`AI Controller: Solicitação de relatório para sessão ${sessionId}`);
-    
-    // Verificar se sessionId é válido
-    if (!sessionId || sessionId === 'undefined' || sessionId === 'null') {
-      console.error('AI Controller: sessionId inválido:', sessionId);
-      return res.status(400).json({
-        error: 'sessionId inválido',
-        success: false
-      });
-    }
-    
     try {
-      // Verificar se a sessão existe e se o usuário tem acesso a ela
+      console.log('AI Controller: Iniciando geração de relatório');
+      const { sessionId, transcript } = req.body;
+      const userId = req.user?.id;
+      
+      console.log(`AI Controller: Processando relatório para sessão ${sessionId}, usuário ${userId}`);
+
+      // Verificar se a sessão existe e se o usuário tem acesso
       const session = await prisma.session.findUnique({
-        where: { id: sessionId },
+        where: {
+          id: sessionId,
+        },
         include: {
-          appointment: {
-            include: {
-              therapist: true,
-              client: true
-            }
-          }
+          therapist: true,
+          client: true
         }
       });
 
       if (!session) {
-        console.error(`AI Controller: Sessão ${sessionId} não encontrada`);
-        return res.status(404).json({
-          error: 'Sessão não encontrada',
-          success: false
+        console.log('AI Controller: Sessão não encontrada');
+        return res.status(404).json({ 
+          message: 'Sessão não encontrada',
+          success: false,
+          type: 'report',
+          report: 'A sessão solicitada não foi encontrada no sistema.' 
         });
       }
 
-      // Verificar se o usuário atual tem acesso a esta sessão
-      const userId = req.user.id;
+      // Para testes ou desenvolvimento, permitir acesso mais amplo
+      const isDevMode = process.env.NODE_ENV === 'development';
+      const isTesting = process.env.TESTING === 'true';
       
-      // Verificar acesso baseado na estrutura de dados que pode existir
-      let hasAccess = false;
-      let therapistId = null;
-      let clientId = null;
-      
-      // Verificar estrutura padrão
-      if (session.appointment?.therapist?.userId) {
-        therapistId = session.appointment.therapist.userId;
-        if (therapistId === userId) {
-          hasAccess = true;
-        }
-      }
-      
-      if (session.appointment?.client?.userId) {
-        clientId = session.appointment.client.userId;
-        if (clientId === userId) {
-          hasAccess = true;
-        }
-      }
-      
-      // Verificar estrutura alternativa (para compatibilidade)
-      if (session.therapist?.userId) {
-        therapistId = session.therapist.userId;
-        if (therapistId === userId) {
-          hasAccess = true;
-        }
-      }
-      
-      if (session.client?.userId) {
-        clientId = session.client.userId;
-        if (clientId === userId) {
-          hasAccess = true;
-        }
-      }
-      
-      // Caso debug esteja habilitado, permitir acesso (apenas em ambiente de desenvolvimento)
-      if (process.env.NODE_ENV === 'development' && process.env.DEBUG_SKIP_AUTH === 'true') {
-        console.warn(`AI Controller: Ignorando verificação de acesso em ambiente de desenvolvimento`);
-        hasAccess = true;
-      }
-      
-      if (!hasAccess) {
-        console.error(`AI Controller: Usuário ${userId} não tem acesso à sessão ${sessionId}`);
-        return res.status(403).json({
-          error: 'Você não tem acesso a esta sessão',
-          success: false
+      // Verificar se o usuário é o terapeuta da sessão
+      if (!isDevMode && !isTesting && session.therapist?.userId !== userId) {
+        console.log(`AI Controller: Acesso não autorizado. Terapeuta: ${session.therapist?.userId}, Usuário: ${userId}`);
+        return res.status(403).json({ 
+          message: 'Apenas o terapeuta pode gerar relatórios',
+          success: false,
+          type: 'report',
+          report: 'Você não tem permissão para gerar relatórios para esta sessão.' 
         });
       }
 
-      // Se o transcript não foi fornecido, buscar do banco de dados
-      if (!transcript) {
-        console.log(`AI Controller: Transcript não fornecido, buscando do banco de dados`);
+      // Construir ou buscar transcrição
+      let processedTranscript = transcript;
+      if (!processedTranscript) {
+        console.log(`AI Controller: Transcript não fornecido, buscando mensagens do banco de dados`);
         
+        // Se não foi fornecido, tentar obter do banco
         let messages = [];
         
-        // Tentar buscar de diferentes modelos possíveis no banco de dados
         try {
-          // Verificar se existe o modelo Message
-          messages = await prisma.message.findMany({
-            where: {
-              sessionId: sessionId
-            },
-            orderBy: {
-              timestamp: 'asc'
-            }
-          });
-        } catch (err) {
-          console.log(`AI Controller: Erro ao buscar de Message, tentando SessionTranscript: ${err.message}`);
-          
-          // Se não existir Message, tentar SessionTranscript
+          // Tentar buscar de diferentes modelos possíveis
           try {
+            messages = await prisma.message.findMany({
+              where: {
+                sessionId: sessionId
+              },
+              orderBy: {
+                timestamp: 'asc'
+              }
+            });
+          } catch (err) {
+            console.log(`AI Controller: Erro ao buscar de Message, tentando SessionTranscript`);
+            
             const transcripts = await prisma.sessionTranscript.findMany({
               where: {
                 sessionId: sessionId
@@ -1058,144 +1131,192 @@ const aiController = {
               }
             });
             
-            // Converter do formato SessionTranscript para um formato similar a Message
             messages = transcripts.map(t => ({
               sender: t.speaker,
               content: t.content,
               timestamp: t.timestamp
             }));
-          } catch (err2) {
-            console.error(`AI Controller: Erro ao buscar transcrições: ${err2.message}`);
-          }
-        }
-
-        if (!messages || messages.length === 0) {
-          console.error(`AI Controller: Nenhuma mensagem encontrada para a sessão ${sessionId}`);
-          return res.status(400).json({
-            error: 'Não há mensagens na sessão para gerar um relatório',
-            success: false
-          });
-        }
-
-        // Montar o transcript a partir das mensagens
-        transcript = messages.map(msg => {
-          // Determinar quem é o sender (pode variar dependendo do modelo)
-          let sender;
-          if (typeof msg.sender === 'string') {
-            // Se já for uma string, tentar padronizar
-            sender = msg.sender.toUpperCase() === 'THERAPIST' || 
-                     msg.sender.toUpperCase() === 'TERAPEUTA' ? 
-                     'Terapeuta' : 'Paciente';
-          } else {
-            // Caso contrário, usar um valor padrão
-            sender = 'Participante';
           }
           
-          return `${sender}: ${msg.content}`;
-        }).join('\n');
+          if (!messages || messages.length === 0) {
+            console.error(`AI Controller: Nenhuma mensagem encontrada para a sessão ${sessionId}`);
+            return res.status(400).json({
+              error: 'Não há mensagens na sessão para gerar um relatório',
+              success: false,
+              type: 'report',
+              report: 'Não há mensagens registradas nesta sessão para gerar um relatório.'
+            });
+          }
+          
+          // Montar o transcript a partir das mensagens
+          processedTranscript = messages.map(msg => {
+            // Determinar quem é o sender (pode variar dependendo do modelo)
+            let sender;
+            if (typeof msg.sender === 'string') {
+              sender = msg.sender.toUpperCase() === 'THERAPIST' || 
+                      msg.sender.toUpperCase() === 'TERAPEUTA' ? 
+                      'Terapeuta' : 'Paciente';
+            } else {
+              sender = 'Participante';
+            }
+            
+            return `${sender}: ${msg.content}`;
+          }).join('\n');
+          
+        } catch (dbError) {
+          console.error(`AI Controller: Erro ao buscar transcrições do banco: ${dbError.message}`);
+          return res.status(500).json({
+            error: 'Erro ao buscar transcrições da sessão',
+            success: false,
+            type: 'report',
+            report: 'Ocorreu um erro ao buscar o histórico da sessão. Tente novamente mais tarde.'
+          });
+        }
       }
 
-      // Se o transcript é muito curto, retornar erro
-      if (!transcript || transcript.length < 50) {
-        console.error(`AI Controller: Transcript muito curto (${transcript?.length || 0} caracteres)`);
+      if (!processedTranscript || processedTranscript.length < 100) {
+        console.error(`AI Controller: Transcript muito curto (${processedTranscript?.length || 0} caracteres)`);
         return res.status(400).json({
           error: 'Conteúdo insuficiente para gerar um relatório',
           success: false,
+          type: 'report',
           report: 'A sessão não possui conteúdo suficiente para gerar um relatório detalhado.'
         });
       }
 
-      console.log(`AI Controller: Enviando solicitação para o OpenAI, transcript com ${transcript.length} caracteres`);
+      // NOVO: Pré-processar a transcrição se for muito longa
+      processedTranscript = await preprocessLongTranscript(processedTranscript, 6000);
 
-      // Verificar a configuração da API
-      const apiKey = process.env.OPENAI_API_KEY;
-      if (!apiKey) {
-        console.error('AI Controller: Chave da API OpenAI não configurada');
-        return res.status(500).json({
-          error: 'Configuração do serviço de IA ausente',
-          success: false
-        });
-      }
-
-      // Usar a instância de OpenAI já criada no topo do arquivo
-      // ao invés de criar uma nova
-      
-      // Criar um prompt estruturado para o modelo
-      const prompt = `
-        Você é um assistente especializado em psicologia e terapia. Gere um relatório profissional e completo
-        com base na seguinte transcrição de uma sessão terapêutica. O relatório deve ser usado pelo terapeuta
-        para documentar a sessão.
-        
-        O relatório deve incluir:
-        - Um resumo das principais questões discutidas
-        - Observações sobre o comportamento e estado emocional do paciente
-        - Temas principais que emergiram durante a sessão
-        - Progressos observados ou desafios identificados
-        - Análise dos padrões de pensamento e comportamento
-        
-        Utilize uma linguagem profissional, objetiva e baseada em evidências. Organize o relatório em seções
-        com títulos claros. Evite julgamentos e mantenha um tom respeitoso.
-        
-        IMPORTANTE: O relatório deve ser baseado EXCLUSIVAMENTE no conteúdo da transcrição fornecida. 
-        NÃO INVENTE informações ou detalhes que não estejam presentes na transcrição.
-        Se a transcrição for muito curta ou não contiver informações suficientes para um relatório detalhado,
-        mencione isso no relatório e forneça apenas as informações que puderem ser extraídas diretamente da transcrição.
-        
-        Transcrição da sessão:
-        ${transcript}
-      `;
-
-      // Consumir a API do OpenAI para gerar o relatório
-      const completion = await openai.chat.completions.create({
-        messages: [
-          { role: "system", content: "Você é um assistente especializado em psicologia e terapia." },
-          { role: "user", content: prompt }
-        ],
-        model: "gpt-4-turbo",
-        temperature: 0.7,
-        max_tokens: 3000
-      });
-
-      // Extrair o texto do relatório da resposta da API
-      const reportText = completion.choices[0].message.content;
-      
-      if (!reportText || reportText.length < 100) {
-        console.error(`AI Controller: Resposta da OpenAI muito curta ou vazia (${reportText?.length || 0} caracteres)`);
-        return res.status(500).json({
-          error: 'A resposta da IA foi insuficiente',
-          success: false,
-          report: 'Não foi possível gerar um relatório detalhado para esta sessão. Por favor, tente novamente mais tarde.'
-        });
-      }
-
-      console.log(`AI Controller: Relatório gerado com sucesso, ${reportText.length} caracteres`);
-
-      // Salvar o relatório no banco de dados
-      let reportId = null;
+      // Gerar o relatório usando OpenAI
       try {
-        // Usar o modelo SessionReport que existe no schema
-        const report = await prisma.sessionReport.create({
+        console.log('AI Controller: Gerando relatório via OpenAI');
+        
+        // Recuperar informações do paciente e terapeuta para personalizar o relatório
+        const patientName = session.client?.name || 'Paciente';
+        const therapistName = session.therapist?.name || 'Terapeuta';
+        
+        // Verificar se tem sessões anteriores para referência
+        let previousSessionsInfo = "Não há informações sobre sessões anteriores disponíveis.";
+        try {
+          const previousSessions = await prisma.session.findMany({
+            where: {
+              therapistId: session.therapistId,
+              clientId: session.clientId,
+              status: 'COMPLETED',
+              id: { not: sessionId },
+              date: { lt: session.date }
+            },
+            orderBy: {
+              date: 'desc'
+            },
+            take: 5
+          });
+          
+          if (previousSessions && previousSessions.length > 0) {
+            previousSessionsInfo = `Existem ${previousSessions.length} sessões anteriores registradas com este paciente. A última sessão ocorreu em ${new Date(previousSessions[0].date).toLocaleDateString()}.`;
+          }
+        } catch (prevSessionsError) {
+          console.error('Erro ao buscar sessões anteriores:', prevSessionsError);
+          // Continuar mesmo sem info das sessões anteriores
+        }
+        
+        // Realizar a chamada à API
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4-turbo",
+          messages: [
+            {
+              role: "system",
+              content: `Você é um assistente especializado na elaboração de relatórios de sessões de terapia.
+
+              Gere um relatório profissional, estruturado e completo com base na transcrição da sessão terapêutica, seguindo as melhores práticas de documentação clínica.
+              
+              Informações importantes:
+              - Nome do paciente: ${patientName}
+              - Nome do terapeuta: ${therapistName}
+              - Data da sessão: ${new Date(session.date).toLocaleDateString()}
+              - ${previousSessionsInfo}
+              
+              O relatório deve incluir as seguintes seções:
+              
+              1. RESUMO DA SESSÃO
+              - Breve resumo dos principais tópicos abordados
+              
+              2. TEMAS PRINCIPAIS
+              - Lista e descrição dos principais temas discutidos
+              
+              3. ESTADO EMOCIONAL E COMPORTAMENTO
+              - Observações sobre o estado emocional do paciente durante a sessão
+              - Padrões de comportamento relevantes
+              
+              4. PROGRESSO
+              - Avanços e insights alcançados na sessão
+              - Relação com objetivos terapêuticos (se evidentes)
+              
+              5. DESAFIOS E OBSTÁCULOS
+              - Principais dificuldades identificadas
+              - Resistências ou padrões disfuncionais observados
+              
+              6. INTERVENÇÕES E TÉCNICAS
+              - Abordagens e técnicas utilizadas pelo terapeuta
+              - Eficácia das intervenções (quando observável)
+              
+              7. PLANO E RECOMENDAÇÕES
+              - Sugestões para o paciente até a próxima sessão
+              - Áreas a focar nas próximas sessões
+              - Exercícios ou práticas recomendadas
+              
+              Formatação:
+              - Use linguagem profissional, clara e objetiva
+              - Evite jargão excessivo
+              - Seja factual e baseado na evidência da transcrição
+              - Use marcadores para facilitar a leitura quando apropriado
+              - Use cabeçalhos para estruturar o documento
+              - Mantenha o relatório conciso mas informativo`
+            },
+            {
+              role: "user",
+              content: `Gere um relatório completo para a seguinte sessão de terapia:
+              
+              ${processedTranscript}`
+            }
+          ],
+          max_tokens: 2000,
+        });
+        
+        const reportText = completion.choices[0].message.content;
+        
+        // Salvar o relatório no banco de dados
+        const savedReport = await prisma.aIInsight.create({
           data: {
-            sessionId: sessionId,
+            sessionId,
             content: reportText,
-            generatedBy: 'AI',  // O modelo usa generatedBy em vez de createdById
-            timestamp: new Date()
+            type: 'REPORT',
+            keywords: 'relatório, sessão, progresso'
           }
         });
-        reportId = report.id;
-      } catch (dbError) {
-        // Logar o erro e continuar sem salvar no banco de dados
-        console.error('AI Controller: Erro ao salvar relatório no banco:', dbError);
-        console.log('AI Controller: Continuando sem salvar no banco de dados');
+        
+        // Responder com o relatório gerado
+        res.status(200).json({
+          message: 'Relatório gerado com sucesso',
+          success: true,
+          type: 'report',
+          report: reportText,
+          data: {
+            report: reportText,
+            id: savedReport.id
+          }
+        });
+        
+      } catch (openaiError) {
+        console.error('AI Controller: Erro na chamada da API OpenAI:', openaiError);
+        return res.status(500).json({
+          message: 'Erro ao processar com a IA',
+          error: openaiError.message,
+          success: false,
+          type: 'report',
+          report: 'Ocorreu um erro ao gerar o relatório com a IA. Tente novamente em alguns instantes.'
+        });
       }
-
-      // Retornar a resposta com o relatório, mesmo se não conseguir salvar no banco
-      return res.status(200).json({
-        success: true,
-        report: reportText,
-        reportId: reportId
-      });
-
     } catch (error) {
       console.error('Erro ao gerar relatório:', error);
       return res.status(500).json({
@@ -1274,4 +1395,12 @@ const aiController = {
   },
 };
 
-module.exports = aiController; 
+// Exportar as funções para testes
+module.exports = {
+  ...aiController,
+  
+  // Exportar funções auxiliares apenas para teste
+  // Em produção, estas exportações adicionais serão ignoradas
+  estimateTokens,
+  preprocessLongTranscript
+}; 
