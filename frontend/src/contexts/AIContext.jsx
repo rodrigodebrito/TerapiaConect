@@ -409,6 +409,72 @@ export const AIProvider = ({ children }) => {
     setEmotions({});
   };
   
+  // Salvar transcrição no backend
+  const saveTranscript = async (transcriptionData) => {
+    try {
+      if (!transcriptionData || !transcriptionData.sessionId || (!transcriptionData.transcript && !transcriptionData.content)) {
+        console.warn('[AIContext] Dados de transcrição inválidos:', transcriptionData);
+        return { success: false, error: 'Dados de transcrição inválidos' };
+      }
+      
+      console.log('[AIContext] Salvando transcrição:', {
+        sessionId: transcriptionData.sessionId,
+        contentLength: transcriptionData.transcript ? transcriptionData.transcript.length : (transcriptionData.content ? transcriptionData.content.length : 0),
+        speaker: transcriptionData.speaker || 'user'
+      });
+      
+      // Obter token de autenticação
+      const authToken = localStorage.getItem('authToken') || 
+                        sessionStorage.getItem('authToken') || 
+                        localStorage.getItem('token') || 
+                        sessionStorage.getItem('token');
+      
+      if (!authToken) {
+        console.warn('[AIContext] Token de autenticação não encontrado');
+        return { success: false, error: 'Token de autenticação não encontrado' };
+      }
+      
+      // Garantir que estamos usando a propriedade 'transcript' que o backend espera
+      if (transcriptionData.content && !transcriptionData.transcript) {
+        transcriptionData.transcript = transcriptionData.content;
+      }
+      
+      // Usar fetch com proxy do Vite (/api/...)
+      const response = await fetch('/api/ai/transcript', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify(transcriptionData)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[AIContext] Erro ao salvar transcrição (${response.status}):`, errorText);
+        return { 
+          success: false, 
+          error: `Erro ao salvar transcrição: ${response.status} ${response.statusText}`,
+          details: errorText
+        };
+      }
+      
+      const result = await response.json();
+      console.log('[AIContext] Transcrição salva com sucesso:', result);
+      
+      // Atualizar transcript local com o novo texto para garantir sincronização
+      setTranscript(prev => {
+        // Adicionar quebra de linha se já existe texto
+        return prev ? `${prev}\n${transcriptionData.content}` : transcriptionData.content;
+      });
+      
+      return { ...result, success: true };
+    } catch (error) {
+      console.error('[AIContext] Erro ao salvar transcrição:', error);
+      return { success: false, error: error.message };
+    }
+  };
+  
   // Contexto para compartilhar
   const contextValue = {
     isInitialized,
@@ -427,7 +493,8 @@ export const AIProvider = ({ children }) => {
     toggleLocalProcessing,
     toggleAnonymization,
     isCompatible,
-    clearTranscript
+    clearTranscript,
+    saveTranscript
   };
   
   // Exportar para o window para permitir acesso fora do React

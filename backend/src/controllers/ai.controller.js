@@ -4,6 +4,16 @@ const { validationResult } = require('express-validator');
 const trainingService = require('../services/ai/training.service');
 const advancedAnalysisService = require('../services/ai/advanced-analysis.service');
 const prisma = new PrismaClient();
+const FormData = require('form-data');
+const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+const openaiService = require('../services/openai.service');
+// const OpenAIService = require('../services/ai/openai.service'); // Comentando para evitar conflito
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+ffmpeg.setFfmpegPath(ffmpegPath);
+const tokenUsageService = require('../services/ai/token-usage.service');
 
 // Configurar o cliente OpenAI
 const openai = new OpenAI({
@@ -118,6 +128,32 @@ async function preprocessLongTranscript(transcript, maxTokens = 4000) {
     
     console.log(`AI Controller: Transcrição truncada manualmente. Novo tamanho: ${truncatedTranscript.length}`);
     return truncatedTranscript;
+  }
+}
+
+/**
+ * Função auxiliar para limpar arquivos temporários
+ * @param {string} originalFilePath - Caminho para o arquivo original
+ * @param {string} convertedFilePath - Caminho para o arquivo convertido
+ * @private
+ */
+async function cleanupTempFiles(originalFilePath, convertedFilePath) {
+  // Aguardar um pequeno intervalo para garantir que qualquer stream seja fechado
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  try {
+    // Excluir os arquivos temporários
+    if (originalFilePath && fs.existsSync(originalFilePath)) {
+      fs.unlinkSync(originalFilePath);
+      console.log(`Arquivo original removido: ${originalFilePath}`);
+    }
+    
+    if (convertedFilePath && fs.existsSync(convertedFilePath)) {
+      fs.unlinkSync(convertedFilePath);
+      console.log(`Arquivo convertido removido: ${convertedFilePath}`);
+    }
+  } catch (cleanupError) {
+    console.error('Erro ao remover arquivos temporários:', cleanupError.message);
   }
 }
 
@@ -400,7 +436,27 @@ const aiController = {
   saveTranscript: async (req, res) => {
     try {
       const { sessionId, transcript, emotions } = req.body;
-      const userId = req.user.id;
+      
+      console.log('Requisição de transcrição recebida:', { 
+        sessionId, 
+        transcriptLength: transcript ? transcript.length : 0,
+        hasEmotions: !!emotions 
+      });
+      
+      // Validar parâmetros obrigatórios
+      if (!sessionId) {
+        return res.status(400).json({ message: 'sessionId é obrigatório' });
+      }
+      
+      if (!transcript) {
+        return res.status(400).json({ message: 'transcript é obrigatório' });
+      }
+      
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: 'Usuário não autenticado' });
+      }
 
       // Verificar se a sessão existe e se o usuário tem acesso
       const session = await prisma.session.findUnique({
@@ -425,32 +481,37 @@ const aiController = {
         return res.status(403).json({ message: 'Acesso não autorizado a esta sessão' });
       }
 
-      // Salvar ou atualizar a transcrição
-      const savedTranscript = await prisma.sessionTranscript.upsert({
-        where: {
-          sessionId_timestamp: {
+      // Salvar a transcrição como registro novo, sem usar upsert que estava causando o erro
+      const timestampNow = new Date();
+      const speakerRole = isTherapist ? 'THERAPIST' : 'CLIENT';
+      
+      console.log(`Salvando transcrição como ${speakerRole} para sessão ${sessionId}`);
+      
+      try {
+        // Criar um novo registro sem tentar usar uma chave composta
+        const savedTranscript = await prisma.sessionTranscript.create({
+          data: {
             sessionId,
-            timestamp: new Date()
+            content: transcript,
+            speaker: speakerRole,
+            timestamp: timestampNow
           }
-        },
-        update: {
-          content: transcript,
-          metadata: emotions ? JSON.stringify(emotions) : null,
-          speaker: isTherapist ? 'THERAPIST' : 'CLIENT'
-        },
-        create: {
-          sessionId,
-          content: transcript,
-          metadata: emotions ? JSON.stringify(emotions) : null,
-          speaker: isTherapist ? 'THERAPIST' : 'CLIENT',
-          timestamp: new Date()
-        }
-      });
-
-      res.status(200).json({
-        message: 'Transcrição salva com sucesso',
-        data: savedTranscript
-      });
+        });
+  
+        console.log('Transcrição salva com sucesso:', savedTranscript.id);
+        
+        res.status(200).json({
+          message: 'Transcrição salva com sucesso',
+          data: savedTranscript
+        });
+      } catch (dbError) {
+        console.error('Erro específico do banco de dados:', dbError);
+        res.status(500).json({ 
+          message: 'Erro ao salvar no banco de dados', 
+          error: dbError.message,
+          code: dbError.code 
+        });
+      }
     } catch (error) {
       console.error('Erro ao salvar transcrição:', error);
       res.status(500).json({ message: 'Erro ao processar solicitação', error: error.message });
@@ -682,7 +743,7 @@ const aiController = {
         if (!analysisText) {
           console.log('AI Controller: Realizando análise padrão sem materiais de treinamento');
           const completion = await openai.chat.completions.create({
-            model: "gpt-4-turbo",
+            model: process.env.OPENAI_MODEL || "gpt-4o-mini",
             messages: [
               {
                 role: "system",
@@ -910,7 +971,7 @@ const aiController = {
             
             // Gerar sugestões usando os materiais
             const completion = await openai.chat.completions.create({
-              model: "gpt-4-turbo",
+              model: process.env.OPENAI_MODEL || "gpt-4o-mini",
               messages: [
                 {
                   role: "system",
@@ -964,7 +1025,7 @@ const aiController = {
         if (!suggestionsResponse) {
           console.log('AI Controller: Realizando sugestões padrão sem materiais de treinamento');
           const completion = await openai.chat.completions.create({
-            model: "gpt-4-turbo",
+            model: process.env.OPENAI_MODEL || "gpt-4o-mini",
             messages: [
               {
                 role: "system",
@@ -1198,7 +1259,7 @@ const aiController = {
         
         // Realizar a chamada à API
         const completion = await openai.chat.completions.create({
-          model: "gpt-4-turbo",
+          model: process.env.OPENAI_MODEL || "gpt-4o-mini",
           messages: [
             {
               role: "system",
@@ -1327,7 +1388,7 @@ const aiController = {
         console.log('AI Controller: Testando conexão com OpenAI');
         
         const completion = await openai.chat.completions.create({
-          model: process.env.OPENAI_MODEL || "gpt-4-turbo",
+          model: process.env.OPENAI_MODEL || "gpt-4o-mini",
           messages: [
             {
               role: "system",
@@ -1366,6 +1427,235 @@ const aiController = {
         message: 'Erro ao processar solicitação', 
         error: error.message,
         configured: false
+      });
+    }
+  },
+
+  /**
+   * Transcrever áudio usando a API Whisper da OpenAI
+   * Aceita WAV, MP3 ou outros formatos, mas SEMPRE converte qualquer formato para MP3 limpo
+   * @param {Request} req - Requisição Express
+   * @param {Response} res - Resposta Express
+   */
+  transcribeAudio: async (req, res) => {
+    // Verificar se há um arquivo na requisição
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Nenhum arquivo de áudio enviado' });
+    }
+
+    console.log(`AI Controller: Recebido arquivo para transcrição: ${req.file.originalname}, tamanho: ${req.file.size} bytes, tipo: ${req.file.mimetype}`);
+    
+    let originalFilePath = req.file.path;
+    let convertedFilePath = null;
+    
+    try {
+      // Não criar cópias extras, usar apenas o arquivo original para conversão
+      console.log('Detalhes do arquivo:');
+      console.log(`- Caminho: ${originalFilePath}`);
+      console.log(`- Nome: ${req.file.originalname}`);
+      console.log(`- Tamanho: ${(req.file.size / 1024).toFixed(2)} KB`);
+      console.log(`- MIME Type: ${req.file.mimetype}`);
+      
+      // Verificar tamanho mínimo do arquivo
+      if (req.file.size < 500) {
+        console.error('AI Controller: Arquivo de áudio muito pequeno, provavelmente corrompido');
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Arquivo de áudio muito pequeno ou possivelmente corrompido'
+        });
+      }
+      
+      // IMPORTANTE: SEMPRE converter para MP3 limpo com configurações exatas
+      // independente do formato original
+      convertedFilePath = originalFilePath + '_converted.mp3';
+      console.log(`SEMPRE convertendo para MP3 limpo: ${originalFilePath} -> ${convertedFilePath}`);
+      
+      try {
+        // Converter para MP3 limpo usando FFmpeg com configurações otimizadas para voz
+        await new Promise((resolve, reject) => {
+          ffmpeg(originalFilePath)
+            .outputOptions([
+              '-y',                 // Substituir arquivo existente
+              '-acodec libmp3lame', // Usar codec MP3
+              '-ac 1',              // Mono (crucial para Whisper)
+              '-ar 16000',          // 16 kHz (ideal para reconhecimento de voz)
+              '-b:a 64k',           // 64 kbps (suficiente para voz)
+              '-write_xing 0',      // Não escrever cabeçalhos VBR Xing/Info
+              '-id3v2_version 0'    // Não incluir metadados ID3
+            ])
+            .on('start', (commandLine) => {
+              console.log('FFmpeg iniciou com o comando:', commandLine);
+            })
+            .on('progress', (progress) => {
+              if (progress.percent) {
+                console.log(`FFmpeg progresso: ${progress.percent.toFixed(1)}% concluído`);
+              }
+            })
+            .on('end', () => {
+              console.log('FFmpeg: Conversão para MP3 concluída com sucesso');
+              resolve();
+            })
+            .on('error', (err) => {
+              console.error('Erro ao converter áudio:', err);
+              reject(err);
+            })
+            .save(convertedFilePath);
+        });
+        
+        // Verificar se o arquivo convertido foi criado e tem tamanho adequado
+        if (!fs.existsSync(convertedFilePath) || fs.statSync(convertedFilePath).size < 500) {
+          throw new Error('Arquivo convertido não foi criado ou está vazio');
+        }
+        
+        console.log(`Arquivo convertido com sucesso: ${convertedFilePath} (${fs.statSync(convertedFilePath).size} bytes)`);
+      } catch (conversionError) {
+        console.error('Erro na conversão do áudio:', conversionError);
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Erro ao converter o formato de áudio',
+          details: conversionError.message
+        });
+      }
+      
+      console.log(`AI Controller: Enviando ${convertedFilePath} para a API Whisper`);
+      
+      // Preparar request para OpenAI
+      const formData = new FormData();
+      formData.append('file', fs.createReadStream(convertedFilePath));
+      formData.append('model', 'whisper-1');
+      formData.append('response_format', 'verbose_json');
+      formData.append('language', 'pt');
+      
+      // Enviar para a API Whisper
+      const openaiResponse = await axios.post('https://api.openai.com/v1/audio/transcriptions', formData, {
+        headers: {
+          ...formData.getHeaders(),
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      });
+      
+      if (!openaiResponse.data || !openaiResponse.data.text) {
+        console.error('AI Controller: Resposta da API Whisper sem texto:', openaiResponse.data);
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Resposta da API Whisper sem texto'
+        });
+      }
+      
+      const transcription = openaiResponse.data.text.trim();
+      console.log(`AI Controller: Transcrição obtida (${transcription.length} caracteres)`);
+      
+      // Se transcription for vazio, retornar erro
+      if (!transcription || transcription.length === 0) {
+        console.error('AI Controller: Transcrição vazia recebida da API Whisper');
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Nenhum texto reconhecido no áudio'
+        });
+      }
+      
+      // Filtrar texto indesejado das transcrições
+      const cleanedTranscription = transcription
+        .replace(/tamara\.org/gi, '') // Remover "tamara.org"
+        .replace(/w{3}\.[\w\-\.]+\.(?:com|org|net)/gi, '') // Remover qualquer URL comum 
+        .replace(/\s{2,}/g, ' ') // Substituir múltiplos espaços por um único
+        .trim();
+      
+      console.log(`AI Controller: Transcrição filtrada: ${cleanedTranscription}`);
+      
+      const responseData = {
+        success: true,
+        text: cleanedTranscription,
+        format: openaiResponse.data.language || 'pt',
+        duration: openaiResponse.data.duration || 0
+      };
+      
+      // Salvar transcrição se tiver sessionId
+      if (req.body.sessionId) {
+        try {
+          const sessionId = req.body.sessionId;
+          const speaker = req.body.speaker || 'undefined';
+          
+          // Adicionar à transcrição no banco
+          await prisma.sessionTranscript.create({
+            data: {
+              sessionId,
+              speaker,
+              content: cleanedTranscription,
+              timestamp: new Date()
+            }
+          });
+          
+          console.log(`AI Controller: Transcrição salva para a sessão ${sessionId}, falante ${speaker}`);
+        } catch (dbError) {
+          console.error('AI Controller: Erro ao salvar transcrição no banco:', dbError);
+          // Continuar apesar do erro no banco
+        }
+      }
+      
+      return res.json(responseData);
+    } catch (error) {
+      console.error('AI Controller: Erro ao transcrever áudio:', error);
+      
+      // Detectar erro específico de formato
+      const errorMessage = error.response?.data?.error?.message || error.message;
+      if (errorMessage.includes('format') || errorMessage.includes('decode')) {
+        console.error('AI Controller: Erro de formato de áudio detectado:', errorMessage);
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Formato de áudio inválido ou não suportado pela API Whisper',
+          details: errorMessage
+        });
+      }
+      
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao transcrever áudio', 
+        error: error.message
+      });
+    } finally {
+      // Limpar arquivos temporários
+      try {
+        // Aguardar um momento para garantir que todos os streams estejam fechados
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Remover o arquivo original
+        if (originalFilePath && fs.existsSync(originalFilePath)) {
+          fs.unlinkSync(originalFilePath);
+          console.log(`Arquivo original removido: ${originalFilePath}`);
+        }
+        
+        // Remover o arquivo convertido
+        if (convertedFilePath && fs.existsSync(convertedFilePath)) {
+          fs.unlinkSync(convertedFilePath);
+          console.log(`Arquivo convertido removido: ${convertedFilePath}`);
+        }
+      } catch (cleanupError) {
+        console.error('Erro ao remover arquivos temporários:', cleanupError.message);
+      }
+    }
+  },
+
+  /**
+   * Obter relatório de uso de tokens
+   * @param {Request} req - Requisição Express
+   * @param {Response} res - Resposta Express
+   */
+  getTokenUsage: async (req, res) => {
+    try {
+      const report = tokenUsageService.getUsageReport();
+      res.status(200).json({
+        success: true,
+        data: report
+      });
+    } catch (error) {
+      console.error('Erro ao obter relatório de uso de tokens:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Erro ao obter relatório de uso de tokens',
+        error: error.message
       });
     }
   },

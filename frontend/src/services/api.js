@@ -16,7 +16,16 @@ const api = axios.create({
 // Interceptor para adicionar token de autorização em todas requisições
 api.interceptors.request.use(
   (config) => {
-    console.log(`Enviando requisição para: ${config.baseURL}${config.url}`);
+    const fullUrl = `${config.baseURL}${config.url}`;
+    console.log(`Enviando requisição para: ${fullUrl}`);
+    
+    // Verificar e corrigir duplo /api/ no URL
+    if (config.url.startsWith('/api/') && config.baseURL.endsWith('/api')) {
+      // Remove o /api/ duplicado no início da URL
+      config.url = config.url.substring(4);
+      console.log(`URL corrigida para evitar duplicação: ${config.baseURL}${config.url}`);
+    }
+    
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;

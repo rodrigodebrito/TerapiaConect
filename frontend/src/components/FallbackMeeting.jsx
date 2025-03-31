@@ -1,10 +1,92 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { useAI } from '../contexts/AIContext';
 import { toast } from 'react-toastify';
 import './FallbackMeeting.css';
 import './AITools.css';
 import AIResultsPanel from './AIResultsPanel';
+import config from '../environments';
+import { useParams, useNavigate } from 'react-router-dom';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faMicrophone, faMicrophoneSlash } from '@fortawesome/free-solid-svg-icons';
+import hybridAIService from '../services/hybridAI.service';
+import WhisperTranscriptionService from '../services/whisperTranscriptionService';
+
+// Componente de erro para capturar falhas na renderização do vídeo
+class VideoErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Erro no componente de vídeo:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="video-error-container" style={{
+          padding: '20px',
+          textAlign: 'center',
+          backgroundColor: '#f8d7da',
+          color: '#721c24',
+          borderRadius: '5px'
+        }}>
+          <h3>Houve um problema com a videoconferência</h3>
+          <button 
+            onClick={() => {
+              this.setState({ hasError: false });
+              if (this.props.onReset) this.props.onReset();
+            }}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#007bff',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              marginTop: '10px'
+            }}
+          >
+            Tentar Novamente
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// Componente para iframe do Daily
+const DailyFrame = ({ roomUrl, onLoad }) => {
+  const iframeRef = useRef(null);
+  
+  useEffect(() => {
+    if (iframeRef.current) {
+      onLoad && onLoad(iframeRef.current);
+    }
+  }, [onLoad]);
+  
+  return (
+    <iframe
+      ref={iframeRef}
+      src={roomUrl}
+      allow="camera; microphone; fullscreen; speaker; display-capture"
+      style={{
+        width: '100%',
+        height: '100%',
+        border: 'none',
+        backgroundColor: '#1a1a1a'
+      }}
+    />
+  );
+};
 
 const FallbackMeeting = ({
   roomName,
@@ -14,774 +96,1377 @@ const FallbackMeeting = ({
   floating = false,
   onPipModeChange = () => {},
 }) => {
-  const jitsiContainerRef = useRef(null);
-  const jitsiApiRef = useRef(null);
-  const iframeRef = useRef(null);
-  const scriptLoadedRef = useRef(false);
-  const aiButtonsCreatedRef = useRef(false);
-  const [isJitsiLoaded, setIsJitsiLoaded] = useState(false);
-  const [isJitsiScriptLoaded, setIsJitsiScriptLoaded] = useState(false);
-  const [isJitsiMounted, setIsJitsiMounted] = useState(false);
-  const { analyze, suggest, report, isProcessing, emotions, startListening, stopListening, isListening, transcript } = useAI();
+  // ========== HOOKS ==========
+  const isMountedRef = useRef(true);
+  const reconnectTimerRef = useRef(null);
+  const recordingTimerRef = useRef(null);
+  const videoContainerRef = useRef(null);
+  const roomNameRef = useRef(roomName);
+  const dailyCallRef = useRef(null);
+  const dailyFrameRef = useRef(null);
+  
+  // ========== STATE HOOKS ==========
+  const [sessionDetails, setSessionDetails] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isPipMode, setIsPipMode] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [transcriptText, setTranscriptText] = useState('');
+  const [transcriptionMode, setTranscriptionMode] = useState('auto');
+  const [callStatus, setCallStatus] = useState('joining');
+  const [participants, setParticipants] = useState({});
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isMuted, setIsMuted] = useState(!audioEnabled);
+  const [isVideoEnabled, setIsVideoEnabled] = useState(videoEnabled);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [processingChunk, setProcessingChunk] = useState(false);
+  const [chunkStats, setChunkStats] = useState({ count: 0, totalDuration: 0 });
+  
+  // ========== ERROR HANDLING ==========
+  
+  // Manipular erros
+  const handleError = useCallback((event) => {
+    // Se é um evento, extrair detalhes do erro
+    if (event && event.detail) {
+      const errorDetail = event.detail.error || event.detail;
+      console.error('Erro de transcrição:', errorDetail);
+      
+      // Não usar toast diretamente aqui
+      const errorMessage = typeof errorDetail === 'string' 
+        ? errorDetail 
+        : (errorDetail.message || 'Erro desconhecido');
+      
+      // Armazenar para mostrar após a renderização
+      window.lastTranscriptionError = errorMessage;
+    } else if (typeof event === 'string') {
+      // Se for string direta
+      console.error('Erro:', event);
+      window.lastTranscriptionError = event;
+    }
+  }, []);
+  
+  // ========== AI CONTEXT HOOKS ==========
+  const { 
+    analyze, 
+    suggest, 
+    report, 
+    startListening, 
+    stopListening, 
+    isListening, 
+    transcript,
+    saveTranscript
+  } = useAI();
+  
+  // Handler para eventos do serviço Whisper
+  const handleWhisperTranscription = useCallback((event) => {
+    try {
+      // Garantir que temos dados válidos
+      if (!event || !event.detail || !event.detail.text) {
+        console.warn('Evento de transcrição sem texto:', event);
+        return;
+      }
+      
+      // Extrair dados do evento
+      const { text, duration, language, sessionId } = event.detail;
+      
+      // Atualizar o texto da transcrição no state
+      setTranscriptText(prev => {
+        const newText = prev ? `${prev}\n${text}` : text;
+        return newText;
+      });
+      
+      // Salvar no backend via AIContext
+      if (sessionId) {
+        // Usar o hook de AIContext para salvar a transcrição
+        if (typeof saveTranscript === 'function') {
+          const transcriptionData = {
+            sessionId: sessionId,
+            transcript: text.trim(),
+            speaker: 'user',
+            timestamp: new Date().toISOString()
+          };
+          
+          console.log('Salvando transcrição no backend via AIContext:', {
+            sessionId: sessionId,
+            textLength: text.length
+          });
+          
+          // Chamar a função do contexto
+          saveTranscript(transcriptionData)
+            .then(result => {
+              console.log('Transcrição salva com sucesso:', result);
+            })
+            .catch(error => {
+              console.error('Erro ao salvar transcrição:', error);
+              // Mostrar erro apenas no console, não interromper o fluxo
+            });
+        } else {
+          console.warn('Função saveTranscript não disponível no contexto AI');
+        }
+      }
+      
+      console.log(`Transcrição Whisper (${Math.round(duration)}s, ${language}): ${text.substring(0, 100)}...`);
+    } catch (error) {
+      handleError(`Erro ao processar transcrição: ${error.message}`);
+    }
+  }, [saveTranscript, handleError]);
+  
+  // ========== LIFECYCLE MANAGEMENT ==========
+  // Função para reiniciar serviços de transcrição se necessário
+  const resetTranscriptionServices = useCallback(() => {
+    try {
+      console.log('Tentando reiniciar serviços de transcrição');
+      
+      // Limpar referências existentes
+      if (window.hybridAIService) {
+        try {
+          window.hybridAIService.stopRecording();
+        } catch (e) {
+          console.error('Erro ao parar hybridAIService:', e);
+        }
+      }
+      
+      if (window.whisperService) {
+        try {
+          window.whisperService.stopRecording();
+        } catch (e) {
+          console.error('Erro ao parar whisperService:', e);
+        }
+      }
+      
+      // Pequena pausa para garantir limpeza
+      setTimeout(() => {
+        // Reiniciar serviços
+        window.hybridAIService = hybridAIService;
+        window.whisperService = new WhisperTranscriptionService();
+        
+        toast.info('Serviços de transcrição reiniciados');
+        console.log('Serviços de transcrição reiniciados com sucesso');
+      }, 1000);
+    } catch (error) {
+      console.error('Erro ao reiniciar serviços de transcrição:', error);
+      toast.error('Falha ao reiniciar serviços. Tente recarregar a página.');
+    }
+  }, []);
 
-  // Extrair o sessionId do roomName ou URL
+  // Usar o resetTranscriptionServices no primeiro useEffect de montagem
+  useEffect(() => {
+    console.log('FallbackMeeting montado');
+    isMountedRef.current = true;
+    
+    // Inicializar serviços de transcrição
+    try {
+      console.log("Inicializando serviços de transcrição...");
+      
+      // Inicializar Whisper Service
+      if (!window.whisperService) {
+        window.whisperService = WhisperTranscriptionService;
+        console.log('Serviço Whisper inicializado com endpoints:');
+        console.log('- Transcrição:', window.whisperService.apiEndpoint);
+        console.log('- Salvar transcrições:', window.whisperService.transcriptEndpoint);
+        
+        // Adicionar listeners de eventos
+        document.addEventListener('whisper:transcriptionResult', handleWhisperTranscription);
+        document.addEventListener('whisper-transcriptionResult', handleWhisperTranscription);
+        window.addEventListener('whisper:transcriptionResult', handleWhisperTranscription);
+        window.addEventListener('whisper-transcriptionResult', handleWhisperTranscription);
+      }
+      
+      // Inicializar WebSpeech
+      if (!window.hybridAIService) {
+        if (window.HybridAIService) {
+          window.hybridAIService = new window.HybridAIService();
+        } else {
+          console.warn("HybridAIService não encontrado");
+        }
+      }
+      
+      console.log("Serviços de transcrição inicializados");
+    } catch (error) {
+      console.error("Erro ao inicializar serviços de transcrição:", error);
+    }
+    
+    // Configurar botão de reset no objeto window para debugging
+    window.resetTranscriptionServices = resetTranscriptionServices;
+    
+    return () => {
+      console.log('FallbackMeeting desmontado');
+      isMountedRef.current = false;
+      
+      // Limpar a função global ao desmontar
+      delete window.resetTranscriptionServices;
+      
+      // Parar serviço Whisper se estiver gravando
+      if (window.whisperService && window.whisperService.isRecording) {
+        try {
+          window.whisperService.stopRecording();
+          console.log('Serviço Whisper parado ao desmontar componente');
+        } catch (error) {
+          console.error('Erro ao parar serviço Whisper:', error);
+        }
+      }
+    };
+  }, [resetTranscriptionServices]);
+  
+  // Handler para erro de autenticação  
+  useEffect(() => {
+    const handleAuthError = (event) => {
+      if (event && event.detail) {
+        console.error('Erro de autenticação:', event.detail.message);
+        toast.error(event.detail.message || 'Erro de autenticação. Faça login novamente.');
+        
+        // Redirecionar para tela de login após 3 segundos
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 3000);
+      }
+    };
+    
+    // Registrar handler
+    window.addEventListener('auth-error', handleAuthError);
+    
+    // Limpar handler ao desmontar
+    return () => {
+      window.removeEventListener('auth-error', handleAuthError);
+    };
+  }, []);
+  
+  // ========== PICTURE-IN-PICTURE MANAGEMENT ==========
+  const handlePipClick = useCallback(() => {
+    try {
+      if (!dailyFrameRef.current) return;
+      
+      // Tentar entrar no modo PiP para o iframe de vídeo
+      if (document.pictureInPictureElement !== dailyFrameRef.current) {
+        console.log('Entrando no modo PiP');
+        dailyFrameRef.current.requestPictureInPicture?.()
+          .then(() => {
+            console.log('PiP ativado com sucesso');
+            onPipModeChange(true);
+          })
+          .catch(e => {
+            console.error('Erro ao entrar no modo PiP', e);
+            toast.error('Não foi possível ativar o modo Picture-in-Picture');
+          });
+      } else {
+        // Sair do modo PiP
+        console.log('Saindo do modo PiP');
+        document.exitPictureInPicture?.()
+          .then(() => {
+            console.log('Saiu do PiP com sucesso');
+            onPipModeChange(false);
+          })
+          .catch(e => console.error('Erro ao sair do modo PiP', e));
+      }
+    } catch (e) {
+      console.error('Erro ao manipular Picture-in-Picture:', e);
+    }
+  }, [onPipModeChange]);
+  
+  // ========== SESSION ID MANAGEMENT ==========
   const getSessionId = useCallback(() => {
-    // Primeiro, tentar obter da URL
-    if (window && window.location && window.location.pathname) {
-      const path = window.location.pathname;
-      const matches = path.match(/\/session\/([^\/]+)/);
+    try {
+      // Tentar extrair da URL
+      if (window.location.pathname) {
+        const matches = window.location.pathname.match(/\/session\/([^\/]+)/);
       if (matches && matches[1]) {
-        console.log("SessionId extraído da URL:", matches[1]);
         return matches[1];
       }
     }
     
-    // Tentar obter do roomName
-    if (!roomName) return null;
-    
-    // Tenta extrair o sessionId do formato room-123456
+      // Tentar extrair do roomName (formato room-123456)
+      if (roomName) {
     const parts = roomName.split('-');
     if (parts.length > 1) {
-      console.log("SessionId extraído do roomName:", parts[1]);
       return parts[1];
     }
-    
-    console.log("Usando roomName como sessionId:", roomName);
     return roomName;
+      }
+      
+      return null;
+    } catch (e) {
+      console.error('Erro ao extrair sessionId:', e);
+      return null;
+    }
   }, [roomName]);
 
-  // Prevenir re-renderizações desnecessárias usando useCallback
-  const handleAnalyze = useCallback(() => {
-    const sessionId = getSessionId();
-    if (sessionId) {
-      console.log("Chamando análise com sessionId:", sessionId);
-      analyze(sessionId);
-    } else {
-      console.error("sessionId não disponível para análise");
-      toast.error("Erro: ID da sessão não disponível");
-    }
-  }, [getSessionId, analyze]);
-
-  const handleSuggest = useCallback(() => {
-    const sessionId = getSessionId();
-    if (sessionId) {
-      console.log("Chamando sugestões com sessionId:", sessionId);
-      suggest(sessionId);
-    } else {
-      console.error("sessionId não disponível para sugestões");
-      toast.error("Erro: ID da sessão não disponível");
-    }
-  }, [getSessionId, suggest]);
-
-  const handleReport = useCallback(() => {
-    const sessionId = getSessionId();
-    if (sessionId) {
-      console.log("Chamando relatório com sessionId:", sessionId);
-      report(sessionId);
-    } else {
-      console.error("sessionId não disponível para relatório");
-      toast.error("Erro: ID da sessão não disponível");
-    }
-  }, [getSessionId, report]);
-
-  // Mapeia uma emoção para um emoji correspondente
-  const getEmotionEmoji = useCallback((emotion) => {
-    const emotionMap = {
-      happiness: '😊',
-      sadness: '😢',
-      anger: '😠',
-      surprise: '😲',
-      fear: '😨',
-      disgust: '🤢',
-      neutral: '😐',
-      joy: '😄',
-      trust: '🤝',
-      anticipation: '🤔',
-      love: '❤️',
-      optimism: '🌞',
-      pessimism: '☁️',
-      anxiety: '😰'
-    };
+  // ========== DAILY ROOM SETUP ==========
+  const initDailyRoom = useCallback(() => {
+    if (!isMountedRef.current) return;
     
-    return emotionMap[emotion.toLowerCase()] || '❓';
-  }, []);
-
-  // Atualizar emoções no container
-  const updateEmotions = useCallback((emotionsContainer) => {
-    if (!emotionsContainer) return;
-    
-    // Limpar emoções anteriores
-    emotionsContainer.innerHTML = '';
-    
-    // Adicionar emoções detectadas
-    if (emotions && Object.keys(emotions).length > 0) {
-      // Ordenar emoções por intensidade
-      const sortedEmotions = Object.entries(emotions)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 3); // Mostrar apenas as 3 mais intensas
-      
-      sortedEmotions.forEach(([emotion, intensity]) => {
-        if (intensity >= 0.1) { // Mostrar apenas se tiver intensidade significativa
-          const emotionEl = document.createElement('div');
-          emotionEl.className = 'emotion-indicator';
-          
-          // Mapear emoção para emoji
-          const emoji = getEmotionEmoji(emotion);
-          
-          emotionEl.innerHTML = `<span class="emotion-emoji">${emoji}</span>`;
-          emotionEl.style.opacity = Math.min(1, intensity);
-          
-          emotionsContainer.appendChild(emotionEl);
-        }
-      });
-    }
-  }, [emotions, getEmotionEmoji]);
-
-  // Função para criar botões de IA
-  const createAIButtons = useCallback(() => {
-    if (floating || aiButtonsCreatedRef.current) return;
-    
-    console.log('Criando botões de IA agora com suporte a emoções');
-    
-    // Remover todos os botões existentes
-    document.querySelectorAll('[id*="ai-"], [class*="ai-tools"], [class*="ai-buttons"]').forEach(el => {
-      if (el.id !== 'direct-ai-buttons') {
-        console.log('Removendo botão antigo:', el.id || el.className);
-        el.remove();
-      }
-    });
-    
-    // Remover botões específicos pelo texto
-    document.querySelectorAll('button').forEach(btn => {
-      const text = btn.textContent || '';
-      if ((text.includes('Analisar') || text.includes('Sugestões') || text.includes('Relatório')) && 
-          !btn.closest('#direct-ai-buttons')) {
-        const parent = btn.parentElement;
-        if (parent && parent.children.length <= 3) {
-          parent.remove();
-        } else {
-          btn.remove();
-        }
-      }
-    });
-    
-    // Remover container antigo se existir
-    const oldContainer = document.getElementById('direct-ai-buttons');
-    if (oldContainer) {
-      oldContainer.remove();
-    }
-    
-    // Criar container principal
-    const container = document.createElement('div');
-    container.id = 'direct-ai-buttons';
-    container.setAttribute('data-testid', 'ai-tools-container');
-    container.style.cssText = `
-      position: fixed !important;
-      bottom: 80px !important;
-      left: 0 !important;
-      width: 100% !important;
-      display: flex !important;
-      justify-content: center !important;
-      align-items: center !important;
-      pointer-events: none !important;
-      z-index: 2147483647 !important;
-    `;
-    
-    // Criar toolbar
-    const toolbar = document.createElement('div');
-    toolbar.setAttribute('data-testid', 'ai-tools-toolbar');
-    toolbar.style.cssText = `
-      display: flex !important;
-      gap: 10px !important;
-      background-color: rgba(0, 0, 0, 0.8) !important;
-      border-radius: 50px !important;
-      padding: 8px 16px !important;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
-      pointer-events: all !important;
-      position: relative !important;
-    `;
-    
-    // Criar contenedor de emoções
-    const emotionsContainer = document.createElement('div');
-    emotionsContainer.className = 'ai-emotions-container';
-    emotionsContainer.setAttribute('data-testid', 'ai-emotions-container');
-    emotionsContainer.style.cssText = `
-      position: absolute !important;
-      top: -30px !important;
-      left: 50% !important;
-      transform: translateX(-50%) !important;
-      display: flex !important;
-      gap: 5px !important;
-      justify-content: center !important;
-    `;
-    
-    // Criar função para botões
-    const createButton = (emoji, text, onClick) => {
-      const button = document.createElement('button');
-      button.setAttribute('data-testid', `ai-button-${text.toLowerCase()}`);
-      button.style.cssText = `
-        background-color: #2a3e4c !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 50px !important;
-        padding: 8px 16px !important;
-        display: flex !important;
-        align-items: center !important;
-        gap: 8px !important;
-        cursor: pointer !important;
-        font-size: 14px !important;
-        font-family: sans-serif !important;
-        transition: all 0.2s ease !important;
-      `;
-      
-      button.innerHTML = `<span style="font-size: 18px !important; display: inline-block !important;">${emoji}</span> <span>${text}</span>`;
-      button.onclick = onClick;
-      
-      // Adicionar hover effect via event listeners
-      button.addEventListener('mouseenter', () => {
-        button.style.backgroundColor = '#3a5268 !important';
-        button.style.transform = 'translateY(-2px) !important';
-      });
-      
-      button.addEventListener('mouseleave', () => {
-        button.style.backgroundColor = '#2a3e4c !important';
-        button.style.transform = 'translateY(0) !important';
-      });
-      
-      return button;
-    };
-    
-    // Criar os botões
-    const analyzeButton = createButton('🧠', 'Analisar', handleAnalyze);
-    const suggestButton = createButton('💡', 'Sugestões', handleSuggest);
-    const reportButton = createButton('📝', 'Relatório', handleReport);
-    
-    // Adicionar botões à toolbar
-    toolbar.appendChild(analyzeButton);
-    toolbar.appendChild(suggestButton);
-    toolbar.appendChild(reportButton);
-    toolbar.appendChild(emotionsContainer);
-    
-    // Adicionar toolbar ao container
-    container.appendChild(toolbar);
-    
-    // Adicionar container ao body
-    document.body.appendChild(container);
-    console.log('Botões de IA criados com sucesso');
-    
-    // Atualizar emoções iniciais
-    updateEmotions(emotionsContainer);
-    
-    // Marcar como criado
-    aiButtonsCreatedRef.current = true;
-  }, [floating, handleAnalyze, handleSuggest, handleReport, updateEmotions]);
-
-  // Carregar o script Jitsi uma vez quando o componente for montado
-  useEffect(() => {
-    if (!scriptLoadedRef.current) {
-      loadJitsiScript();
-    } else if (typeof JitsiMeetExternalAPI !== 'undefined') {
-      // Se o script já estiver carregado, inicializar o Jitsi
-      initJitsi();
-    } else {
-      // Tentar carregar novamente
-      loadJitsiScript();
-    }
-
-    return () => {
-      // Limpar quando o componente for desmontado
-      if (jitsiApiRef.current) {
-        try {
-          jitsiApiRef.current.dispose();
-          jitsiApiRef.current = null;
-        } catch (error) {
-          console.error('Erro ao descartar instância do Jitsi:', error);
-        }
-      }
-    };
-  }, [roomName, userName]);
-
-  // Efeito para controlar áudio/vídeo
-  useEffect(() => {
-    if (jitsiApiRef.current) {
-      try {
-        jitsiApiRef.current.executeCommand('toggleAudio', !audioEnabled);
-        jitsiApiRef.current.executeCommand('toggleVideo', !videoEnabled);
-      } catch (error) {
-        console.error('Erro ao alternar áudio/vídeo:', error);
-      }
-    }
-  }, [audioEnabled, videoEnabled]);
-
-  // Efeito para garantir que o iframe seja estável após o carregamento
-  useEffect(() => {
-    if (isJitsiMounted && jitsiApiRef.current) {
-      // Garantir que os botões existam após o Jitsi estar completamente carregado
-      if (!floating && !document.getElementById('direct-ai-buttons')) {
-        createAIButtons();
-      }
-      
-      // Monitorar se ainda temos o iframe
-      const checkInterval = setInterval(() => {
-        if (!jitsiContainerRef.current.querySelector('iframe')) {
-          console.warn('Iframe do Jitsi não encontrado, tentando reinicializar');
-          initJitsi();
-          clearInterval(checkInterval);
-        }
-      }, 5000);
-      
-      return () => clearInterval(checkInterval);
-    }
-  }, [isJitsiMounted, floating, createAIButtons]);
-
-  // Adicionar um mecanismo de recuperação automática
-  useEffect(() => {
-    let recoveryAttempts = 0;
-    const maxRecoveryAttempts = 3;
-    
-    const recoveryCheck = setTimeout(() => {
-      // Se após 10 segundos o jitsi não estiver montado, tentar recuperar
-      if (!isJitsiMounted && jitsiContainerRef.current) {
-        console.warn('Jitsi não foi montado após 10s, tentando recuperação automática');
-        
-        const attemptRecovery = () => {
-          if (recoveryAttempts < maxRecoveryAttempts) {
-            recoveryAttempts++;
-            console.log(`Tentativa de recuperação ${recoveryAttempts}/${maxRecoveryAttempts}`);
-            
-            // Tentar recarregar o script ou reinicializar o Jitsi
-            if (typeof JitsiMeetExternalAPI === 'undefined') {
-              loadJitsiScript();
-            } else {
-              initJitsi();
-            }
-            
-            // Verificar novamente após um tempo
-            setTimeout(() => {
-              if (!isJitsiMounted) {
-                attemptRecovery();
-              }
-            }, 5000);
-          } else {
-            console.error('Número máximo de tentativas de recuperação alcançado');
-            toast.error('Não foi possível iniciar a videochamada. Tente recarregar a página.');
-          }
-        };
-        
-        attemptRecovery();
-      }
-    }, 10000);
-    
-    return () => clearTimeout(recoveryCheck);
-  }, [isJitsiMounted]);
-
-  // Efeito para iniciar a captura de áudio quando o Jitsi estiver carregado
-  useEffect(() => {
-    if (isJitsiLoaded && !floating) {
-      // Iniciar a gravação de áudio após um pequeno delay para garantir que tudo esteja carregado
-      const timer = setTimeout(() => {
-        if (!isListening) {
-          console.log('Iniciando reconhecimento de voz automaticamente');
-          startListening();
-        }
-      }, 2000);
-      
-      return () => {
-        clearTimeout(timer);
-        if (isListening) {
-          console.log('Finalizando reconhecimento de voz');
-          stopListening();
-        }
-      };
-    }
-  }, [isJitsiLoaded, floating, startListening, stopListening, isListening]);
-
-  // Efeito para monitorar a transcrição e registrar mudanças
-  useEffect(() => {
-    if (transcript) {
-      console.log('Transcrição atualizada:', transcript.substring(0, 50) + (transcript.length > 50 ? '...' : ''));
-    }
-  }, [transcript]);
-
-  // Registrar o AIContext globalmente para que os botões possam acessá-lo
-  useEffect(() => {
-    if (window) {
-      window.__AI_CONTEXT = { analyze, suggest, report, isProcessing, emotions, startListening, stopListening, isListening, transcript };
-      
-      // Disparar evento para outros componentes
-      const event = new CustomEvent('ai-context-updated', {
-        detail: {
-          isProcessing,
-          emotions,
-          isListening,
-          transcript
-        }
-      });
-      window.dispatchEvent(event);
-    }
-  }, [analyze, suggest, report, isProcessing, emotions, startListening, stopListening, isListening, transcript]);
-
-  // Efeito para criar botões assim que o componente montar
-  useEffect(() => {
-    if (!floating) {
-      // Criar botões imediatamente, não esperar pelo Jitsi
-      createAIButtons();
-      
-      // Verificador periódico para garantir que os botões existam
-      const interval = setInterval(() => {
-        if (!document.getElementById('direct-ai-buttons')) {
-          console.log('Botões de IA não encontrados, recriando...');
-          createAIButtons();
-        }
-      }, 2000);
-
-      return () => {
-        clearInterval(interval);
-        
-        // Remover botões ao desmontar
-        const container = document.getElementById('direct-ai-buttons');
-        if (container) {
-          container.remove();
-        }
-        
-        aiButtonsCreatedRef.current = false;
-      };
-    }
-  }, [floating, createAIButtons]);
-
-  // Efeito para atualizar estados dos botões
-  useEffect(() => {
-    // Atualizar estado de processamento
-    const container = document.getElementById('direct-ai-buttons');
-    if (container) {
-      if (isProcessing) {
-        container.classList.add('processing');
-      } else {
-        container.classList.remove('processing');
-      }
-      
-      const buttons = container.querySelectorAll('button');
-      buttons.forEach(button => {
-        button.disabled = isProcessing;
-        button.style.opacity = isProcessing ? '0.5 !important' : '1 !important';
-        button.style.cursor = isProcessing ? 'not-allowed !important' : 'pointer !important';
-      });
-      
-      // Atualizar emoções
-      const emotionsContainer = container.querySelector('.ai-emotions-container');
-      if (emotionsContainer) {
-        updateEmotions(emotionsContainer);
-      }
-    }
-  }, [isProcessing, emotions, updateEmotions]);
-
-  // Função para carregar o script do Jitsi
-  const loadJitsiScript = () => {
-    if (scriptLoadedRef.current) {
-      console.log('Script do Jitsi já está sendo carregado');
-      return;
-    }
-    
-    console.log('Carregando script do Jitsi Meet');
-    scriptLoadedRef.current = true;
-    
-    const script = document.createElement('script');
-    script.src = 'https://meet.jit.si/external_api.js';
-    script.async = true;
-    script.onload = () => {
-      console.log('Script do Jitsi carregado com sucesso');
-      setIsJitsiScriptLoaded(true);
-      setTimeout(() => {
-        if (typeof JitsiMeetExternalAPI === 'undefined') {
-          console.error('JitsiMeetExternalAPI não está definido após carregamento do script');
-          toast.error('Erro ao carregar videochamada. Tentando novamente...');
-          // Recarregar script com abordagem diferente
-          const alternativeScript = document.createElement('script');
-          alternativeScript.src = 'https://meet.jit.si/libs/external_api.min.js';
-          alternativeScript.async = true;
-          alternativeScript.onload = () => {
-            console.log('Script alternativo do Jitsi carregado com sucesso');
-            setIsJitsiScriptLoaded(true);
-            initJitsi();
-          };
-          document.body.appendChild(alternativeScript);
-        } else {
-          console.log('JitsiMeetExternalAPI está disponível, inicializando...');
-          initJitsi();
-        }
-      }, 500);
-    };
-    
-    script.onerror = (error) => {
-      console.error('Erro ao carregar script do Jitsi:', error);
-      toast.error('Erro ao carregar componentes da videochamada');
-      scriptLoadedRef.current = false;
-      
-      // Tentar URL alternativa
-      console.log('Tentando URL alternativa para o script do Jitsi');
-      const alternativeScript = document.createElement('script');
-      alternativeScript.src = 'https://meet.jit.si/libs/external_api.min.js';
-      alternativeScript.async = true;
-      alternativeScript.onload = () => {
-        console.log('Script alternativo do Jitsi carregado com sucesso');
-        setIsJitsiScriptLoaded(true);
-        initJitsi();
-      };
-      document.body.appendChild(alternativeScript);
-    };
-    
-    document.body.appendChild(script);
-  };
-
-  // Função para inicializar o Jitsi
-  const initJitsi = () => {
-    console.log('Inicializando Jitsi com sala:', roomName);
-    
-    // Garantir que o elemento contêiner exista
-    if (!jitsiContainerRef.current) {
-      console.error('Container do Jitsi não encontrado.');
-      toast.error('Erro ao inicializar a videochamada. Recarregando...');
-      
-      // Tentar uma última vez recarregar com um delay
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
-      
-      return;
-    }
+    console.log('Inicializando sala Daily.co');
+    setIsLoading(true);
+    setError(null);
     
     try {
-      // Limpar container antes de inicializar
-      while (jitsiContainerRef.current.firstChild) {
-        jitsiContainerRef.current.removeChild(jitsiContainerRef.current.firstChild);
+      // Obter o token de autenticação do sessionStorage ou localStorage
+      const authToken = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+      
+      // Usar o sessionId como identificador de sala
+      const sessionId = getSessionId();
+      
+      // Criar um identificador único para esta sessão de terapia
+      // Remover caracteres especiais e letras maiúsculas da sala para evitar problemas
+      const sanitizedId = (sessionId || roomName || `tc-${Date.now()}-${Math.floor(Math.random() * 100000)}`)
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '-');
+      
+      console.log('ID da sala sanitizado:', sanitizedId);
+      
+      // Criar a sala manualmente via API Daily.co usando o API Key
+      const DAILY_API_KEY = 'e70077d9b78043fac2ba899cbfec34c9ab88d8dfad6dbb374e0c7722b8d8759e'; // Seu API Key
+      
+      // Primeiro vamos verificar se a sala existe
+      fetch(`https://api.daily.co/v1/rooms/${sanitizedId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${DAILY_API_KEY}`
+        }
+      })
+      .then(response => {
+        if (response.ok) {
+          // Sala existe, retornar os dados
+          return response.json().then(data => {
+            console.log('Sala já existe:', data);
+            return { url: `https://teraconect.daily.co/${sanitizedId}`, name: sanitizedId };
+          });
+        } else if (response.status === 404) {
+          // Sala não existe, criar
+          console.log('Sala não existe, criando...');
+          
+          return fetch('https://api.daily.co/v1/rooms', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${DAILY_API_KEY}`
+            },
+            body: JSON.stringify({
+              name: sanitizedId,
+              properties: {
+                enable_chat: true,
+                enable_screenshare: true,
+                start_video_off: false,
+                start_audio_off: false,
+                enable_knocking: true,
+                enable_prejoin_ui: true,
+                exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 horas
+              }
+            })
+          })
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('Falha ao criar sala via API Direct. Status: ' + response.status);
+            }
+            return response.json();
+          })
+          .then(data => {
+            console.log('Sala criada com sucesso via API direta:', data);
+            return { url: data.url, name: data.name };
+          });
+        } else {
+          throw new Error('Falha ao verificar sala. Status: ' + response.status);
+        }
+      })
+      .then(data => {
+        console.log('Dados da sala finais:', data);
+        
+        // Usar a URL da sala
+        const dailyRoomUrl = data.url;
+        
+        // Adicionar log para depuração
+        console.log(`Conectando com a sala: ${dailyRoomUrl}`);
+        
+        // Atualizar estado com a URL
+        if (isMountedRef.current) {
+          setSessionDetails(data);
+          console.log('Daily.co sala inicializada com sucesso:', data.name, 'URL:', dailyRoomUrl);
+        }
+      })
+      .catch(error => {
+        console.error('Erro ao criar/verificar sala Daily.co:', error);
+        
+        // Em caso de erro, usar URL direta e esperar que a sala já exista
+        if (isMountedRef.current) {
+          const directUrl = `https://teraconect.daily.co/${sanitizedId}`;
+          console.warn('Usando URL direta após erro:', directUrl);
+          setSessionDetails({ url: directUrl, name: sanitizedId });
+        }
+      })
+      .finally(() => {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao inicializar o Daily.co:', error);
+      if (isMountedRef.current) {
+        setError('Não foi possível iniciar a videochamada. Tente novamente.');
+        setIsLoading(false);
+        toast.error('Erro ao iniciar a videochamada. Tente recarregar a página.');
+      }
+    }
+  }, [roomName, getSessionId]);
+  
+  // Inicializar a sala ao montar
+  useEffect(() => {
+    if (isMountedRef.current) {
+      initDailyRoom();
+    }
+  }, [initDailyRoom]);
+  
+  // ========== AI EVENT HANDLERS ==========
+  const handleAnalyze = useCallback(() => {
+    try {
+      const sessionId = getSessionId();
+      if (sessionId) {
+        console.log('Analisando sessão:', sessionId);
+        // Passar o texto atual da transcrição para a análise
+        analyze(sessionId, transcriptText);
+      } else {
+        toast.error('ID da sessão não disponível');
+      }
+    } catch (e) {
+      console.error('Erro ao analisar:', e);
+      toast.error('Erro ao analisar a sessão');
+    }
+  }, [analyze, getSessionId, transcriptText]);
+
+  const handleSuggest = useCallback(() => {
+    try {
+      const sessionId = getSessionId();
+      if (sessionId) {
+        console.log('Gerando sugestões para sessão:', sessionId);
+        // Passar o texto atual da transcrição para gerar sugestões
+        suggest(sessionId, transcriptText);
+      } else {
+        toast.error('ID da sessão não disponível');
+      }
+    } catch (e) {
+      console.error('Erro ao gerar sugestões:', e);
+      toast.error('Erro ao gerar sugestões');
+    }
+  }, [suggest, getSessionId, transcriptText]);
+
+  const handleReport = useCallback(() => {
+    try {
+      const sessionId = getSessionId();
+      if (sessionId) {
+        console.log('Gerando relatório para sessão:', sessionId);
+        // Passar o texto atual da transcrição para gerar relatório
+        report(sessionId, transcriptText);
+      } else {
+        toast.error('ID da sessão não disponível');
+      }
+    } catch (e) {
+      console.error('Erro ao gerar relatório:', e);
+      toast.error('Erro ao gerar relatório');
+    }
+  }, [report, getSessionId, transcriptText]);
+  
+  // ========== TRANSCRIPT HANDLING ==========
+  // Esta declaração foi movida para a seção STATE HOOKS acima
+  /* const [isTranscribing, setIsTranscribing] = useState(false); */
+  
+  // useEffect para lidar com eventos de transcrição de ambos os serviços
+  useEffect(() => {
+    // Configurar eventos para receber transcrições
+    const handleHybridTranscript = (event) => {
+      if (event && event.detail) {
+        setTranscriptText(prev => prev + (prev ? '\n' : '') + event.detail.transcript);
+      }
+    };
+    
+    // Adicionar listeners
+    window.addEventListener('transcript', handleHybridTranscript);
+    window.addEventListener('whisper-transcription', handleWhisperTranscription);
+    document.addEventListener('whisper:transcriptionResult', handleWhisperTranscription);
+    window.addEventListener('speech-error', handleError);
+    window.addEventListener('whisper-error', handleError);
+    document.addEventListener('whisper:transcriptionError', handleError);
+    
+    return () => {
+      // Remover listeners
+      window.removeEventListener('transcript', handleHybridTranscript);
+      window.removeEventListener('whisper-transcription', handleWhisperTranscription);
+      document.removeEventListener('whisper:transcriptionResult', handleWhisperTranscription);
+      window.removeEventListener('speech-error', handleError);
+      window.removeEventListener('whisper-error', handleError);
+      document.removeEventListener('whisper:transcriptionError', handleError);
+    };
+  }, [handleWhisperTranscription, handleError]);
+  
+  // Usar useEffect para mostrar os toasts após a renderização
+  useEffect(() => {
+    // Mostrar aviso se não tiver texto
+    if (window.lastTranscriptionError) {
+      toast.warning(window.lastTranscriptionError);
+      window.lastTranscriptionError = null;
+    }
+    
+    // Mostrar notificação de sucesso se tiver texto
+    if (window.lastTranscriptText) {
+      toast.success(`Transcrição recebida: ${window.lastTranscriptText}`);
+      window.lastTranscriptText = null;
+    }
+  }, [transcriptText]);
+  
+  // Função para alternar transcrição
+  const toggleTranscription = useCallback(() => {
+    try {
+      if (isTranscribing) {
+        // Parar transcrição
+        console.log('Parando reconhecimento de voz');
+        window.dispatchEvent(new Event('stop-transcription'));
+        setIsTranscribing(false);
+        toast.info('Transcrição parada');
+      } else {
+        // Iniciar transcrição
+        console.log('Iniciando reconhecimento de voz');
+        setTranscriptText(''); // Limpar texto anterior
+        window.dispatchEvent(new Event('start-transcription'));
+        setIsTranscribing(true);
+        toast.info('Transcrição iniciada');
+        
+        // Disparar evento para forçar visibilidade após iniciar transcrição
+        setTimeout(() => {
+          window.dispatchEvent(new Event('force-transcript-visibility'));
+        }, 500);
+      }
+    } catch (e) {
+      console.error('Erro ao alternar transcrição:', e);
+      toast.error('Erro ao controlar transcrição');
+    }
+  }, [isTranscribing]);
+
+  // ========== AI BUTTONS CREATION ==========
+  const createAIButtons = useCallback(() => {
+    try {
+      if (!isMountedRef.current) return;
+      console.log('Criando botões de IA...');
+      
+      // Vamos usar className para estilizar com CSS em vez de modificar o DOM
+      // Não é mais necessário criar elementos manualmente através do DOM
+      
+    } catch (error) {
+      console.error('Erro ao criar botões de IA:', error);
+    }
+  }, [handleAnalyze, handleReport, handleSuggest, isTranscribing, toggleTranscription, transcriptText]);
+  
+  // Callback quando o iframe é carregado
+  const handleIframeLoad = useCallback((iframeElement) => {
+    if (!isMountedRef.current) return;
+    
+    console.log('Daily iframe carregado com sucesso');
+    
+    // Armazenar a referência do iframe
+    dailyFrameRef.current = iframeElement;
+    
+    // Marcar que o vídeo foi carregado
+    setIsVideoEnabled(true);
+    
+    try {
+      // Tentar configurar o currentCall globalmente
+      if (typeof window.DailyIframe !== 'undefined') {
+        const dailyObjects = window.DailyIframe.wrap(iframeElement);
+        // Disponibilizar globalmente para verificação de participantes
+        dailyCallRef.current = dailyObjects;
+        console.log('API da Daily.co acessível globalmente via window.currentCall');
+      }
+        } catch (error) {
+      console.error('Erro ao configurar API da Daily:', error);
+    }
+    
+    // Remover a tela de carregamento
+    setIsLoading(false);
+    
+    // Aguardar a renderização completa do componente antes de tentar criar botões
+    setTimeout(() => {
+      const dailyContainer = document.querySelector('.meeting-root');
+      if (dailyContainer) {
+        console.log('Container do Daily encontrado, adicionando classe daily-container');
+        dailyContainer.classList.add('daily-container');
+    } else {
+        console.warn('Container do Daily não encontrado no primeiro tempo');
+        // Segunda tentativa com um seletor mais específico
+        const videoContainer = document.querySelector('.video-container');
+        if (videoContainer) {
+          console.log('Container de vídeo encontrado, adicionando classe daily-container');
+          videoContainer.classList.add('daily-container');
+        }
+      }
+    }, 500);
+    
+    // Enviar mensagens para o iframe após o carregamento
+    setTimeout(() => {
+      try {
+        const roomIdentifier = getSessionId() || roomName || 'default-room';
+        if (iframeElement && iframeElement.contentWindow) {
+          iframeElement.contentWindow.postMessage({
+            type: 'join-room',
+            roomId: roomIdentifier,
+            userName: userName || 'Usuário'
+          }, '*');
+        }
+      } catch (e) {
+        console.warn('Não foi possível enviar mensagem para o iframe:', e);
+      }
+    }, 1000);
+  }, [createAIButtons, getSessionId, roomName, userName]);
+  
+  // Conectar com o sistema de transcrição
+  useEffect(() => {
+    const startTranscriptionHandler = () => {
+      // Iniciar a transcrição usando o serviço hybridAI
+      if (window.hybridAIService && typeof window.hybridAIService.startRecording === 'function') {
+        console.log("Iniciando reconhecimento de voz via hybridAIService");
+        window.hybridAIService.startRecording();
+        setIsTranscribing(true);
+      }
+    };
+    
+    const stopTranscriptionHandler = () => {
+      // Parar a transcrição
+      if (window.hybridAIService && typeof window.hybridAIService.stopRecording === 'function') {
+        console.log("Parando reconhecimento de voz via hybridAIService");
+        window.hybridAIService.stopRecording();
+        setIsTranscribing(false);
+      }
+    };
+    
+    // Registrar event listeners
+    window.addEventListener('start-transcription', startTranscriptionHandler);
+    window.addEventListener('stop-transcription', stopTranscriptionHandler);
+    
+    // Limpar event listeners ao desmontar
+    return () => {
+      window.removeEventListener('start-transcription', startTranscriptionHandler);
+      window.removeEventListener('stop-transcription', stopTranscriptionHandler);
+      
+      // Garantir que a transcrição seja interrompida
+      if (window.hybridAIService && typeof window.hybridAIService.stopRecording === 'function') {
+        window.hybridAIService.stopRecording();
+      }
+    };
+  }, []);
+  
+  // Adicionar CSS para os botões e a transcrição
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .daily-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
       }
       
-      // Descartar instância anterior se existir
-      if (jitsiApiRef.current) {
-        try {
-          jitsiApiRef.current.dispose();
-          jitsiApiRef.current = null;
-        } catch (disposeError) {
-          console.error('Erro ao descartar instância anterior do Jitsi:', disposeError);
+      .ai-buttons-container {
+        position: absolute;
+        bottom: 100px;
+        right: 20px;
+        z-index: 1000;
+        display: flex;
+        gap: 12px;
+        flex-direction: column;
+      }
+      
+      .ai-button, .mic-button {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: white;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(3px);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        padding: 0;
+      }
+      
+      .ai-button:hover, .mic-button:hover {
+        background: rgba(50, 50, 50, 0.95);
+        transform: scale(1.1);
+        box-shadow: 0 3px 7px rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+      }
+      
+      .mic-button.active {
+        background: rgba(206, 52, 52, 0.85);
+        border: 1px solid rgba(255, 100, 100, 0.4);
+      }
+      
+      .mic-button.paused {
+        background: rgba(255, 152, 0, 0.7);
+        border: 1px solid rgba(255, 180, 0, 0.6);
+        animation: pulse 2s infinite;
+      }
+      
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.6);
+        }
+        70% {
+          box-shadow: 0 0 0 8px rgba(255, 152, 0, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(255, 152, 0, 0);
         }
       }
       
-      // Configurar opções do Jitsi
-      const domain = 'meet.jit.si';
-      const options = {
-        roomName: roomName,
-        width: '100%',
-        height: '100%',
-        parentNode: jitsiContainerRef.current,
-        configOverwrite: {
-          startWithAudioMuted: !audioEnabled,
-          startWithVideoMuted: !videoEnabled,
-          prejoinPageEnabled: false,
-          disableDeepLinking: true,
-          enableClosePage: false,
-          toolbarButtons: [
-            'microphone', 'camera', 'desktop', 'chat', 
-            'raisehand', 'videoquality', 'fullscreen', 'fodeviceselection',
-            'recording', 'etherpad', 'settings', 'tileview', 'hangup'
-          ],
-        },
-        interfaceConfigOverwrite: {
-          DEFAULT_BACKGROUND: '#3f51b5',
-          TOOLBAR_BUTTONS: [
-            'microphone', 'camera', 'closedcaptions', 'desktop', 'fullscreen',
-            'fodeviceselection', 'hangup', 'profile', 'info', 'chat', 'recording',
-            'livestreaming', 'etherpad', 'sharedvideo', 'settings', 'raisehand',
-            'videoquality', 'filmstrip', 'tileview', 'download', 'help'
-          ],
-          SETTINGS_SECTIONS: ['devices', 'language', 'moderator', 'profile', 'calendar'],
-          SHOW_JITSI_WATERMARK: false,
-          SHOW_WATERMARK_FOR_GUESTS: false,
-          SHOW_CHROME_EXTENSION_BANNER: false,
-          SHOW_PROMOTIONAL_CLOSE_PAGE: false,
-          TOOLBAR_ALWAYS_VISIBLE: true,
-        },
-        userInfo: {
-          displayName: userName
+      .ai-button svg, .mic-button svg {
+        width: 22px;
+        height: 22px;
+        filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
+      }
+      
+      .transcript-container {
+        position: fixed;
+        bottom: 160px; /* Aumentado para ficar acima dos controles do Daily */
+        left: 50%;
+        transform: translateX(-50%);
+        width: 80%; /* Aumentado para melhor legibilidade */
+        max-width: 800px;
+        background-color: rgba(0, 0, 0, 0.85); /* Mais opaco para melhor legibilidade */
+        color: white;
+        padding: 15px 20px;
+        border-radius: 12px;
+        font-size: 15px; /* Aumentado para melhor legibilidade */
+        z-index: 950; /* Valor alto para garantir que fique acima de outros elementos */
+        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        pointer-events: auto; /* Permitir interações com a transcrição */
+        display: block !important; /* Forçar exibição */
+        visibility: visible !important; /* Garantir visibilidade */
+      }
+      
+      .transcript-container.hidden {
+        opacity: 0.2;
+        transform: translateX(-50%) translateY(20px);
+        transition: all 0.3s ease;
+      }
+      
+      .transcript-container:not(.hidden) {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+        transition: all 0.3s ease;
+      }
+      
+      .transcript-title {
+        font-weight: bold;
+        margin-bottom: 8px;
+        color: #a0d1ff;
+        font-size: 16px;
+        text-align: center;
+      }
+      
+      .transcript-text {
+        line-height: 1.5;
+        max-height: 150px; /* Maior altura para mostrar mais conteúdo */
+        overflow-y: auto;
+        padding: 5px;
+        min-height: 30px;
+      }
+    `;
+    
+    document.head.appendChild(style);
+    
+    return () => {
+      if (style.parentNode) {
+        style.parentNode.removeChild(style);
+      }
+    };
+  }, []);
+  
+  // ========== VOICE RECOGNITION ==========
+  // Inicializar serviço de reconhecimento de voz
+  useEffect(() => {
+    try {
+      // Verificar se o serviço já foi inicializado globalmente
+      if (!window.hybridAIService) {
+        console.log('Inicializando serviço de reconhecimento de voz');
+        
+        // Importar dinamicamente o serviço
+        import('../services/hybridAI.service').then(module => {
+          const HybridAIService = module.default;
+          
+          // Criar instância e atribuir à window
+          window.hybridAIService = new HybridAIService();
+          window.HybridAIService = HybridAIService; // Armazenar classe para reinstanciação se necessário
+          
+          console.log('Serviço de reconhecimento de voz inicializado com sucesso');
+        }).catch(error => {
+          console.error('Erro ao importar serviço de reconhecimento de voz:', error);
+        });
+      } else {
+        console.log('Serviço de reconhecimento de voz já inicializado');
+      }
+    } catch (e) {
+      console.error('Erro ao configurar serviço de reconhecimento de voz:', e);
+    }
+  }, []);
+  
+  // ========== UI COMPONENTS ==========
+  // Componente de seletor de modo de transcrição
+  const TranscriptionSelector = ({ mode, onChange }) => {
+    return (
+      <div className="transcription-mode-selector">
+        <label>Modo de transcrição: </label>
+        <select
+          value={mode}
+          onChange={(e) => onChange(e.target.value)}
+          className="transcription-mode-select"
+        >
+          <option value="auto">Auto</option>
+          <option value="whisper">Whisper (Alta precisão)</option>
+          <option value="webspeech">Browser (Tempo real)</option>
+        </select>
+      </div>
+    );
+  };
+  
+  // Adicionar botões de AI na interface
+  const AIButtons = () => {
+    return (
+      <div className="ai-buttons-container">
+        <MicButton />
+        
+        <TranscriptionSelector 
+          mode={transcriptionMode} 
+          onChange={setTranscriptionMode} 
+        />
+        
+        <button 
+          onClick={handleAnalyze}
+          className="ai-button"
+          title="Analisar conversa atual"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM13 17H11V15H13V17ZM13 13H11V7H13V13Z" fill="white"/>
+          </svg>
+        </button>
+        
+        <button 
+          onClick={handleSuggest}
+          className="ai-button"
+          title="Obter sugestões"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 20C7.59 20 4 16.41 4 12C4 7.59 7.59 4 12 4C16.41 4 20 7.59 20 12C20 16.41 16.41 20 12 20ZM11 16H13V18H11ZM12.61 6.04C10.55 5.79 8.73 7.13 8.27 9.17C8.05 10.3 9.03 10.99 10.1 10.68C10.65 10.5 11.25 10.07 11.36 9.5C11.78 7.83 14.08 8.2 14.08 10.25C14.08 11.28 13.47 11.8 12.69 12.5C11.91 13.2 11 14.09 11 15.25V15.5H13V15.25C13 14.58 13.67 14.11 14.45 13.41C15.23 12.71 16 11.8 16 10.25C16 7.92 14.57 6.29 12.61 6.04Z" fill="white"/>
+          </svg>
+        </button>
+        
+        <button 
+          onClick={handleReport}
+          className="ai-button"
+          title="Gerar relatório"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM18 20H6V4H13V9H18V20ZM8 14H16V16H8V14ZM8 18H13V20H8V18ZM8 10H16V12H8V10Z" fill="white"/>
+          </svg>
+        </button>
+      </div>
+    );
+  };
+  
+  // Componente de botão do microfone aprimorado
+  const MicButton = () => {
+    const [isRecording, setIsRecording] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
+    const [reconnectAttempts, setReconnectAttempts] = useState(0);
+    const recordingTimerRef = useRef(null);
+    const reconnectTimerRef = useRef(null);
+    
+    // Definir a função restartRecording ANTES de usá-la em qualquer useEffect
+    const restartRecording = useCallback(() => {
+      try {
+        console.log('Reiniciando gravação de voz...');
+        
+        // Parar qualquer instância ativa
+        if (window.hybridAIService) {
+          window.hybridAIService.stopRecording();
+        }
+        
+        if (window.whisperService) {
+          window.whisperService.stopRecording();
+        }
+        
+        // Pequeno delay para garantir que tudo foi limpo
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = setTimeout(() => {
+          // Decidir qual serviço usar baseado no modo selecionado
+          if (transcriptionMode === 'whisper') {
+            if (window.whisperService) {
+              window.whisperService.startRecording();
+              setIsRecording(true);
+              setIsPaused(false);
+              toast.info('Reconhecimento Whisper iniciado');
+            }
+          } else if (transcriptionMode === 'webspeech') {
+            if (window.hybridAIService) {
+              window.hybridAIService.startRecording();
+              setIsRecording(true);
+              setIsPaused(false);
+              toast.info('Reconhecimento Web Speech iniciado');
+            }
+          } else if (transcriptionMode === 'auto') {
+            // No modo auto, inicia ambos
+            let started = false;
+            
+            if (window.whisperService) {
+              window.whisperService.startRecording();
+              started = true;
+            }
+            
+            if (window.hybridAIService) {
+              window.hybridAIService.startRecording();
+              started = true;
+            }
+            
+            if (started) {
+              setIsRecording(true);
+              setIsPaused(false);
+              toast.info('Reconhecimento híbrido iniciado');
+            } else {
+              toast.error('Nenhum serviço de reconhecimento disponível');
+              setIsRecording(false);
+            }
+          }
+        }, 1000);
+      } catch (e) {
+        console.error('Erro ao reiniciar gravação:', e);
+        setIsRecording(false);
+        setIsPaused(false);
+      }
+    }, [transcriptionMode]);
+    
+    // Inicializar os serviços de transcrição
+    useEffect(() => {
+      // Verificar se os serviços já foram inicializados globalmente
+      if (!window.hybridAIService) {
+        console.log('Inicializando serviço Web Speech API');
+        window.hybridAIService = hybridAIService;
+      }
+      
+      if (!window.whisperService) {
+        console.log('Inicializando serviço Whisper');
+        window.whisperService = WhisperTranscriptionService;
+      }
+      
+      // Limpar ao desmontar
+      return () => {
+        if (reconnectTimerRef.current) {
+          clearTimeout(reconnectTimerRef.current);
+        }
+        
+        if (recordingTimerRef.current) {
+          clearTimeout(recordingTimerRef.current);
+        }
+      };
+    }, []);
+    
+    // Verificar periodicamente se a gravação ainda está ativa
+    useEffect(() => {
+      const checkRecordingStatus = () => {
+        // Verificar consistência com base no modo atual
+        const webSpeechActive = window.hybridAIService?.isListening || false;
+        const whisperActive = window.whisperService?.isRecording || false;
+        
+        // Verificar inconsistências com base no modo de transcrição atual
+        let shouldBeActive = false;
+        
+        if (transcriptionMode === 'whisper') {
+          shouldBeActive = whisperActive;
+        } else if (transcriptionMode === 'webspeech') {
+          shouldBeActive = webSpeechActive;
+        } else if (transcriptionMode === 'auto') {
+          shouldBeActive = webSpeechActive || whisperActive;
+        }
+        
+        // Se o estado visual não condiz com o estado real, corrigir
+        if (isRecording !== shouldBeActive) {
+          console.log(`Corrigindo estado inconsistente: UI=${isRecording}, atual=${shouldBeActive}`);
+          setIsRecording(shouldBeActive);
         }
       };
       
-      // Inicializar a API do Jitsi
-      console.log('Criando API Jitsi para sala:', roomName);
+      // Verificar a cada 3 segundos
+      const intervalId = setInterval(checkRecordingStatus, 3000);
       
-      // Verificar se o objeto JitsiMeetExternalAPI está disponível
-      if (typeof JitsiMeetExternalAPI !== 'undefined') {
-        jitsiApiRef.current = new JitsiMeetExternalAPI(domain, options);
-        console.log('API Jitsi criada com sucesso');
-        setIsJitsiMounted(true);
-        
-        // Definir referência ao iframe do Jitsi
-        setTimeout(() => {
-          try {
-            const iframe = jitsiContainerRef.current.querySelector('iframe');
-            if (iframe) {
-              iframeRef.current = iframe;
-              
-              // Ajustar estilo do iframe
-              iframe.style.width = '100%';
-              iframe.style.height = '100%';
-              iframe.style.border = 'none';
-              iframe.style.backgroundColor = '#1a1a1a';
-              
-              // Permitir Picture-in-Picture se suportado
-              if (document.pictureInPictureEnabled) {
-                iframe.allowPictureInPicture = true;
-              }
-              
-              console.log('Iframe do Jitsi configurado com sucesso');
-            } else {
-              console.error('Iframe do Jitsi não encontrado após inicialização');
-            }
-          } catch (iframeError) {
-            console.error('Erro ao configurar iframe do Jitsi:', iframeError);
-          }
-        }, 1000);
-        
-        // Adicionar event listeners
-        if (jitsiApiRef.current) {
-          jitsiApiRef.current.addListener('videoConferenceJoined', () => {
-            console.log('Entrou na conferência de vídeo');
-            jitsiApiRef.current.executeCommand('displayName', userName);
-          });
-          
-          jitsiApiRef.current.addListener('readyToClose', () => {
-            console.log('Jitsi pronto para fechar');
-            // Remover API e limpar
-            setIsJitsiMounted(false);
-            jitsiApiRef.current = null;
-          });
-        }
-      } else {
-        console.error('O objeto JitsiMeetExternalAPI não está disponível. Verifique se o script foi carregado corretamente.');
-        toast.error('Erro ao iniciar videochamada. Tentando novamente...');
-        
-        // Tentar recarregar o script
-        loadJitsiScript();
-      }
-    } catch (error) {
-      console.error('Erro ao inicializar o Jitsi:', error);
-      toast.error('Erro ao iniciar videochamada. Tente recarregar a página.');
-    }
-  };
-
-  const handlePipClick = () => {
-    if (iframeRef.current && document.pictureInPictureEnabled) {
-      if (document.pictureInPictureElement) {
-        document.exitPictureInPicture().catch(error => {
-          console.error('Error exiting PiP mode:', error);
-        });
-        onPipModeChange(false);
-      } else {
-        iframeRef.current.requestPictureInPicture().then(() => {
-          onPipModeChange(true);
-        }).catch(error => {
-          console.error('Error entering PiP mode:', error);
-        });
-      }
-    }
-  };
-
-  // Componente de botão de microfone
-  const MicButton = useCallback(() => {
-    if (floating) return null;
+      return () => clearInterval(intervalId);
+    }, [isRecording, transcriptionMode]);
     
-    const handleMicToggle = () => {
-      if (isListening) {
-        console.log('Parando reconhecimento de voz manualmente');
-        stopListening();
-      } else {
-        console.log('Iniciando reconhecimento de voz manualmente');
-        startListening();
+    const toggleMicrophone = useCallback(() => {
+      try {
+        // Se estamos gravando, parar gravação completamente
+        if (isRecording) {
+          console.log('Parando reconhecimento de voz');
+          
+          // Parar serviços com base no modo
+          if (transcriptionMode === 'whisper' || transcriptionMode === 'auto') {
+            if (window.whisperService) {
+              window.whisperService.stopRecording();
+            }
+          }
+          
+          if (transcriptionMode === 'webspeech' || transcriptionMode === 'auto') {
+            if (window.hybridAIService) {
+              window.hybridAIService.stopRecording();
+            }
+          }
+          
+          // Atualizar UI
+          setIsRecording(false);
+          setIsPaused(false);
+          
+          // Limpar qualquer timer pendente
+          if (recordingTimerRef.current) {
+            clearTimeout(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+          }
+          
+          // Notificar o usuário
+          toast.info('Transcrição parada');
+        } 
+        // Se não estamos gravando, iniciar gravação
+        else {
+          console.log(`Iniciando reconhecimento no modo: ${transcriptionMode}`);
+          
+          // Prevenção contra múltiplos cliques
+          if (recordingTimerRef.current) {
+            return;
+          }
+          
+          // Flag para rastrear se algum serviço foi iniciado
+          let serviceStarted = false;
+          
+          try {
+            // Iniciar com base no modo selecionado
+            if (transcriptionMode === 'whisper' || transcriptionMode === 'auto') {
+              if (window.whisperService) {
+                const success = window.whisperService.startRecording();
+                if (success || success === undefined) { // undefined para compatibilidade
+                  serviceStarted = true;
+                }
+              } else {
+                console.warn('Serviço Whisper não disponível');
+                // Tentar reinicializar
+                window.whisperService = new WhisperTranscriptionService();
+              }
+            }
+            
+            if (transcriptionMode === 'webspeech' || transcriptionMode === 'auto') {
+              if (window.hybridAIService) {
+                const success = window.hybridAIService.startRecording();
+                if (success || success === undefined) { // undefined para compatibilidade
+                  serviceStarted = true;
+                }
+              } else {
+                console.warn('Serviço Web Speech não disponível');
+                // Tentar reinicializar
+                window.hybridAIService = hybridAIService;
+              }
+            }
+          } catch (serviceError) {
+            console.error('Erro ao iniciar serviço de reconhecimento:', serviceError);
+            toast.error('Erro ao iniciar reconhecimento. Tente novamente.');
+            return;
+          }
+          
+          // Atualizar estado e mostrar mensagem apropriada
+          if (serviceStarted) {
+            setIsRecording(true);
+            
+            // Mensagem baseada no modo
+            if (transcriptionMode === 'whisper') {
+              toast.info('Transcrição Whisper iniciada (alta precisão)');
+            } else if (transcriptionMode === 'webspeech') {
+              toast.info('Transcrição Web Speech iniciada (tempo real)');
+            } else {
+              toast.info('Transcrição híbrida iniciada');
+            }
+          } else {
+            toast.error('Não foi possível iniciar o serviço de reconhecimento de voz');
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao alternar microfone:', error);
+        toast.error('Erro ao controlar reconhecimento de voz');
       }
+    }, [isRecording, transcriptionMode]);
+    
+    // Renderização do ícone do microfone
+    const renderIcon = () => {
+      return <FontAwesomeIcon 
+        icon={isRecording ? faMicrophoneSlash : faMicrophone} 
+        className="mic-icon" 
+      />;
     };
     
     return (
-      <div 
-        className="mic-button"
-        onClick={handleMicToggle}
-        style={{
-          position: 'fixed',
-          right: '20px',
-          bottom: '150px',
-          zIndex: 2147483647,
-          width: '44px',
-          height: '44px',
-          borderRadius: '50%',
-          backgroundColor: isListening ? '#e74c3c' : '#2ecc71',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-        }}
+      <button 
+        onClick={toggleMicrophone}
+        className={`mic-button ${isRecording ? 'recording' : ''}`}
+        title={isRecording ? 'Parar gravação' : 'Iniciar gravação'}
       >
-        <span 
-          style={{
-            fontSize: '22px',
-            color: 'white'
-          }}
-        >
-          {isListening ? '🔴' : '🎙️'}
-        </span>
+        {renderIcon()}
+      </button>
+    );
+  };
+  
+  // useEffect para lidar com eventos adicionais de transcrição
+  useEffect(() => {
+    // Handler para procesamento de chunks
+    const handleChunkProcessing = (event) => {
+      if (event && event.detail) {
+        setProcessingChunk(true);
+        const { chunkNumber, duration } = event.detail;
+        console.log(`Processando chunk #${chunkNumber}, duração: ${Math.round(duration/1000)}s`);
+      }
+    };
+    
+    // Handler para quando um chunk é salvo
+    const handleTranscriptionSaved = (event) => {
+      if (event && event.detail) {
+        setProcessingChunk(false);
+        const { historyLength, text } = event.detail;
+        
+        setChunkStats(prev => ({
+          count: historyLength || prev.count + 1,
+          totalDuration: prev.totalDuration + (event.detail.duration || 0)
+        }));
+        
+        // Notificar usuário discretamente 
+        toast.success(`Transcrição contínua #${historyLength} salva`, { 
+          autoClose: 1500,
+          position: 'bottom-right'
+        });
+      }
+    };
+    
+    // Registrar event listeners
+    document.addEventListener('whisper:processingChunk', handleChunkProcessing);
+    document.addEventListener('whisper-processingChunk', handleChunkProcessing);
+    document.addEventListener('whisper:transcriptionSaved', handleTranscriptionSaved);
+    document.addEventListener('whisper-transcriptionSaved', handleTranscriptionSaved);
+    
+    // Limpar event listeners
+    return () => {
+      document.removeEventListener('whisper:processingChunk', handleChunkProcessing);
+      document.removeEventListener('whisper-processingChunk', handleChunkProcessing);
+      document.removeEventListener('whisper:transcriptionSaved', handleTranscriptionSaved);
+      document.removeEventListener('whisper-transcriptionSaved', handleTranscriptionSaved);
+    };
+  }, []);
+  
+  // Componente para mostrar status da transcrição contínua
+  const TranscriptionStatus = () => {
+    if (!isTranscribing) return null;
+    
+    return (
+      <div className="transcription-status">
+        <div className={`status-indicator ${processingChunk ? 'processing' : 'recording'}`}></div>
+        <div className="status-text">
+          {processingChunk 
+            ? 'Processando chunk de áudio...' 
+            : 'Gravando áudio...'}
+        </div>
+        {chunkStats.count > 0 && (
+          <div className="chunk-stats">
+            {chunkStats.count} chunk{chunkStats.count !== 1 ? 's' : ''} processado{chunkStats.count !== 1 ? 's' : ''}
+          </div>
+        )}
       </div>
     );
-  }, [isListening, startListening, stopListening, floating]);
-
+  };
+  
+  // Adicionar CSS para o status da transcrição
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .transcription-status {
+        position: absolute;
+        bottom: 150px;
+        left: 20px;
+        background: rgba(0, 0, 0, 0.6);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        z-index: 1000;
+      }
+      
+      .status-indicator {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 8px;
+      }
+      
+      .status-indicator.recording {
+        background: #ff4433;
+        animation: pulse 1.5s infinite;
+      }
+      
+      .status-indicator.processing {
+        background: #ffaa33;
+        animation: blink 1s infinite;
+      }
+      
+      .chunk-stats {
+        margin-left: 8px;
+        font-size: 10px;
+        opacity: 0.8;
+      }
+      
+      @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+      }
+      
+      @keyframes blink {
+        0% { opacity: 1; }
+        50% { opacity: 0.3; }
+        100% { opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+  
+  // ========== RENDER ==========
   return (
-    <div className="meeting-root">
-      <div className="fallback-container">
-        <div 
-          className={`video-area ${floating ? 'pip-mode' : ''}`} 
-          ref={jitsiContainerRef}
-        >
-          {!isJitsiLoaded && (
-            <div className="loading-indicator">
-              <span>Carregando sala de reunião...</span>
+    <div className="meeting-root daily-container" style={{ width: '100%', height: '100%' }}>
+      <VideoErrorBoundary onReset={initDailyRoom}>
+        <div className="video-container daily-container" style={{ 
+          width: '100%', 
+          height: '100%',
+          position: 'relative',
+          overflow: 'hidden',
+          backgroundColor: '#1a1a1a',
+          borderRadius: floating ? '8px' : '0'
+        }}>
+          {isLoading && (
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              color: 'white',
+              fontFamily: 'sans-serif'
+            }}>
+              <div>Preparando sala de videoconferência...</div>
             </div>
           )}
 
-          {document.pictureInPictureEnabled && !floating && isJitsiLoaded && isJitsiMounted && (
+          {error && (
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              color: 'white',
+              textAlign: 'center',
+              fontFamily: 'sans-serif'
+            }}>
+              <div>{error}</div>
+              <div style={{ fontSize: '12px', marginTop: '10px', opacity: 0.8 }}>
+                Usando domínio: teraconect.daily.co
+              </div>
             <button 
-              className="pip-button" 
+                onClick={initDailyRoom}
+                style={{
+                  marginTop: '20px',
+                  padding: '8px 16px',
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Tentar Novamente
+            </button>
+        </div>
+          )}
+          
+          {!isLoading && !error && sessionDetails && (
+            <DailyFrame 
+              roomUrl={sessionDetails.url} 
+              onLoad={handleIframeLoad}
+            />
+          )}
+          
+          {document.pictureInPictureEnabled && !floating && isVideoEnabled && (
+            <button 
               onClick={handlePipClick}
-              title="Modo Picture-in-Picture"
+          style={{
+                position: 'absolute',
+                top: '10px',
+                right: '10px',
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '5px 10px',
+            fontSize: '12px',
+                cursor: 'pointer',
+                zIndex: 10
+              }}
             >
-              <span>PiP</span>
+              PiP
             </button>
           )}
         </div>
-      </div>
-      <div className="wake-lock-fix" aria-hidden="true"></div>
-      <MicButton />
+      </VideoErrorBoundary>
       
-      {transcript && (
-        <div 
-          className="transcript-indicator"
-          style={{
-            position: 'fixed',
-            bottom: '20px',
-            left: '20px',
-            zIndex: 2147483646,
-            maxWidth: '80%',
-            backgroundColor: 'rgba(0,0,0,0.7)',
-            color: 'white',
-            padding: '8px 12px',
-            borderRadius: '8px',
-            fontSize: '12px',
-            pointerEvents: 'none'
-          }}
-        >
-          <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>Transcrição:</div>
-          <div>{transcript.length > 150 ? transcript.substring(transcript.length - 150) + '...' : transcript}</div>
+      <AIButtons />
+      
+      {/* Sempre renderizar o container de transcrição, mas controlar visibilidade com CSS */}
+      <div className={`transcript-container ${!transcriptText ? 'hidden' : ''}`}>
+        <div className="transcript-title">Transcrição em tempo real</div>
+        <div className="transcript-text">
+          {transcriptText || 'Aguardando transcrição...'}
         </div>
-      )}
+      </div>
       
       {/* Componente para exibir resultados da IA */}
       <AIResultsPanel />
+      
+      {/* Botão para reiniciar serviços de transcrição (apenas em desenvolvimento) */}
+      {process.env.NODE_ENV === 'development' && (
+        <button 
+          onClick={resetTranscriptionServices}
+          style={{
+            position: 'fixed',
+            bottom: '10px',
+            right: '10px',
+            backgroundColor: '#dc3545',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            padding: '8px 12px',
+            fontSize: '12px',
+            cursor: 'pointer',
+            zIndex: 9999
+          }}
+        >
+          Reset Transcription Services
+        </button>
+      )}
+      
+      <TranscriptionStatus />
     </div>
   );
 };

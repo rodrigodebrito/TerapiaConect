@@ -12,17 +12,51 @@ const aiService = {
    * @returns {Promise} Resposta da API
    */
   saveTranscript: async (sessionId, transcript, emotions = null) => {
-    try {
-      const response = await api.post('/ai/transcript', {
-        sessionId,
-        transcript,
-        emotions
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Erro ao salvar transcrição:', error);
-      throw error;
+    // Validação básica de entrada
+    if (!sessionId) {
+      console.error('aiService: sessionId é obrigatório para salvar transcrição');
+      throw new Error('ID da sessão é obrigatório');
     }
+    
+    if (!transcript) {
+      console.error('aiService: transcript é obrigatório para salvar transcrição');
+      throw new Error('Texto da transcrição é obrigatório');
+    }
+    
+    console.log(`aiService: Enviando transcrição para a sessão ${sessionId}`);
+    console.log(`aiService: Tamanho do texto: ${transcript.length} caracteres`);
+    
+    // Preparar payload
+    const payload = {
+      sessionId,
+      transcript,
+      emotions: emotions || null
+    };
+    
+    // Tentar até 3 vezes em caso de erro
+    let lastError = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        console.log(`aiService: Tentativa ${attempt} de salvar transcrição`);
+        const response = await api.post('/ai/transcript', payload);
+        console.log('aiService: Transcrição salva com sucesso');
+        return response.data;
+      } catch (error) {
+        console.error(`aiService: Erro na tentativa ${attempt}:`, error);
+        lastError = error;
+        
+        // Esperar um pouco antes da próxima tentativa
+        if (attempt < 3) {
+          const delay = attempt * 500; // 500ms, 1000ms
+          console.log(`aiService: Aguardando ${delay}ms antes da próxima tentativa`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    // Se chegou aqui, todas as tentativas falharam
+    console.error('aiService: Todas as tentativas de salvar transcrição falharam');
+    throw lastError;
   },
 
   /**

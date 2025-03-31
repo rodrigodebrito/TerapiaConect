@@ -159,14 +159,23 @@ function handleReportClick() {
 
 // Inicialização automática quando o documento estiver pronto
 document.addEventListener('DOMContentLoaded', () => {
-  // Criar estilos globais para garantir que os botões sejam visíveis
-  injectGlobalStyles();
+  console.log('DOMContentLoaded em jitsiToolsInjector.js - desativando injeção automática');
+  // A injeção automática foi desativada para evitar conflitos com o FallbackMeeting
+  // injectGlobalStyles();
 });
 
 /**
  * Adiciona estilos CSS globais para garantir visibilidade dos botões
+ * Função desativada para evitar conflitos - agora os estilos são inseridos
+ * diretamente via componentes React
  */
 function injectGlobalStyles() {
+  // Desativado para evitar conflitos com o FallbackMeeting
+  console.log('Tentativa de injeção de estilos via jitsiToolsInjector - desativada');
+  return;
+  
+  // Código original comentado abaixo
+  /*
   const styleId = 'ai-tools-global-styles';
   
   // Evitar duplicação
@@ -277,6 +286,7 @@ function injectGlobalStyles() {
   `;
   
   document.head.appendChild(styleElement);
+  */
 }
 
 export default {

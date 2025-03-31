@@ -2,78 +2,81 @@
  * Controlador para gerenciar videoconferências
  * 
  * Este controlador lida com a criação, configuração e gerenciamento
- * de sessões de videoconferência usando o serviço do Jitsi
+ * de sessões de videoconferência usando o serviço do Daily.co
  */
 
 const jitsiService = require('../services/jitsi.service');
+const dailyService = require('../services/daily.service');
 const prisma = require('../utils/prisma');
 
 /**
- * Controlador para gerenciar videoconferências com Jitsi
+ * Controlador para gerenciar videoconferências com Daily.co
  */
 const meetingController = {
   /**
-   * Cria uma reunião/sessão no Jitsi
+   * Cria uma reunião/sessão no Daily.co
    * @param {Request} req - Requisição Express
    * @param {Response} res - Resposta Express
    */
   createMeeting: async (req, res) => {
     try {
-      const { sessionId, title } = req.body;
-
-      if (!sessionId) {
-        return res.status(400).json({ message: 'ID da sessão é obrigatório' });
+      const { roomName, provider = 'jitsi' } = req.body;
+      
+      // Verificar se há um usuário logado (req.user é inserido pelo middleware de auth)
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ error: 'Usuário não autenticado' });
       }
-
-      // Buscar a sessão no banco de dados
-      const session = await prisma.session.findUnique({
-        where: { id: sessionId },
-        include: {
-          therapist: {
-            include: {
-              user: true
-            }
+      
+      // Gerar identificador único para a sessão se não fornecido
+      const sessionId = roomName || `session-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      
+      console.log(`Criando reunião. Provider: ${provider}, roomName: ${sessionId}`);
+      
+      let roomData = {};
+      let url = '';
+      
+      // Criar sala no provedor de videoconferência selecionado
+      if (provider === 'daily') {
+        // Usar o serviço Daily para criar a sala
+        const dailyRoom = await dailyService.validateAndGetRoom(sessionId);
+        url = dailyRoom.url;
+        roomData = {
+          dailyRoomName: dailyRoom.name,
+          dailyRoomUrl: dailyRoom.url
+        };
+        console.log('Sala Daily.co criada:', dailyRoom);
+      } else if (provider === 'dyte') {
+        // Código para o Dyte, se for necessário
+        // ...
+      } else {
+        // Jitsi (provider padrão)
+        url = `https://meet.jit.si/${sessionId}`;
+      }
+      
+      // Registrar a reunião no banco de dados
+      const meeting = await prisma.meeting.create({
+        data: {
+          sessionId,
+          status: 'active',
+          provider,
+          createdBy: {
+            connect: { id: req.user.id }
           },
-          client: {
-            include: {
-              user: true
-            }
-          }
+          ...roomData
         }
       });
-
-      if (!session) {
-        return res.status(404).json({ message: 'Sessão não encontrada' });
-      }
-
-      // Verificar se o usuário atual é o terapeuta ou cliente envolvido
-      const userId = req.user.id;
-      const isTherapist = session.therapist.userId === userId;
-      const isClient = session.client.userId === userId;
-
-      if (!isTherapist && !isClient) {
-        return res.status(403).json({ message: 'Não autorizado a criar reunião para esta sessão' });
-      }
-
-      // Criar a reunião no Jitsi
-      const meetingTitle = title || `Sessão: ${session.therapist.user.name} - ${new Date().toLocaleDateString()}`;
-      const jitsiResponse = await jitsiService.createMeeting(meetingTitle);
-
-      // Salvar o ID da reunião Jitsi na sessão
-      await prisma.$executeRawUnsafe(`
-        UPDATE "Session"
-        SET "dyteMeetingId" = '${jitsiResponse.data.id}',
-            "dyteRoomName" = '${jitsiResponse.data.room_name || ''}'
-        WHERE id = '${sessionId}'
-      `);
-
-      res.status(201).json({
-        message: 'Reunião criada com sucesso',
-        meetingDetails: jitsiResponse.data
+      
+      console.log(`Reunião criada, ID: ${meeting.id}, SessionID: ${sessionId}`);
+      
+      return res.status(201).json({
+        id: meeting.id,
+        sessionId,
+        url,
+        provider
       });
     } catch (error) {
       console.error('Erro ao criar reunião:', error);
-      res.status(500).json({ message: 'Erro ao criar reunião' });
+      return res.status(500).json({ error: 'Erro ao criar reunião: ' + error.message });
     }
   },
 
@@ -111,8 +114,23 @@ const meetingController = {
         return res.status(404).json({ message: 'Sessão não encontrada' });
       }
 
-      if (!session.dyteMeetingId) {
-        return res.status(400).json({ message: 'Reunião ainda não foi criada para esta sessão' });
+      // Verificar se existe uma reunião criada
+      if (!session.dyteMeetingId || !session.dyteRoomName) {
+        // Se não existir, criar uma nova reunião Daily.co
+        const roomName = `tc-${sessionId.substring(0, 8)}-${Date.now()}`;
+        const dailyRoom = await dailyService.createRoom(roomName, 2);
+        
+        // Atualizar a sessão com os dados da nova sala
+        await prisma.$executeRawUnsafe(`
+          UPDATE "Session"
+          SET "dyteMeetingId" = '${dailyRoom.name}',
+              "dyteRoomName" = '${dailyRoom.url}'
+          WHERE id = '${sessionId}'
+        `);
+        
+        // Atualizar os dados da sessão na memória
+        session.dyteMeetingId = dailyRoom.name;
+        session.dyteRoomName = dailyRoom.url;
       }
 
       // Verificar se o usuário atual é o terapeuta ou cliente envolvido
@@ -126,32 +144,33 @@ const meetingController = {
       }
 
       // Definir o papel com base em quem está entrando
-      const role = isTherapist ? 'moderator' : 'participant';
+      const role = isTherapist ? 'host' : 'participant';
       
-      // Adicionar o participante à reunião no Jitsi
-      const participantResponse = await jitsiService.addParticipant(
-        session.dyteMeetingId,
-        currentUser.name,
-        userId,
-        role
-      );
+      // Gerar um token para o participante (opcional, para acesso seguro)
+      const tokenResult = await dailyService.createMeetingToken(session.dyteMeetingId, {
+        userName: currentUser.name,
+        userId: userId,
+        isOwner: isTherapist,
+        startAudioOff: false,
+        startVideoOff: false
+      });
 
-      // Retornar informações para o frontend
+      // Para compatibilidade com o cliente existente, retornamos o mesmo formato
       res.status(200).json({
         message: 'Token de participante gerado com sucesso',
-        authToken: participantResponse.data.token,
+        authToken: tokenResult.token,
         meetingId: session.dyteMeetingId,
         roomName: session.dyteRoomName,
-        domain: process.env.JITSI_DOMAIN || 'meet.jit.si',
+        domain: 'terapiaconect.daily.co',
         // Informações sobre o usuário
         userName: currentUser.name,
         userId: userId,
         userRole: role,
-        isHost: participantResponse.data.isHost
+        isHost: isTherapist
       });
     } catch (error) {
       console.error('Erro ao entrar na reunião:', error);
-      res.status(500).json({ message: 'Erro ao entrar na reunião' });
+      res.status(500).json({ message: 'Erro ao entrar na reunião', error: error.message });
     }
   },
 
@@ -190,8 +209,8 @@ const meetingController = {
         return res.status(403).json({ message: 'Apenas o terapeuta pode encerrar a reunião' });
       }
 
-      // Encerrar a reunião no Jitsi
-      await jitsiService.endMeeting(session.dyteMeetingId);
+      // Encerrar a reunião no Daily.co
+      await dailyService.deleteRoom(session.dyteMeetingId);
 
       // Atualizar a sessão no banco de dados
       await prisma.$executeRawUnsafe(`
@@ -204,7 +223,7 @@ const meetingController = {
       res.status(200).json({ message: 'Reunião encerrada com sucesso' });
     } catch (error) {
       console.error('Erro ao encerrar reunião:', error);
-      res.status(500).json({ message: 'Erro ao encerrar reunião' });
+      res.status(500).json({ message: 'Erro ao encerrar reunião', error: error.message });
     }
   },
 
@@ -250,16 +269,20 @@ const meetingController = {
         });
       }
 
-      // Verificar o status da reunião no Jitsi
-      const meetingInfo = await jitsiService.getMeeting(session.dyteMeetingId);
-      
-      res.json({
-        active: meetingInfo.data.status === 'active',
-        meetingDetails: meetingInfo.data
+      // Verificar o status da reunião no Daily.co
+      const roomStatus = await dailyService.getRoomStatus(session.dyteMeetingId);
+
+      return res.json({
+        active: roomStatus.exists,
+        url: session.dyteRoomName,
+        roomName: session.dyteMeetingId,
+        created: roomStatus.created,
+        expires: roomStatus.expires,
+        message: roomStatus.exists ? 'Reunião ativa' : 'Reunião não existe ou expirou'
       });
     } catch (error) {
       console.error('Erro ao verificar status da reunião:', error);
-      res.status(500).json({ message: 'Erro ao verificar status da reunião' });
+      res.status(500).json({ message: 'Erro ao verificar status da reunião', error: error.message });
     }
   }
 };

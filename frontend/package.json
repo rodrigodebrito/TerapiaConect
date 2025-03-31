@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@daily-co/daily-js": "^0.77.0",
+    "@daily-co/daily-react": "^0.22.0",
     "@dytesdk/react-ui-kit": "^2.3.6",
     "@dytesdk/react-web-core": "^2.4.4",
     "@emotion/react": "^11.14.0",
@@ -32,6 +34,7 @@
     "axios": "^1.6.8",
     "bootstrap": "^5.3.3",
     "date-fns": "^4.1.0",
+    "lamejs": "^1.2.1",
     "moment": "^2.30.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

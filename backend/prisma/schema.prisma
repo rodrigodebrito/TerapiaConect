@@ -204,15 +204,15 @@ model TrainingMaterial {
   categories           String[]
   videoUrl             String?
   isVideoTranscription Boolean  @default(false)
-  documentPath         String?
-  documentName         String?
-  documentType         String?
   insights             String?
-  embedding            Json?
   status               String   @default("pending")
   userId               String
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+  documentName         String?
+  documentPath         String?
+  documentType         String?
+  embedding            Json?
 
   @@index([userId])
   @@index([categories])

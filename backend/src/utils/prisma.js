@@ -6,9 +6,14 @@
 
 const { PrismaClient } = require('@prisma/client');
 
-// Inicializa o cliente Prisma
+// Verificar configuração de debug do Prisma no .env
+const debugPrisma = process.env.DEBUG_PRISMA === 'true';
+
+// Inicializa o cliente Prisma com configurações de log baseadas no ambiente
 const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
+  log: debugPrisma || process.env.NODE_ENV === 'development' 
+    ? ['query', 'info', 'warn', 'error'] 
+    : ['error'],
 });
 
 // Função para testar a conexão com o banco de dados

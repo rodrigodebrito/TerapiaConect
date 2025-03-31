@@ -157,67 +157,6 @@ const SessionRoom = () => {
     }
   }, [session, isRoomMounted]);
 
-  // Efeito para garantir que os estilos globais para os botões de IA sejam injetados
-  useEffect(() => {
-    // Injetar os estilos globais para os botões de IA
-    const styleElement = document.createElement('style');
-    styleElement.id = 'ai-tools-global-styles';
-    styleElement.textContent = `
-      .ai-tools-container-direct {
-        position: fixed !important;
-        bottom: 100px !important;
-        left: 0 !important;
-        width: 100% !important;
-        height: auto !important;
-        display: flex !important;
-        justify-content: center !important;
-        align-items: center !important;
-        pointer-events: none !important;
-        z-index: 2147483647 !important;
-      }
-      
-      .ai-simple-toolbar {
-        display: flex !important;
-        gap: 10px !important;
-        background-color: rgba(0, 0, 0, 0.8) !important;
-        border-radius: 50px !important;
-        padding: 8px 16px !important;
-        backdrop-filter: blur(5px) !important;
-        -webkit-backdrop-filter: blur(5px) !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
-        pointer-events: all !important;
-      }
-      
-      .ai-simple-button {
-        background-color: #2a3e4c !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 50px !important;
-        padding: 8px 16px !important;
-        display: flex !important;
-        align-items: center !important;
-        gap: 8px !important;
-        cursor: pointer !important;
-        transition: all 0.2s ease !important;
-        font-size: 14px !important;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
-      }
-    `;
-    
-    // Adicionar ao head se ainda não existir
-    if (!document.getElementById('ai-tools-global-styles')) {
-      document.head.appendChild(styleElement);
-    }
-    
-    return () => {
-      // Remover estilos quando componente for desmontado
-      const existingStyle = document.getElementById('ai-tools-global-styles');
-      if (existingStyle) {
-        document.head.removeChild(existingStyle);
-      }
-    };
-  }, []);
-
   // Verificar se a sessão é virtual/emergência e adaptar a experiência
   const isVirtualSession = session?.isVirtual || session?.isEmergency || false;
   
@@ -248,11 +187,6 @@ const SessionRoom = () => {
               <p>Em caso de problemas técnicos, entre em contato por outros meios.</p>
             </div>
           </div>
-        </div>
-        <div className="virtual-controls">
-          <button className="exit-button" onClick={exitSession}>
-            Sair da Sessão
-          </button>
         </div>
       </div>
     );
@@ -293,14 +227,6 @@ const SessionRoom = () => {
             onMouseLeave={() => setCanDrag(false)}
           >
             {sessionId && isRoomMounted && renderMeeting()}
-            
-            {showControls && !isPipMode && (
-              <div className="video-controls">
-                <button className="exit-button" onClick={exitSession}>
-                  Sair da Sessão
-                </button>
-              </div>
-            )}
             
             {isPipMode && (
               <>

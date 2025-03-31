@@ -51,7 +51,7 @@ class AdvancedAnalysisService {
       Seja preciso e clínico na identificação dos temas, utilizando terminologia terapêutica apropriada.`;
       
       const completion = await openai.chat.completions.create({
-        model: "gpt-4-turbo",
+        model: "gpt-4o-mini",
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },
@@ -190,7 +190,7 @@ class AdvancedAnalysisService {
             Forneça uma análise detalhada deste tema específico, conectando-o com os conceitos dos materiais de treinamento.`;
             
             const completion = await openai.chat.completions.create({
-              model: "gpt-4-turbo",
+              model: "gpt-4o-mini",
               messages: [
                 { role: "system", content: systemPrompt },
                 { role: "user", content: userPrompt }
@@ -309,7 +309,7 @@ class AdvancedAnalysisService {
       
       // Gerar a análise estruturada
       const completion = await openai.chat.completions.create({
-        model: "gpt-4-turbo",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }

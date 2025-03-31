@@ -2,6 +2,7 @@ const OpenAI = require('openai');
 require('dotenv').config();
 const fs = require('fs');
 const logger = require('../../utils/logger');
+const tokenUsageService = require('./token-usage.service');
 
 // Configuração do cliente OpenAI
 const openai = new OpenAI({
@@ -79,7 +80,7 @@ const openAIService = {
     async analyzeText(text) {
         try {
             const response = await openai.chat.completions.create({
-                model: "gpt-4",
+                model: "gpt-4o-mini",
                 messages: [
                     {
                         role: "system",
@@ -90,9 +91,16 @@ const openAIService = {
                         content: text
                     }
                 ],
-                temperature: 0.7,
-                max_tokens: 500
+                temperature: 0.2,
+                max_tokens: 1500
             });
+
+            // Registrar uso de tokens
+            tokenUsageService.logTokenUsage(
+                "gpt-4o-mini", 
+                [{ role: "system", content: SYSTEM_PROMPTS.analysis }, { role: "user", content: text }],
+                response.choices[0].message.content
+            );
 
             return response.choices[0].message.content;
         } catch (error) {
@@ -109,7 +117,7 @@ const openAIService = {
     async generateSuggestions(context) {
         try {
             const response = await openai.chat.completions.create({
-                model: "gpt-4",
+                model: "gpt-4o-mini",
                 messages: [
                     {
                         role: "system",
@@ -139,7 +147,7 @@ const openAIService = {
     async generateReport(sessionContent) {
         try {
             const response = await openai.chat.completions.create({
-                model: "gpt-4",
+                model: "gpt-4o-mini",
                 messages: [
                     {
                         role: "system",
