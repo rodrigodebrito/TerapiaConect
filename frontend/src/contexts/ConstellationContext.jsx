@@ -193,10 +193,43 @@ export const ConstellationProvider = ({ children, isHost = true, sessionId = nul
     // }
   };
   
+  // Tomar controle de volta (apenas para o terapeuta/host)
+  const takeControl = () => {
+    if (isHost) {
+      setHasControl(true);
+      console.log('Terapeuta retomou o controle do campo');
+      
+      // Emit via socket
+      // if (socketRef.current) {
+      //   socketRef.current.emit('takeControl', 'therapist');
+      // }
+    }
+  };
+  
   // Salvar a configuração atual
   const saveConfiguration = () => {
     console.log('Configuração salva:', representatives);
+    
+    // Criar um objeto com os dados da constelação
+    const constellationData = {
+      sessionId,
+      timestamp: new Date().toISOString(),
+      representatives: representatives.map(rep => ({
+        id: rep.id,
+        name: rep.name,
+        position: rep.position,
+        color: rep.color,
+        type: rep.type
+      }))
+    };
+    
     // Implementar lógica para salvar no backend
+    // if (socketRef.current) {
+    //   socketRef.current.emit('saveConstellation', constellationData);
+    // }
+    
+    // Retornar os dados para uso externo
+    return constellationData;
   };
   
   // Iniciar a edição de um representante
@@ -246,47 +279,49 @@ export const ConstellationProvider = ({ children, isHost = true, sessionId = nul
     // }
   };
 
+  // Criar o contexto com os valores
+  const value = {
+    representatives,
+    selectedRepresentative,
+    representativeName,
+    selectedType,
+    selectedColor,
+    hasControl,
+    showDragHint,
+    editingId,
+    editName,
+    editColor,
+    isDraggingAny,
+    showNames,
+    
+    // Setters
+    setRepresentativeName,
+    setSelectedType,
+    setSelectedColor,
+    setShowNames,
+    setEditName,
+    setEditColor,
+    
+    // Ações
+    addRepresentative,
+    handleRepresentativeClick: handleRepresentativeSelect,
+    setRepresentativePosition,
+    setDraggingState,
+    transferControl,
+    takeControl,
+    saveConfiguration,
+    startEditing,
+    saveEditing,
+    cancelEditing,
+    removeRepresentative,
+    
+    // Constantes 
+    REPRESENTATIVE_COLORS,
+    REPRESENTATIVE_TYPES
+  };
+
   return (
-    <ConstellationContext.Provider value={{
-      representatives,
-      selectedRepresentative,
-      representativeName,
-      selectedType,
-      selectedColor,
-      hasControl,
-      isDraggingAny,
-      showDragHint,
-      editingId,
-      editName,
-      editColor,
-      showNames,
-      setRepresentatives,
-      setSelectedRepresentative,
-      setRepresentativeName,
-      setSelectedType,
-      setSelectedColor,
-      setHasControl,
-      setIsDraggingAny,
-      setShowDragHint,
-      setEditingId,
-      setEditName,
-      setEditColor,
-      setShowNames,
-      getColorForIndex,
-      addRepresentative,
-      handleRepresentativeSelect,
-      handleContextMenu,
-      setRepresentativePosition,
-      setDraggingState,
-      transferControl,
-      saveConfiguration,
-      startEditing,
-      saveEditing,
-      cancelEditing,
-      removeRepresentative,
-      REPRESENTATIVE_COLORS,
-      REPRESENTATIVE_TYPES
-    }}>
+    <ConstellationContext.Provider value={value}>
       {children}
     </ConstellationContext.Provider>
   );

@@ -69,16 +69,21 @@ useGLTF.preload(REPRESENTATIVE_TYPES.SUBJETIVO_LONGO.modelPath);
 useGLTF.preload(REPRESENTATIVE_TYPES.SUBJETIVO_CURTO.modelPath);
 
 // Componente para o campo de constelação
-const ConstellationField = ({ isHost = true, sessionId = null, fieldTexture = "/white-circle.png" }) => {
+const ConstellationField = ({ 
+  isHost = true, 
+  sessionId = null, 
+  fieldTexture = "/white-circle.png", 
+  onSave = null 
+}) => {
   return (
     <ConstellationProvider isHost={isHost} sessionId={sessionId}>
-      <ConstellationView fieldTexture={fieldTexture} />
+      <ConstellationView fieldTexture={fieldTexture} onSave={onSave} />
     </ConstellationProvider>
   );
 };
 
 // Componente de visualização que usa o ConstellationContext
-const ConstellationView = ({ fieldTexture }) => {
+const ConstellationView = ({ fieldTexture, onSave }) => {
   const { 
     representatives, 
     selectedRepresentative, 
@@ -109,8 +114,36 @@ const ConstellationView = ({ fieldTexture }) => {
     REPRESENTATIVE_TYPES,
     handleRepresentativeClick,
     setRepresentativePosition,
-    setDraggingState
+    setDraggingState,
+    takeControl
   } = useContext(ConstellationContext);
+
+  // Event listener para tecla de atalho para retomar controle
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Tecla 'C' para retomar o controle (Control Take)
+      if (e.key === 'c' && isHost) {
+        takeControl();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isHost, takeControl]);
+
+  // Função para salvar configuração que também chama o callback externo
+  const handleSaveConfiguration = useCallback(() => {
+    // Chamar a função saveConfiguration do contexto
+    const savedData = saveConfiguration();
+    
+    // Se foi fornecida uma função onSave via props, chamá-la com os dados salvos
+    if (onSave && typeof onSave === 'function') {
+      onSave(savedData);
+    }
+  }, [saveConfiguration, onSave]);
 
   return (
     <div className="constellation-field-container">
@@ -305,7 +338,7 @@ const ConstellationView = ({ fieldTexture }) => {
             </button>
             
             <button 
-              onClick={saveConfiguration}
+              onClick={handleSaveConfiguration}
               className="control-button"
             >
               Salvar

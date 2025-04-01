@@ -198,4 +198,130 @@
   .ai-simple-toolbar {
     padding: 8px;
   }
+}
+
+/* Estilos para o modo constellation */
+.meeting-root.with-constellation {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.video-container.pip-mode {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 300px;
+  height: 200px;
+  z-index: 1000;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  resize: both;
+  min-width: 200px;
+  min-height: 150px;
+  cursor: move;
+  transition: width 0.3s, height 0.3s;
+}
+
+.constellation-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #f5f5f5;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+}
+
+.constellation-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px;
+  background-color: #4A4A4A;
+}
+
+.close-constellation-button {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.close-constellation-button:hover {
+  background-color: #c82333;
+}
+
+.constellation-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Sobrescrever estilos do campo de constelação quando integrado */
+.with-constellation .constellation-field-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Estilo para o botão de constelação quando ativo */
+.ai-button.active {
+  background-color: #6c5ce7;
+}
+
+/* Estilo para o componente de status da transcrição */
+.transcription-status-container {
+  position: absolute;
+  bottom: 150px;
+  left: 20px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  z-index: 1000;
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.status-indicator.recording {
+  background: #ff4433;
+  animation: pulse 1.5s infinite;
+}
+
+.status-indicator.processing {
+  background: #ffaa33;
+  animation: blink 1s infinite;
+}
+
+.chunk-stats {
+  margin-left: 8px;
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+@keyframes blink {
+  0% { opacity: 1; }
+  50% { opacity: 0.3; }
+  100% { opacity: 1; }
 } 

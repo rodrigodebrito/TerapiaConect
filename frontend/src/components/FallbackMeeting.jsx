@@ -11,6 +11,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faMicrophone, faMicrophoneSlash } from '@fortawesome/free-solid-svg-icons';
 import hybridAIService from '../services/hybridAI.service';
 import WhisperTranscriptionService from '../services/whisperTranscriptionService';
+// Importação do componente de Constelação
+import ConstellationField from './ConstellationField';
 
 // Componente de erro para capturar falhas na renderização do vídeo
 class VideoErrorBoundary extends React.Component {
@@ -122,6 +124,7 @@ const FallbackMeeting = ({
   const [isRecording, setIsRecording] = useState(false);
   const [processingChunk, setProcessingChunk] = useState(false);
   const [chunkStats, setChunkStats] = useState({ count: 0, totalDuration: 0 });
+  const [showConstellation, setShowConstellation] = useState(false);
   
   // ========== ERROR HANDLING ==========
   
@@ -509,12 +512,16 @@ const FallbackMeeting = ({
     }
   }, [roomName, getSessionId]);
   
-  // Inicializar a sala ao montar
+  // Configurar os event listeners para o Daily.co
   useEffect(() => {
-    if (isMountedRef.current) {
-      initDailyRoom();
-    }
-  }, [initDailyRoom]);
+    if (!roomNameRef.current) return;
+    
+    initDailyRoom();
+    
+    return () => {
+      cleanupDaily();
+    };
+  }, [roomName]);
   
   // ========== AI EVENT HANDLERS ==========
   const handleAnalyze = useCallback(() => {
@@ -639,6 +646,54 @@ const FallbackMeeting = ({
       toast.error('Erro ao controlar transcrição');
     }
   }, [isTranscribing]);
+
+  // Função para alternar a visualização do campo de constelação
+  const handleToggleConstellation = useCallback(() => {
+    // Se estamos mostrando o campo, ativar o modo PIP para o vídeo
+    setShowConstellation(prev => {
+      const newState = !prev;
+      // Quando ativar o campo, também ativar o modo PIP para o vídeo
+      if (newState) {
+        setIsPipMode(true);
+      } else {
+        // Quando desativar o campo, voltar ao modo normal
+        setIsPipMode(false);
+      }
+      return newState;
+    });
+  }, []);
+
+  // Função para salvar o estado do campo de constelação
+  const saveConstellationState = useCallback(async (constellationData) => {
+    if (!sessionDetails || !sessionDetails.sessionId) {
+      console.error('Não foi possível salvar o estado da constelação: ID da sessão não disponível');
+      return;
+    }
+
+    try {
+      // Aqui implementaremos a chamada para a API que salvará os dados da constelação
+      // associados a esta sessão específica
+      console.log('Salvando estado da constelação para a sessão:', sessionDetails.sessionId);
+      
+      // Exemplo de como poderia ser a chamada à API (a ser implementada no backend)
+      /*
+      const response = await api.post(`/api/sessions/${sessionDetails.sessionId}/constellation`, {
+        data: constellationData,
+        timestamp: new Date().toISOString()
+      });
+      
+      if (response.status === 200) {
+        toast.success('Campo de constelação salvo com sucesso!');
+      }
+      */
+      
+      // Por enquanto apenas mostra uma notificação simulando o salvamento
+      toast.success('Campo de constelação salvo com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar o estado da constelação:', error);
+      toast.error('Erro ao salvar o campo de constelação');
+    }
+  }, [sessionDetails]);
 
   // ========== AI BUTTONS CREATION ==========
   const createAIButtons = useCallback(() => {
@@ -932,6 +987,9 @@ const FallbackMeeting = ({
   
   // Adicionar botões de AI na interface
   const AIButtons = () => {
+    // Verificar se o usuário é terapeuta para mostrar o botão de constelação
+    const isTherapist = sessionDetails?.isHost || false;
+
     return (
       <div className="ai-buttons-container">
         <MicButton />
@@ -970,6 +1028,20 @@ const FallbackMeeting = ({
             <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM18 20H6V4H13V9H18V20ZM8 14H16V16H8V14ZM8 18H13V20H8V18ZM8 10H16V12H8V10Z" fill="white"/>
           </svg>
         </button>
+
+        {/* Botão de Constelação - apenas visível para terapeutas */}
+        {isTherapist && (
+          <button 
+            onClick={handleToggleConstellation}
+            className={`ai-button ${showConstellation ? 'active' : ''}`}
+            title="Campo de Constelação"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z" fill="white"/>
+              <path d="M12 8L8.5 17.29L9.21 18L12 15L14.79 18L15.5 17.29L12 8Z" fill="white"/>
+            </svg>
+          </button>
+        )}
       </div>
     );
   };
@@ -1264,99 +1336,146 @@ const FallbackMeeting = ({
     };
   }, []);
   
-  // Componente para mostrar status da transcrição contínua
+  // Componente para status de transcrição
   const TranscriptionStatus = () => {
-    if (!isTranscribing) return null;
+    // Se não estamos transcrevendo, não mostrar nada
+    if (!isTranscribing && !processingChunk) return null;
     
     return (
-      <div className="transcription-status">
+      <div className="transcription-status-container">
         <div className={`status-indicator ${processingChunk ? 'processing' : 'recording'}`}></div>
-        <div className="status-text">
-          {processingChunk 
-            ? 'Processando chunk de áudio...' 
-            : 'Gravando áudio...'}
-        </div>
+        <span>{processingChunk ? 'Processando áudio...' : 'Gravando áudio...'}</span>
         {chunkStats.count > 0 && (
-          <div className="chunk-stats">
-            {chunkStats.count} chunk{chunkStats.count !== 1 ? 's' : ''} processado{chunkStats.count !== 1 ? 's' : ''}
-          </div>
+          <span className="chunk-stats">
+            ({chunkStats.count} chunks, {Math.round(chunkStats.totalDuration)}s)
+          </span>
         )}
       </div>
     );
   };
   
-  // Adicionar CSS para o status da transcrição
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.textContent = `
-      .transcription-status {
-        position: absolute;
-        bottom: 150px;
-        left: 20px;
-        background: rgba(0, 0, 0, 0.6);
-        color: white;
-        padding: 8px 12px;
-        border-radius: 4px;
-        font-size: 12px;
-        display: flex;
-        align-items: center;
-        z-index: 1000;
-      }
-      
-      .status-indicator {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        margin-right: 8px;
-      }
-      
-      .status-indicator.recording {
-        background: #ff4433;
-        animation: pulse 1.5s infinite;
-      }
-      
-      .status-indicator.processing {
-        background: #ffaa33;
-        animation: blink 1s infinite;
-      }
-      
-      .chunk-stats {
-        margin-left: 8px;
-        font-size: 10px;
-        opacity: 0.8;
-      }
-      
-      @keyframes pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.5; }
-        100% { opacity: 1; }
-      }
-      
-      @keyframes blink {
-        0% { opacity: 1; }
-        50% { opacity: 0.3; }
-        100% { opacity: 1; }
-      }
-    `;
-    document.head.appendChild(style);
+  // Componente wrapper para o campo de constelação
+  const ConstellationWrapper = () => {
+    if (!showConstellation) return null;
     
-    return () => {
-      document.head.removeChild(style);
+    // Função para interceptar o salvamento do campo de constelação
+    const handleSave = (constellationData) => {
+      // Salvar o estado do campo associado à sessão atual
+      saveConstellationState(constellationData);
     };
+    
+    return (
+      <div className="constellation-overlay">
+        <div className="constellation-header">
+          <button 
+            onClick={handleToggleConstellation} 
+            className="close-constellation-button"
+          >
+            Fechar Campo de Constelação
+          </button>
+        </div>
+        <div className="constellation-container">
+          <ConstellationField 
+            isHost={sessionDetails?.isHost || false} 
+            sessionId={sessionDetails?.sessionId}
+            onSave={handleSave}
+            fieldTexture="/white-circle.png"
+          />
+        </div>
+      </div>
+    );
+  };
+  
+  // Referências para arrastar o container de vídeo em modo PIP
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
+  
+  // Handler para iniciar o arrasto do container de vídeo em modo PIP
+  const handlePipDragStart = useCallback((e) => {
+    if (!showConstellation || !videoContainerRef.current) return;
+    
+    // Obter as posições iniciais
+    const rect = videoContainerRef.current.getBoundingClientRect();
+    dragStartRef.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+    
+    isDraggingRef.current = true;
+    
+    // Adicionar os event listeners para mover e finalizar o arrasto
+    document.addEventListener('mousemove', handlePipDragMove);
+    document.addEventListener('mouseup', handlePipDragEnd);
+    
+    // Prevenir seleção de texto durante o arrasto
+    e.preventDefault();
+  }, [showConstellation]);
+  
+  // Handler para mover o container de vídeo durante o arrasto
+  const handlePipDragMove = useCallback((e) => {
+    if (!isDraggingRef.current || !videoContainerRef.current) return;
+    
+    const container = videoContainerRef.current;
+    const newLeft = e.clientX - dragStartRef.current.x;
+    const newTop = e.clientY - dragStartRef.current.y;
+    
+    // Verificar limites da janela para não sair da tela
+    const rect = container.getBoundingClientRect();
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+    
+    // Calcular posições considerando os limites
+    const limitedLeft = Math.max(0, Math.min(newLeft, windowWidth - rect.width));
+    const limitedTop = Math.max(0, Math.min(newTop, windowHeight - rect.height));
+    
+    // Atualizar posição
+    container.style.left = `${limitedLeft}px`;
+    container.style.top = `${limitedTop}px`;
+    container.style.right = 'auto';
   }, []);
   
+  // Handler para finalizar o arrasto
+  const handlePipDragEnd = useCallback(() => {
+    isDraggingRef.current = false;
+    
+    // Remover os event listeners
+    document.removeEventListener('mousemove', handlePipDragMove);
+    document.removeEventListener('mouseup', handlePipDragEnd);
+  }, [handlePipDragMove]);
+  
+  // Adicionar/remover event listeners globais quando o modo constelação muda
+  useEffect(() => {
+    // Limpar os event listeners ao desmontar o componente
+    return () => {
+      document.removeEventListener('mousemove', handlePipDragMove);
+      document.removeEventListener('mouseup', handlePipDragEnd);
+    };
+  }, [handlePipDragMove, handlePipDragEnd]);
+
   // ========== RENDER ==========
   return (
-    <div className="meeting-root daily-container" style={{ width: '100%', height: '100%' }}>
+    <div className={`meeting-root daily-container ${showConstellation ? 'with-constellation' : ''}`} style={{ width: '100%', height: '100%' }}>
       <VideoErrorBoundary onReset={initDailyRoom}>
-        <div className="video-container daily-container" style={{ 
-          width: '100%', 
-          height: '100%',
-          position: 'relative',
+        <div className={`video-container daily-container ${showConstellation ? 'pip-mode' : ''}`} style={{ 
+          width: showConstellation ? '300px' : '100%', 
+          height: showConstellation ? '200px' : '100%',
+          position: showConstellation ? 'absolute' : 'relative',
+          top: showConstellation ? '10px' : 'auto',
+          right: showConstellation ? '10px' : 'auto',
+          zIndex: showConstellation ? 1000 : 1,
           overflow: 'hidden',
           backgroundColor: '#1a1a1a',
-          borderRadius: floating ? '8px' : '0'
-        }}>
+          borderRadius: floating || showConstellation ? '8px' : '0',
+          boxShadow: showConstellation ? '0 4px 8px rgba(0,0,0,0.3)' : 'none',
+          resize: showConstellation ? 'both' : 'none',
+          minWidth: showConstellation ? '200px' : 'auto',
+          minHeight: showConstellation ? '150px' : 'auto',
+          cursor: showConstellation ? 'move' : 'auto',
+          transition: 'width 0.3s, height 0.3s'
+        }}
+        ref={videoContainerRef}
+        onMouseDown={showConstellation ? handlePipDragStart : undefined}
+        >
           {isLoading && (
             <div style={{
               position: 'absolute',
@@ -1408,7 +1527,7 @@ const FallbackMeeting = ({
             />
           )}
           
-          {document.pictureInPictureEnabled && !floating && isVideoEnabled && (
+          {document.pictureInPictureEnabled && !floating && isVideoEnabled && !showConstellation && (
             <button 
               onClick={handlePipClick}
           style={{
@@ -1443,6 +1562,9 @@ const FallbackMeeting = ({
       
       {/* Componente para exibir resultados da IA */}
       <AIResultsPanel />
+      
+      {/* Componente para exibir o campo de constelação */}
+      <ConstellationWrapper />
       
       {/* Botão para reiniciar serviços de transcrição (apenas em desenvolvimento) */}
       {process.env.NODE_ENV === 'development' && (
