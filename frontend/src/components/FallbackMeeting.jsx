@@ -11,8 +11,10 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faMicrophone, faMicrophoneSlash } from '@fortawesome/free-solid-svg-icons';
 import hybridAIService from '../services/hybridAI.service';
 import WhisperTranscriptionService from '../services/whisperTranscriptionService';
-// Importação do componente de Constelação
-import ConstellationField from './ConstellationField';
+// Importação do componente de Constelação usando caminho completo
+import ConstellationFieldComponent from './ConstellationField/ConstellationFieldComponent';
+// Usando um alias para compatibilidade com o resto do código
+const ConstellationField = ConstellationFieldComponent;
 
 // Componente de erro para capturar falhas na renderização do vídeo
 class VideoErrorBoundary extends React.Component {
