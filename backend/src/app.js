@@ -16,6 +16,7 @@ const paymentRoutes = require('./routes/payment.route');
 const aiRoutes = require('./routes/ai.routes');
 const embedRoutes = require('./routes/embedding.route');
 const chatRoutes = require('./routes/chat.route');
+const insightRoutes = require('./routes/insight.routes');
 
 const app = express();
 
@@ -78,5 +79,6 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/embed', embedRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/insights', insightRoutes);
 
 // ... existing code ... 

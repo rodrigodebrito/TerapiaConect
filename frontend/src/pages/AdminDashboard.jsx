@@ -10,7 +10,7 @@ import {
 import { Add, Edit, Delete, ViewList, Refresh, CloudUpload, HourglassEmpty, CheckCircle, Error } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import * as trainingApi from '../api/training';
+import training from '../services/training';
 import { toast } from 'react-hot-toast';
 import api, { uploadApi } from '../api/api';
 import TranscriptionUploader from '../components/TranscriptionUploader';
@@ -117,11 +117,11 @@ const AdminDashboard = () => {
   const fetchMaterials = async () => {
     try {
       setLoading(true);
-      const data = await trainingApi.getAllMaterials();
-      setMaterials(data);
+      const materials = await training.getAllMaterials();
+      setMaterials(materials);
     } catch (error) {
       console.error('Erro ao buscar materiais:', error);
-      toast.error('Erro ao buscar materiais');
+      toast.error('Erro ao carregar materiais');
     } finally {
       setLoading(false);
     }
@@ -271,7 +271,7 @@ const AdminDashboard = () => {
     
     try {
       setLoading(true);
-      await trainingApi.deleteMaterial(id);
+      await training.deleteMaterial(id);
       toast.success('Material excluído com sucesso!');
       fetchMaterials();
     } catch (error) {
@@ -293,7 +293,7 @@ const AdminDashboard = () => {
     });
     
     try {
-      const result = await trainingApi.processMaterial(id);
+      const result = await training.processMaterial(id);
       
       // Fechar a notificação de carregamento
       toast.dismiss('processing-toast');
@@ -309,7 +309,7 @@ const AdminDashboard = () => {
         const checkInterval = setInterval(async () => {
           try {
             checkCount++;
-            const updatedMaterial = await trainingApi.getMaterialById(id);
+            const updatedMaterial = await training.getMaterialById(id);
             
             // Se o material já foi processado ou houve erro
             if (updatedMaterial.status === 'processed' || updatedMaterial.status === 'error') {
@@ -342,7 +342,7 @@ const AdminDashboard = () => {
       }
       
       // Para processamentos síncronos, continuar normalmente
-      const updatedMaterial = await trainingApi.getMaterialById(id);
+      const updatedMaterial = await training.getMaterialById(id);
       
       // Exibir os insights em um diálogo
       if (updatedMaterial && updatedMaterial.insights) {
@@ -379,15 +379,12 @@ const AdminDashboard = () => {
     try {
       setLoading(true);
       
-      // Buscar o material para exibir seus insights
-      const material = await trainingApi.getMaterialById(id);
+      // Buscar o material usando o serviço correto
+      const material = await training.getMaterialById(id);
       
       if (material && material.insights) {
-        // Abrir diálogo específico para insights
         setCurrentMaterial(material);
         setOpenInsightsDialog(true);
-        
-        // Mostrar mensagem de sucesso
         toast.success('Exibindo insights salvos');
       } else {
         toast.info('Este material ainda não possui insights. Tente processá-lo primeiro.');

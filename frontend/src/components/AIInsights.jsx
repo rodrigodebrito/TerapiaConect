@@ -18,7 +18,7 @@ const AIInsights = ({ sessionId, isTherapist }) => {
   const fetchInsights = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`/api/ai/insights/session/${sessionId}`, {
+      const response = await axios.get(`/api/insights/${sessionId}`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`
         }
@@ -42,7 +42,7 @@ const AIInsights = ({ sessionId, isTherapist }) => {
     
     try {
       setIsSubmitting(true);
-      const response = await axios.post(`/api/ai/insights/session/${sessionId}`, {
+      const response = await axios.post(`/api/insights/${sessionId}`, {
         prompt: promptInput
       }, {
         headers: {
