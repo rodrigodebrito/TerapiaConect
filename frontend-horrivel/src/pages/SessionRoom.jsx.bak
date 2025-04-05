@@ -1,0 +1,1472 @@
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
+import { getSessionById, markSessionCompleted } from '../services/sessionService';
+import FallbackMeeting from '../components/FallbackMeeting';
+import { AIProvider } from '../contexts/AIContext';
+import AIToolsContainer from '../components/AIComponents';
+import ConstellationField from '../components/ConstellationField/index.jsx';
+import ConstellationField3D from '../components/ConstellationField3D/index.jsx';
+import { setupConstellationSync } from '../constellation-sync';
+import '../styles/SessionRoom.css';
+
+// Referência global para controlar sessões e sincronizações
+const globalSyncStates = {
+  initializedSessions: new Set(),
+  activeFields: new Map()
+};
+
+// Sistema de debug para monitorar ciclo de vida de componentes
+const setupDebugMonitoring = () => {
+  console.log('🔍 Inicializando sistema de monitoramento de ciclo de vida');
+  
+  // Registrar momentos de montagem/desmontagem
+  window.componentLifecycles = window.componentLifecycles || {};
+  
+  // Registrar montagem de componente
+  window.registerMount = (componentId) => {
+    const timestamp = Date.now();
+    window.componentLifecycles[componentId] = {
+      mounted: timestamp,
+      mountCount: (window.componentLifecycles[componentId]?.mountCount || 0) + 1
+    };
+    console.log(`🟢 Componente ${componentId} montado [#${window.componentLifecycles[componentId].mountCount}] em ${new Date(timestamp).toISOString()}`);
+  };
+  
+  // Registrar desmontagem de componente
+  window.registerUnmount = (componentId) => {
+    const timestamp = Date.now();
+    if (window.componentLifecycles[componentId]) {
+      window.componentLifecycles[componentId].unmounted = timestamp;
+      window.componentLifecycles[componentId].lastLifetime = 
+        timestamp - window.componentLifecycles[componentId].mounted;
+      
+      console.log(`🔴 Componente ${componentId} desmontado após ${window.componentLifecycles[componentId].lastLifetime}ms`);
+    } else {
+      console.log(`🔴 Componente ${componentId} desmontado (sem registro de montagem)`);
+    }
+  };
+  
+  // Função para verificar estabilidade dos componentes
+  window.checkStability = () => {
+    console.log('📊 Verificando estabilidade dos componentes:');
+    Object.entries(window.componentLifecycles).forEach(([id, data]) => {
+      console.log(`${id}: ${data.mountCount} montagens, última duração: ${data.lastLifetime || 'ainda ativo'}ms`);
+    });
+  };
+  
+  // Configurar verificação periódica
+  window.stabilityInterval = setInterval(window.checkStability, 10000);
+  
+  // Adicionar ao objeto window para debugging via console
+  window.debugComponents = {
+    getLifecycles: () => window.componentLifecycles,
+    clearMonitoring: () => {
+      clearInterval(window.stabilityInterval);
+      window.componentLifecycles = {};
+      console.log('🧹 Monitoramento de componentes limpo');
+    }
+  };
+  
+  return () => {
+    // Função de limpeza
+    clearInterval(window.stabilityInterval);
+    window.componentLifecycles = {};
+  };
+};
+
+const SessionRoom = () => {
+  const { sessionId } = useParams();
+  const navigate = useNavigate();
+  
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isPipMode, setIsPipMode] = useState(false);
+  const [fullScreenElement, setFullScreenElement] = useState(null);
+  const [showControls, setShowControls] = useState(true);
+  const [videoPosition, setVideoPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [isRoomMounted, setIsRoomMounted] = useState(false);
+  const [showAITools, setShowAITools] = useState(true);
+  const [showConstellation, setShowConstellation] = useState(false);
+  const [userRole, setUserRole] = useState(null);
+  const [videoDimensions, setVideoDimensions] = useState({ width: 300, height: 200 });
+  const [isResizing, setIsResizing] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  
+  const aiContainerRef = useRef(null);
+  const videoContainerRef = useRef(null);
+  const constellationContainerRef = useRef(null);
+  const dailyCallRef = useRef(null);
+  
+  // Referência para o FallbackMeeting - evitar remontagens
+  const fallbackMeetingRef = useRef(null);
+  
+  // Referências para elementos importantes
+  const videoModeRef = useRef({
+    isPip: false,
+    lastChange: 0,
+    skipNextChange: false,
+    changedByVideo: false,
+    lastFloatingValue: false,
+    lastDomUpdate: 0
+  });
+  
+  // Dentro do componente, adicionar estado para armazenar a referência de sync
+  const [sync, setSync] = useState(null);
+  
+  // Criar referência para setupDailyMessageHandlers
+  const setupDailyMessageHandlersRef = useRef(null);
+
+  // Verificar se o container de AI está vazio após a montagem
+  useEffect(() => {
+    const checkIfAIContainerEmpty = () => {
+      if (aiContainerRef.current) {
+        const hasContent = aiContainerRef.current.querySelector('.persistent-ai-tools');
+        if (!hasContent || (hasContent && !hasContent.childNodes.length)) {
+          setShowAITools(false);
+        } else {
+          setShowAITools(true);
+        }
+      }
+    };
+    
+    // Verificar inicialmente
+    checkIfAIContainerEmpty();
+    
+    // Configurar um MutationObserver para monitorar mudanças no container
+    const observer = new MutationObserver(checkIfAIContainerEmpty);
+    
+    if (aiContainerRef.current) {
+      observer.observe(aiContainerRef.current, { 
+        childList: true, 
+        subtree: true 
+      });
+    }
+    
+    // Verificar novamente após alguns segundos para garantir
+    const timer = setTimeout(checkIfAIContainerEmpty, 3000);
+    
+    return () => {
+      observer.disconnect();
+      clearTimeout(timer);
+    };
+  }, [isRoomMounted]);
+
+  // Carregar dados da sessão
+  useEffect(() => {
+    const fetchSessionData = async () => {
+      try {
+        setLoading(true);
+        const data = await getSessionById(sessionId);
+        setSession(data);
+        
+        console.log('Dados da sessão carregados:', data);
+        
+        // Verificar o papel do usuário atual
+        const authToken = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+        if (authToken) {
+          try {
+            // Decodificar o token JWT para obter o ID do usuário
+            const decodedToken = JSON.parse(atob(authToken.split('.')[1]));
+            const currentUserId = decodedToken.id || decodedToken.userId;
+            
+            console.log('ID do usuário atual:', currentUserId);
+            console.log('ID do terapeuta da sessão:', data.therapistId);
+            
+            // Verificar a estrutura dos dados da sessão
+            if (data.therapist && data.therapist.userId) {
+              console.log('ID do usuário terapeuta na sessão:', data.therapist.userId);
+              
+              // Se o usuário atual é o terapeuta da sessão (pelo userId do objeto therapist)
+              if (data.therapist.userId === currentUserId) {
+                console.log('Usuário é o terapeuta que está oferecendo o serviço');
+                setUserRole('therapist-provider');
+              } else {
+                console.log('Usuário não é o terapeuta da sessão');
+                setUserRole('client');
+              }
+            } 
+            // Se não tiver a estrutura esperada, usar o therapistId direto
+            else if (data.therapistId) {
+              // Se o usuário atual é o terapeuta da sessão (pelo therapistId)
+              if (data.therapistId === currentUserId) {
+                console.log('Usuário é o terapeuta que está oferecendo o serviço (pelo therapistId)');
+                setUserRole('therapist-provider');
+              } else {
+                console.log('Usuário não é o terapeuta da sessão (pelo therapistId)');
+                setUserRole('client');
+              }
+            } 
+            // Último recurso, verificar o role no token
+            else {
+              const userRole = decodedToken.role;
+              console.log('Role no token:', userRole);
+              
+              if (userRole === 'THERAPIST' || userRole === 'therapist') {
+                console.log('Usuário é terapeuta (pelo token)');
+                setUserRole('therapist-provider');
+              } else {
+                console.log('Usuário não é terapeuta (pelo token)');
+                setUserRole('client');
+              }
+            }
+          } catch (error) {
+            console.error('Erro ao decodificar token:', error);
+            // Em caso de erro, definir como terapeuta para não bloquear funcionalidades
+            console.log('Erro ao verificar papel - assumindo terapeuta por segurança');
+            setUserRole('therapist-provider');
+          }
+        } else {
+          console.log('Nenhum token de autenticação encontrado');
+        }
+        
+        document.title = `${data.title || 'Sessão'} - TerapiaConect`;
+        setError(null);
+      } catch (err) {
+        console.error('Erro ao carregar sessão:', err);
+        // Em vez de apenas mostrar erro, criar uma sessão temporária para permitir a videochamada
+        setSession({
+          id: sessionId,
+          title: 'Sessão Terapêutica',
+          therapist: { name: 'Terapeuta' },
+          isTemporary: true
+        });
+        setError('Usando modo temporário de videochamada');
+        toast.warning('Usando modo temporário de videochamada');
+        
+        // Em caso de erro, permitir acesso às ferramentas por padrão
+        console.log('Erro ao carregar sessão - assumindo terapeuta por padrão');
+        setUserRole('therapist-provider');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (sessionId) {
+      console.log(`Sessão inicializada com ID: ${sessionId}`);
+      
+      // Expor ID da sessão em variável global para facilitar acesso em outros componentes
+      window.currentSessionData = {
+        id: sessionId,
+        timestamp: Date.now()
+      };
+      
+      // Armazenar também no sessionStorage
+      sessionStorage.setItem('currentSessionId', sessionId);
+      
+      fetchSessionData();
+    }
+    
+    // Limpar ao desmontar
+    return () => {
+      if (dailyCallRef.current) {
+        try {
+          dailyCallRef.current.destroy();
+        } catch (error) {
+          console.error('Erro ao destruir dailyCall:', error);
+        }
+      }
+      
+      // Limpar referência global
+      if (window.currentSessionData && window.currentSessionData.id === sessionId) {
+        delete window.currentSessionData;
+      }
+      
+      // Remover do sessionStorage se estiver saindo desta sessão
+      if (sessionStorage.getItem('currentSessionId') === sessionId) {
+        sessionStorage.removeItem('currentSessionId');
+      }
+    };
+  }, [sessionId]);
+
+  // Criar referência para a função sendUpdate no nível principal do componente
+  const sendUpdateRef = useRef(null);
+
+  // Função para lidar com mensagens recebidas sobre o estado do campo
+  const handleShowConstellation = useCallback((event) => {
+    console.log('📥 Recebeu evento show-constellation:', event);
+    
+    // Validar evento
+    if (!event || !event.detail || event.detail.sessionId !== sessionId) {
+      console.log('Evento inválido ou para outra sessão, ignorando');
+      return;
+    }
+    
+    // Verificar se vem de uma origem remota (outro participante)
+    const isRemoteEvent = event.detail.remote === true || event.detail.source === 'daily-api' || event.detail.source === 'sync-system';
+    
+    console.log('Processando evento de ativação do campo', { isRemoteEvent, source: event.detail.source });
+    
+    // Se já estiver ativo, apenas garantir visibilidade sem mudar estado
+    if (showConstellation) {
+      console.log('Campo já está ativo, garantindo visibilidade');
+      
+      // Garantir visibilidade após breve delay
+      setTimeout(() => {
+        // Garantir que o container de constelação seja visível
+        const constellationContainer = document.querySelector('.constellation-container');
+        if (constellationContainer) {
+          constellationContainer.style.display = 'block';
+          constellationContainer.style.opacity = '1';
+          constellationContainer.style.visibility = 'visible';
+        }
+        
+        // Garantir que o vídeo em modo PIP esteja visível
+        const pipContainer = document.querySelector('.video-container-pip');
+        if (pipContainer) {
+          pipContainer.style.display = 'block';
+          pipContainer.style.visibility = 'visible';
+          pipContainer.style.opacity = '1';
+          pipContainer.style.zIndex = '999';
+        }
+      }, 300);
+      
+      return;
+    }
+    
+    // Persistir estado no sessionStorage
+    sessionStorage.setItem(`constellation-active-${sessionId}`, 'true');
+    
+    // Adicionar classe imediatamente para feedback visual
+    const sessionRoomElement = document.querySelector('.session-room');
+    if (sessionRoomElement) {
+      sessionRoomElement.classList.add('with-constellation');
+    }
+    
+    // IMPORTANTE: Primeiro acionar o modo PIP no componente de vídeo VIA REF
+    // antes de qualquer mudança de estado React para evitar remontagem
+    if (fallbackMeetingRef.current && fallbackMeetingRef.current.setFloating) {
+      console.log('Definindo modo PIP via ref ANTES da mudança de estado para evento remoto');
+      fallbackMeetingRef.current.setFloating(true);
+    }
+    
+    // Verificar se devemos forçar modo PIP
+    const forcePIP = event.detail.forcePIP === true;
+    
+    // Disparar evento para evitar recriação do componente de vídeo (somente se não forçar PIP)
+    if (!forcePIP) {
+      window.dispatchEvent(new CustomEvent('pre-constellation-change', {
+        detail: {
+          sessionId,
+          timestamp: Date.now()
+        }
+      }));
+    }
+    
+    // Atualizar o estado
+    setShowConstellation(true);
+    
+    // Mostrar notificação apenas se solicitado por usuário remoto e não suprimido
+    if (isRemoteEvent && !event.detail.suppressNotification) {
+      toast.info('Campo de Constelação ativado por outro participante', {
+        position: "top-right",
+        autoClose: 3000
+      });
+    }
+    
+    // Acionar evento de ativação para o componente do campo
+    window.dispatchEvent(new CustomEvent('activate-constellation', {
+      detail: {
+        sessionId,
+        timestamp: Date.now(),
+        suppressNotification: true
+      }
+    }));
+  }, [sessionId, showConstellation, fallbackMeetingRef]);
+
+  // Setup constellation synchronization
+  useEffect(() => {
+    // Verificar se a inicialização já foi feita (para evitar inicialização múltipla)
+    const syncInitKey = `sync-initialized-${sessionId}`;
+    if (sessionStorage.getItem(syncInitKey) === 'true') {
+      console.log('Sistema de sincronização já inicializado para esta sessão');
+      return;
+    }
+    
+    console.log('Configurando sistema de sincronização para o campo de constelação');
+    
+    // Instalar logger global para eventos relacionados à constelação
+    const originalAddEventListener = window.addEventListener;
+    const originalDispatchEvent = window.dispatchEvent;
+    
+    // Interceptar addEventListener para logar
+    window.addEventListener = function(type, listener, options) {
+      // Verificar se é um evento relacionado à constelação
+      if (type.includes('constellation')) {
+        console.log(`[EventLogger] Registrando listener para evento: ${type}`);
+      }
+      
+      // Chamar a função original
+      return originalAddEventListener.call(this, type, listener, options);
+    };
+    
+    // Interceptar dispatchEvent para logar
+    window.dispatchEvent = function(event) {
+      // Verificar se é um evento relacionado à constelação
+      if (event.type && event.type.includes('constellation')) {
+        console.log(`[EventLogger] Disparando evento: ${event.type}`, 
+          event.detail ? {
+            sessionId: event.detail.sessionId,
+            timestamp: event.detail.timestamp,
+            show: event.detail.show
+          } : '(sem detalhes)');
+      }
+      
+      // Chamar a função original
+      return originalDispatchEvent.call(this, event);
+    };
+    
+    // Marcar como inicializado
+    sessionStorage.setItem(syncInitKey, 'true');
+    
+    // Limpar qualquer estado persistente anterior para evitar problemas
+    sessionStorage.removeItem('constellation-active');
+    
+    // Forçar o estado para desativado inicialmente
+    setShowConstellation(false);
+    
+    // Remover classe do DOM se existir (para garantir estado inicial limpo)
+    const sessionRoomElement = document.querySelector('.session-room');
+    if (sessionRoomElement) {
+      sessionRoomElement.classList.remove('with-constellation');
+    }
+    
+    // NOVO: Inicializar sistema de sincronização
+    const handleSyncStateChange = (newState, data) => {
+      console.log('Recebido evento de sincronização:', { newState, hasData: !!data });
+      
+      if (typeof newState === 'boolean') {
+        // Se o estado mudou para ativo, isso indica uma ativação remota
+        if (newState === true && !showConstellation) {
+          // Simular um evento de ativação
+          const showEvent = new CustomEvent('constellation-show', {
+            detail: {
+              sessionId,
+              show: true,
+              remote: true,
+              timestamp: Date.now(),
+              source: 'sync-system'
+            }
+          });
+          window.dispatchEvent(showEvent);
+        }
+      }
+    };
+    
+    const syncInstance = setupConstellationSync(sessionId, handleSyncStateChange);
+    setSync(syncInstance);
+    console.log('Sistema de sincronização inicializado com sucesso');
+    
+    // Configurar listeners para os eventos de ativação
+    window.addEventListener('constellation-show', handleShowConstellation);
+    
+    // Configurar listener para eventos da API de mensagens da Dailyco
+    const handleDailyAppMessage = (event) => {
+      try {
+        if (!event || !event.data) return;
+        
+        console.log('Mensagem recebida da API Daily.co:', event.data);
+        
+        // Verificar se é do tipo que nos interessa
+        if (event.data.type === 'constellation-show' || 
+            event.data.type === 'constellation-toggle') {
+          
+          // Validar se é para esta sessão
+          if (event.data.sessionId !== sessionId) {
+            console.log('Mensagem para outra sessão, ignorando');
+            return;
+          }
+          
+          console.log('Recebida mensagem de ativação via Daily.co:', event.data);
+          
+          // Verificar se devemos ativar o campo
+          if (event.data.show === true) {
+            // Simular um evento de ativação
+            const showEvent = new CustomEvent('constellation-show', {
+              detail: {
+                sessionId,
+                show: true,
+                remote: true,
+                timestamp: Date.now(),
+                source: 'daily-api',
+                suppressNotification: false
+              }
+            });
+            window.dispatchEvent(showEvent);
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao processar mensagem Daily.co:', error);
+      }
+    };
+    
+    // Registrar para receber mensagens do Daily.co quando o objeto estiver disponível
+    const checkForDailyAndRegister = () => {
+      if (dailyCallRef.current) {
+        try {
+          dailyCallRef.current.on('app-message', handleDailyAppMessage);
+          console.log('Registrado para receber mensagens Daily.co');
+        } catch (error) {
+          console.error('Erro ao registrar para mensagens Daily.co:', error);
+        }
+      } else {
+        console.log('Daily.co ainda não disponível, tentando novamente...');
+        setTimeout(checkForDailyAndRegister, 1000);
+      }
+    };
+    
+    // Iniciar verificação
+    checkForDailyAndRegister();
+    
+    // Limpeza ao desmontar
+    return () => {
+      // Restaurar as funções originais
+      window.addEventListener = originalAddEventListener;
+      window.dispatchEvent = originalDispatchEvent;
+      
+      // Desregistrar listeners
+      window.removeEventListener('constellation-show', handleShowConstellation);
+      
+      // Limpar o sistema de sincronização
+      if (sync && typeof sync.cleanup === 'function') {
+        sync.cleanup();
+      }
+      
+      // Remover marcação de inicialização
+      sessionStorage.removeItem(syncInitKey);
+      
+      // Limpar o estado de ativação
+      sessionStorage.removeItem('constellation-active');
+      
+      console.log('Sistema de sincronização para o campo de constelação foi desmontado');
+    };
+  }, [sessionId, handleShowConstellation, showConstellation]);
+
+  // Monitorar mudanças no estado de tela cheia
+  useEffect(() => {
+    const handleFullScreenChange = () => {
+      const isDocFullScreen = document.fullscreenElement !== null || 
+                              document.webkitFullscreenElement !== null ||
+                              document.msFullscreenElement !== null;
+      
+      setIsFullScreen(isDocFullScreen);
+      setFullScreenElement(document.fullscreenElement);
+      
+      // Mostrar controles por alguns segundos ao entrar/sair da tela cheia
+      setShowControls(true);
+      setTimeout(() => {
+        if (!isPipMode) {
+          setShowControls(false);
+        }
+      }, 3000);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullScreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullScreenChange);
+    document.addEventListener('msfullscreenchange', handleFullScreenChange);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullScreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullScreenChange);
+      document.removeEventListener('msfullscreenchange', handleFullScreenChange);
+    };
+  }, [isPipMode]);
+
+  // Função simplificada para iniciar o arrasto do vídeo
+  const handleMouseDown = (e) => {
+    // Interromper a propagação do evento para evitar que o clique afete outros elementos
+    e.stopPropagation();
+    e.preventDefault();
+    
+    // Se o clique foi no botão para fechar ou em outro controle, não iniciar arrasto
+    if (e.target.closest('.exit-constellation-btn') || e.target.closest('.video-resizer')) {
+      return;
+    }
+    
+    // Posição inicial do mouse
+    const startX = e.clientX;
+    const startY = e.clientY;
+    
+    // Posição inicial do elemento
+    const startLeft = videoPosition.x;
+    const startTop = videoPosition.y;
+    
+    // Sinalizar que estamos arrastando
+    setIsDragging(true);
+    
+    // Função para mover o elemento
+    function handleMove(moveEvent) {
+      // Calcular o deslocamento
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      // Atualizar a posição
+      setVideoPosition({
+        x: startLeft + deltaX,
+        y: startTop + deltaY
+      });
+    }
+    
+    // Função para encerrar o arrasto
+    function handleUp() {
+      // Remover os event listeners
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+      
+      // Sinalizar que não estamos mais arrastando
+      setIsDragging(false);
+    }
+    
+    // Adicionar event listeners para mover e soltar
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+  };
+
+  // Função simplificada para redimensionar o vídeo
+  const handleResizeStart = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    // Posição inicial do mouse
+    const startX = e.clientX;
+    const startY = e.clientY;
+    
+    // Dimensões iniciais
+    const startWidth = videoDimensions.width;
+    const startHeight = videoDimensions.height;
+    
+    // Sinalizar que estamos redimensionando
+    setIsResizing(true);
+    
+    // Função para redimensionar
+    function handleMove(moveEvent) {
+      // Calcular o deslocamento
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      // Atualizar as dimensões
+      setVideoDimensions({
+        width: Math.max(200, startWidth + deltaX),
+        height: Math.max(150, startHeight + deltaY)
+      });
+    }
+    
+    // Função para encerrar o redimensionamento
+    function handleUp() {
+      // Remover os event listeners
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+      
+      // Sinalizar que não estamos mais redimensionando
+      setIsResizing(false);
+    }
+    
+    // Adicionar event listeners para mover e soltar
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+  };
+
+  // Função para alternar o campo de constelação
+  const handleConstellationToggle = async () => {
+    console.log('🔄 Toggle Constellation - Estado atual:', showConstellation);
+    
+    // Verificar se já foi ativado recentemente para evitar múltiplos cliques
+    const lastActivationTime = parseInt(sessionStorage.getItem(`constellation-last-activation-${sessionId}`)) || 0;
+    const now = Date.now();
+    
+    if (now - lastActivationTime < 2000) {
+      console.log('Ignorando clique duplo em menos de 2 segundos');
+      return;
+    }
+    
+    // Salvar o novo timestamp de ativação
+    sessionStorage.setItem(`constellation-last-activation-${sessionId}`, now.toString());
+    
+    // Sempre forçar ativação - nunca desativar ao clicar no botão
+    const newState = true;
+    
+    // Verificar se o componente de vídeo existe e está montado antes de continuar
+    if (!fallbackMeetingRef.current) {
+      console.warn('Componente de vídeo não está disponível, aguardando montagem...');
+      toast.warning('Aguardando inicialização do vídeo antes de ativar o campo');
+      
+      // Tentar novamente em 2 segundos
+      setTimeout(() => handleConstellationToggle(), 2000);
+      return;
+    }
+    
+    console.log('Componente de vídeo está pronto, prosseguindo com ativação');
+    
+    // Mostrar mensagem de carregamento enquanto garantimos o Daily.co
+    toast.info('Preparando campo de constelação...', {
+      position: "top-right",
+      autoClose: 1500,
+      hideProgressBar: true
+    });
+    
+    // Usar o novo método para garantir que o objeto Daily.co esteja disponível
+    try {
+      // Tentar obter a API via vários métodos para garantir
+      // 1. Verificar se já temos o objeto via dailyCallRef
+      let dailyCall = dailyCallRef.current;
+      
+      // 2. Tentar obter do componente de vídeo
+      if (!dailyCall && fallbackMeetingRef.current.getDailyCall) {
+        dailyCall = fallbackMeetingRef.current.getDailyCall();
+      }
+      
+      // 3. Se ainda não tiver, usar o novo método para criar sob demanda
+      if (!dailyCall && fallbackMeetingRef.current.ensureDailyCall) {
+        console.log('Tentando criar objeto Daily.co sob demanda...');
+        try {
+          dailyCall = await fallbackMeetingRef.current.ensureDailyCall();
+        } catch (createError) {
+          console.error('Falha ao criar Daily.co sob demanda:', createError);
+        }
+      }
+      
+      // 4. Tentar objeto global como último recurso
+      if (!dailyCall && window._dailyAPI) {
+        console.log('Usando objeto global _dailyAPI como último recurso');
+        dailyCall = window._dailyAPI;
+      }
+      
+      if (!dailyCall) {
+        console.error('Objeto Daily.co não disponível por nenhum método. Continuando sem sincronização.');
+        
+        // Avisar o usuário, mas continuar com ativação local
+        toast.warning('Modo offline: outros participantes não verão o campo', {
+          position: "top-right",
+          autoClose: 3000
+        });
+      } else {
+        console.log('Objeto Daily.co disponível, enviando mensagem de sincronização...');
+        
+        // Construir mensagem de sincronização
+        const message = {
+          type: 'constellation-show',
+          show: newState,
+          sessionId,
+          timestamp: now,
+          clientId: `client_${Date.now()}`,
+          forceUpdate: true,
+          initiator: 'user',
+          source: 'user-action'
+        };
+        
+        // Tentar enviar mensagem
+        try {
+          // Usar diretamente a API do Daily.co para enviar a mensagem
+          dailyCall.sendAppMessage(message, '*');
+          console.log('Mensagem de ativação enviada via Daily.co para todos os participantes');
+          
+          // Também disparar evento interno para outros subsistemas
+          window.dispatchEvent(new CustomEvent('constellation-sync-event', { 
+            detail: {
+              ...message,
+              localSync: true
+            }
+          }));
+        } catch (syncError) {
+          console.error('Erro ao enviar mensagem de sincronização:', syncError);
+          toast.error('Erro ao sincronizar: outros participantes podem não ver o campo', {
+            position: "top-right",
+            autoClose: 3000
+          });
+        }
+      }
+      
+      // IMPORTANTE: Primeiro acionar o modo PIP no componente de vídeo VIA REF
+      // antes de qualquer mudança de estado React para evitar remontagem
+      if (fallbackMeetingRef.current && fallbackMeetingRef.current.setFloating) {
+        console.log('Definindo modo PIP via ref ANTES da mudança de estado');
+        fallbackMeetingRef.current.setFloating(true);
+      }
+      
+      // Adicionar classe imediatamente para feedback visual
+      const sessionRoomElement = document.querySelector('.session-room');
+      if (sessionRoomElement) {
+        sessionRoomElement.classList.add('with-constellation');
+      }
+      
+      // Mostrar notificação de sucesso
+      toast.success('Campo de Constelação ativado!', {
+        position: "top-right",
+        autoClose: 2000,
+        hideProgressBar: false
+      });
+      
+      // Persistir estado no sessionStorage
+      sessionStorage.setItem(`constellation-active-${sessionId}`, 'true');
+      
+      // Forçar visibilidade do campo e do vídeo PIP após um breve delay
+      setTimeout(() => {
+        // Garantir que o container de constelação seja visível
+        const constellationContainer = document.querySelector('.constellation-container');
+        if (constellationContainer) {
+          constellationContainer.style.display = 'block';
+          constellationContainer.style.opacity = '1';
+          constellationContainer.style.visibility = 'visible';
+        }
+        
+        // Garantir que o vídeo em modo PIP esteja visível
+        const pipContainer = document.querySelector('.video-container-pip');
+        if (pipContainer) {
+          pipContainer.style.display = 'block';
+          pipContainer.style.visibility = 'visible';
+          pipContainer.style.opacity = '1';
+          pipContainer.style.zIndex = '9999';
+        }
+        
+        console.log('Forçando visibilidade dos elementos após ativação');
+      }, 300);
+      
+      // Apenas DEPOIS de configurar o modo PIP no componente, atualizar o estado React
+      console.log('Atualizando estado React APÓS configuração do modo PIP');
+      setShowConstellation(newState);
+      
+      // Disparar eventos personalizados
+      console.log('Disparando eventos de ativação');
+      window.dispatchEvent(new CustomEvent('activate-constellation', {
+        detail: {
+          sessionId,
+          timestamp: Date.now(),
+          suppressNotification: true  // Evitar notificação duplicada
+        }
+      }));
+      
+      // Forçar sincronização com outros clientes usando sistema dedicado de sync
+      if (typeof sync === 'object' && typeof sync.forceSyncNow === 'function') {
+        try {
+          sync.forceSyncNow(true, null, dailyCall);
+          console.log('Solicitação de forceSync enviada via sistema dedicado');
+        } catch (error) {
+          console.error('Erro ao forçar sincronização via sistema dedicado:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao ativar campo de constelação:', error);
+      
+      // Ativar localmente mesmo com erro
+      setShowConstellation(true);
+      
+      // Mostrar erro, mas não bloquear a experiência
+      toast.error('Erro na sincronização. O campo foi ativado apenas para você.', {
+        position: "top-right",
+        autoClose: 4000
+      });
+    }
+  };
+
+  // Alternar o modo PIP
+  const handlePipModeChange = useCallback((enabled) => {
+    console.log(`Modo PIP ${enabled ? 'ativado' : 'desativado'} pela videoconferência`);
+    
+    // Marcar que esta alteração foi iniciada pelo componente de vídeo
+    videoModeRef.current.changedByVideo = true;
+    videoModeRef.current.isPip = enabled;
+    
+    // Se o campo de constelação estiver ativo, manter ativo
+    // Apenas atualizamos o modo de exibição do vídeo sem alterar o estado
+    if (showConstellation && !enabled) {
+      console.log('Mantendo campo de constelação ativo, apenas ajustando vídeo');
+      
+      // Atualizar modos de exibição diretamente no DOM sem re-renderizar
+      const sessionRoomElement = document.querySelector('.session-room');
+      if (sessionRoomElement) {
+        if (enabled) {
+          sessionRoomElement.classList.add('video-pip-mode');
+        } else {
+          sessionRoomElement.classList.remove('video-pip-mode');
+        }
+      }
+    } else if (!showConstellation && enabled) {
+      // Comportamento normal quando o campo não está ativo e estamos ativando o PIP
+      // Atualizar o estado (isso renderiza o componente)
+      setShowConstellation(true);
+    } else if (showConstellation && enabled) {
+      // Já está no modo que queremos, não fazer nada
+      console.log('Já estamos no modo PIP, ignorando evento');
+    } else if (!showConstellation && !enabled) {
+      // Já está no modo que queremos, não fazer nada
+      console.log('Já estamos no modo normal, ignorando evento');
+    }
+    
+    // Resetar o flag após um pequeno delay
+    setTimeout(() => {
+      videoModeRef.current.changedByVideo = false;
+    }, 200);
+  }, [showConstellation]);
+
+  // Definir a função setupDailyMessageHandlers
+  const setupDailyMessageHandlers = useCallback((dailyCallObj, clientId) => {
+    if (!dailyCallObj) {
+      console.error('Objeto Daily.co inválido passado para setupDailyMessageHandlers');
+      return;
+    }
+
+    try {
+      console.log('Configurando listeners para mensagens...');
+      
+      // Remover qualquer listener existente para evitar duplicação
+      try {
+        dailyCallObj.off('app-message');
+        console.log('Removidos listeners anteriores');
+      } catch (cleanupErr) {
+        console.warn('Erro ao limpar listeners anteriores:', cleanupErr);
+      }
+      
+      // Configurar novo listener para todas as mensagens do Daily.co
+      dailyCallObj.on('app-message', (evt) => {
+        const message = evt.data;
+        
+        // Log detalhado da mensagem recebida
+        console.log('📬 Mensagem recebida via Daily.co:', {
+          type: message?.type,
+          sessionId: message?.sessionId,
+          mySessionId: sessionId,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Processar mensagens relacionadas à constelação
+        if (message && (
+            message.type === 'constellation-show' || 
+            message.type === 'constellation-toggle' ||
+            message.type === 'activate-constellation'
+        )) {
+          console.log('Mensagem de ativação de constelação recebida:', message);
+          
+          // Evitar processamento de mensagens antigas
+          const msgTime = message.timestamp || Date.now();
+          const now = Date.now();
+          if (now - msgTime > 10000) {
+            console.log('Ignorando mensagem muito antiga (> 10s)');
+            return;
+          }
+          
+          // Verificar se a mensagem se aplica a esta sessão
+          if (message.sessionId && message.sessionId !== sessionId) {
+            console.log('Mensagem para outra sessão, ignorando');
+            return;
+          }
+          
+          // Se o campo de constelação deve ser ativado
+          if (message.show === true || message.type === 'activate-constellation') {
+            console.log('Mensagem indica ativação do campo - disparando evento interno');
+            
+            // Criar evento interno para ativar o campo
+            window.dispatchEvent(new CustomEvent('constellation-show', {
+              detail: {
+                sessionId,
+                show: true,
+                remote: true,
+                timestamp: Date.now(),
+                source: 'daily-message',
+                suppressNotification: false,
+                originMessage: message
+              }
+            }));
+            
+            // Também ativar diretamente o campo via componente
+            window.dispatchEvent(new CustomEvent('activate-constellation', {
+              detail: {
+                sessionId,
+                timestamp: Date.now(),
+                source: 'daily-message',
+                suppressNotification: false
+              }
+            }));
+            
+            // Notificar o usuário via toast
+            if (!message.suppressNotification) {
+              toast.info('Campo de Constelação ativado por outro participante', {
+                position: "top-right",
+                autoClose: 3000
+              });
+            }
+          } else if (message && message.type === 'constellation-update') {
+            // Processar atualizações de posição/rotação dos representantes
+            console.log('Recebida atualização de posição/estado para o campo:', message);
+            
+            // Disparar evento para componentes que precisam processar esta atualização
+            window.dispatchEvent(new CustomEvent('constellation-field-update', {
+              detail: {
+                ...message,
+                timestamp: Date.now(),
+                source: 'daily-message'
+              }
+            }));
+          } else if (message && message.type === 'client-joined') {
+            // Novo cliente entrou na sala
+            console.log('Novo cliente entrou na sala:', message.clientId);
+            
+            // Se este cliente já tem o campo ativo, notificar o novo participante
+            if (showConstellation) {
+              console.log('Notificando novo participante que o campo já está ativo...');
+              
+              setTimeout(() => {
+                try {
+                  dailyCallObj.sendAppMessage({
+                    type: 'constellation-show',
+                    show: true,
+                    sessionId,
+                    timestamp: Date.now(),
+                    clientId,
+                    forceUpdate: true,
+                    source: 'existing-client'
+                  }, '*');
+                  
+                  console.log('Notificação enviada para o novo participante');
+                } catch (error) {
+                  console.error('Erro ao notificar novo participante:', error);
+                }
+              }, 2000); // Atraso para garantir que o cliente esteja pronto
+            }
+          }
+        });
+        
+        console.log('✅ Listener para mensagens Daily.co configurado com sucesso');
+        
+        // Enviar mensagem inicial para notificar presença após um breve delay
+        // para garantir que a conexão está estável
+        setTimeout(() => {
+          try {
+            console.log('Enviando mensagem inicial de presença...');
+            
+            dailyCallObj.sendAppMessage({
+              type: 'client-joined',
+              sessionId,
+              timestamp: Date.now(),
+              clientId
+            }, '*');
+            
+            console.log('Mensagem de presença enviada com sucesso');
+            
+            // Se o campo já estiver ativo, enviar estado para sincronizar
+            if (showConstellation) {
+              console.log('Campo já ativo neste cliente, notificando outros participantes...');
+              
+              dailyCallObj.sendAppMessage({
+                type: 'constellation-show',
+                show: true,
+                sessionId,
+                timestamp: Date.now(),
+                clientId,
+                forceUpdate: true
+              }, '*');
+              
+              console.log('Mensagem de sincronização enviada com sucesso');
+            }
+          } catch (error) {
+            console.error('Erro ao enviar mensagem inicial:', error);
+          }
+        }, 1500);
+    } catch (err) {
+      console.error('❌ Erro ao configurar listener para app-messages:', err);
+    }
+  }, [sessionId, showConstellation]);
+
+  // Armazenar a função no ref para evitar problemas de dependência circular
+  useEffect(() => {
+    setupDailyMessageHandlersRef.current = setupDailyMessageHandlers;
+  }, [setupDailyMessageHandlers]);
+
+  // Modificar a função handleDailyReference para aguardar o estado correto da conexão antes de iniciar sincronização
+  const handleDailyReference = useCallback((dailyCallObj) => {
+    if (dailyCallObj) {
+      console.log('🔄 Recebida referência do Daily.co API object');
+      
+      // Armazenar a referência no ref global para acesso em outros lugares
+      dailyCallRef.current = dailyCallObj;
+      
+      // Informações desta instância
+      const CLIENT_ID = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.log(`ID deste cliente: ${CLIENT_ID}`);
+      
+      // Verificar se o objeto API tem os métodos esperados
+      if (typeof dailyCallObj.on !== 'function' || typeof dailyCallObj.sendAppMessage !== 'function') {
+        console.error('Objeto Daily.co não tem os métodos esperados:', { 
+          hasOn: typeof dailyCallObj.on === 'function',
+          hasSendAppMessage: typeof dailyCallObj.sendAppMessage === 'function'
+        });
+        return;
+      }
+      
+      // NOVA VERIFICAÇÃO: Verificar o estado atual da conexão
+      const meetingState = dailyCallObj.meetingState();
+      console.log('Estado atual da conexão Daily.co:', meetingState);
+      
+      // Configurar um listener para aguardar conexão completa se ainda não estiver
+      if (meetingState !== 'joined-meeting') {
+        console.log('Aguardando conexão completa antes de configurar sincronização...');
+        
+        const handleMeetingJoined = () => {
+          console.log('🟢 Participante conectado à sala - iniciando sincronização');
+          
+          // Usar a função via ref para evitar problemas de dependência circular
+          if (setupDailyMessageHandlersRef.current) {
+            setupDailyMessageHandlersRef.current(dailyCallObj, CLIENT_ID);
+          } else {
+            console.error('setupDailyMessageHandlers não está disponível!');
+          }
+          
+          // Remover este listener após uso
+          dailyCallObj.off('joined-meeting', handleMeetingJoined);
+        };
+        
+        // Configurar listener para estado de conexão
+        dailyCallObj.on('joined-meeting', handleMeetingJoined);
+      } else {
+        // Já está conectado, configurar imediatamente
+        console.log('🟢 Conexão já estabelecida - iniciando sincronização imediatamente');
+        
+        // Usar a função via ref para evitar problemas de dependência circular
+        if (setupDailyMessageHandlersRef.current) {
+          setupDailyMessageHandlersRef.current(dailyCallObj, CLIENT_ID);
+        } else {
+          console.error('setupDailyMessageHandlers não está disponível!');
+        }
+      }
+    } else {
+      console.warn('Recebida referência nula do Daily.co API object');
+    }
+  }, [sessionId]);
+
+  // Montar o componente apenas uma vez
+  useEffect(() => {
+    if (session && !isRoomMounted) {
+      // Delay para garantir estabilidade antes de montar o componente
+      const timer = setTimeout(() => {
+        setIsRoomMounted(true);
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [session, isRoomMounted]);
+
+  // Toggle fullscreen for constellation field
+  const toggleFullScreen = () => {
+    if (!constellationContainerRef.current) return;
+    
+    if (!isFullScreen) {
+      if (constellationContainerRef.current.requestFullscreen) {
+        constellationContainerRef.current.requestFullscreen();
+      } else if (constellationContainerRef.current.webkitRequestFullscreen) {
+        constellationContainerRef.current.webkitRequestFullscreen();
+      } else if (constellationContainerRef.current.msRequestFullscreen) {
+        constellationContainerRef.current.msRequestFullscreen();
+      }
+      setIsFullScreen(true);
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      }
+      setIsFullScreen(false);
+    }
+  };
+
+  // Adicionar efeito para garantir visibilidade do campo e do vídeo quando ativo
+  useEffect(() => {
+    if (showConstellation) {
+      // Função para garantir visibilidade
+      const ensureVisibility = () => {
+        // Garantir que o campo de constelação seja visível
+        const constellationContainer = document.querySelector('.constellation-container');
+        if (constellationContainer) {
+          constellationContainer.style.display = 'block';
+          constellationContainer.style.visibility = 'visible';
+          constellationContainer.style.opacity = '1';
+          constellationContainer.style.zIndex = '1';
+        }
+        
+        // Garantir que o vídeo em PIP esteja visível
+        const videoContainer = document.querySelector('.video-container-pip');
+        if (videoContainer) {
+          videoContainer.style.display = 'block';
+          videoContainer.style.visibility = 'visible';
+          videoContainer.style.zIndex = '9999';
+          videoContainer.style.position = 'fixed';
+          videoContainer.style.right = '20px';
+          videoContainer.style.top = '20px';
+          videoContainer.style.width = '300px';
+          videoContainer.style.height = '200px';
+        }
+        
+        // Garantir que o container principal tenha a classe correta
+        const sessionRoom = document.querySelector('.session-room');
+        if (sessionRoom && !sessionRoom.classList.contains('with-constellation')) {
+          sessionRoom.classList.add('with-constellation');
+        }
+      };
+      
+      // Chamar imediatamente
+      ensureVisibility();
+      
+      // E também depois de um curto delay para garantir após renderização
+      const timer1 = setTimeout(ensureVisibility, 500);
+      const timer2 = setTimeout(ensureVisibility, 1000);
+      
+      // Configurar um intervalo para verificar periodicamente
+      const interval = setInterval(ensureVisibility, 2000);
+      
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        clearInterval(interval);
+      };
+    }
+  }, [showConstellation]);
+
+  // Sair da sessão
+  const exitSession = async () => {
+    try {
+      // Atualizar status da sessão para concluída
+      if (session && session.status === 'em_andamento') {
+        await markSessionCompleted(sessionId);
+      }
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Erro ao sair da sessão:', error);
+      toast.error('Erro ao finalizar a sessão');
+      navigate('/dashboard');
+    }
+  };
+
+  // Verificar se a sessão é virtual/emergência e adaptar a experiência
+  const isVirtualSession = session?.isVirtual || session?.isEmergency || false;
+  
+  useEffect(() => {
+    if (isVirtualSession) {
+      // Log para depuração
+      console.log('Sessão virtual detectada:', session);
+      
+      // Podemos configurar comportamentos específicos para sessão virtual
+      toast.info('Você está em uma sala de sessão temporária. Algumas funcionalidades podem ser limitadas.');
+      
+      // Podemos simular carregamento mais rápido
+      if (loading) {
+        setLoading(false);
+      }
+    }
+  }, [isVirtualSession, session, loading]);
+  
+  // Componente de sessão virtual para quando não temos dados reais
+  const VirtualSessionFallback = () => {
+    return (
+      <div className="virtual-session-container">
+        <div className="virtual-video-container">
+          <div className="virtual-video-placeholder">
+            <div className="virtual-video-message">
+              <h3>Sala de Sessão Temporária</h3>
+              <p>Esta é uma sala de sessão temporária onde você pode se conectar com o terapeuta.</p>
+              <p>Em caso de problemas técnicos, entre em contato por outros meios.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Adicionar listener para o evento que ocorre antes de ativar o campo
+  useEffect(() => {
+    const handlePreConstellationChange = () => {
+      console.log('Evento pre-constellation-change detectado, evitando mudança de modo de vídeo');
+      // Marcar para não mudar o modo de vídeo quando o estado de showConstellation mudar
+      videoModeRef.current.skipNextChange = true;
+    };
+    
+    document.addEventListener('pre-constellation-change', handlePreConstellationChange);
+    
+    return () => {
+      document.removeEventListener('pre-constellation-change', handlePreConstellationChange);
+    };
+  }, []);
+
+  // Memoizar o componente FallbackMeeting para evitar recriação
+  const MemoizedFallbackMeeting = useMemo(() => {
+    console.log('Criando instância memorizada do FallbackMeeting para sessionId:', sessionId);
+    
+    if (!sessionId) return null;
+    
+    // Remover TODAS as dependências que possam mudar durante a vida do componente
+    // Criar uma instância totalmente estável que será controlada apenas via ref
+    
+    return (
+      <FallbackMeeting
+        roomName={sessionId}
+        userName={session?.therapist?.name || session?.client?.name || 'Usuário'}
+        floating={false} // Valor inicial que será atualizado via ref
+        onPipModeChange={handlePipModeChange}
+        onDailyReference={handleDailyReference}
+        // Chave FIXA para garantir que o componente NUNCA seja remontado
+        key="meeting-stable-instance"
+        ref={fallbackMeetingRef}
+      />
+    );
+  // Remover TODAS as dependências para evitar recriação em qualquer circunstância
+  }, []);
+
+  // Modificador para forçar uso da mesma instância do componente de vídeo
+  useEffect(() => {
+    // Atualizar manual da prop floating quando showConstellation mudar
+    if (fallbackMeetingRef.current && fallbackMeetingRef.current.setFloating) {
+      console.log(`Atualizando manualmente a prop floating para: ${showConstellation}`);
+      fallbackMeetingRef.current.setFloating(showConstellation);
+    }
+  }, [showConstellation]);
+  
+  // Chamada no useEffect principal do componente
+  useEffect(() => {
+    // Configurar sistema de debug para monitoramento de componentes
+    const cleanupDebug = setupDebugMonitoring();
+    
+    // Limpar ao desmontar
+    return () => {
+      cleanupDebug();
+    };
+  }, []);
+
+  if (loading) {
+    return <div className="loading-container">Carregando sessão...</div>;
+  }
+
+  // Mesmo com erro, tentar renderizar o componente de videochamada
+  return (
+    <AIProvider>
+      <div 
+        className={`session-room ${isFullScreen ? 'fullscreen' : ''} ${showConstellation ? 'with-constellation' : ''}`}
+        data-session-id={sessionId}
+      >
+        {isVirtualSession ? (
+          <VirtualSessionFallback />
+        ) : (
+          <>
+            {/* Layout principal - videoconferência ou constelação */}
+            {!showConstellation ? (
+              <div className="session-video-container">
+                {sessionId && isRoomMounted && MemoizedFallbackMeeting}
+              </div>
+            ) : (
+              <div 
+                ref={constellationContainerRef}
+                className={`constellation-container ${isFullScreen ? 'fullscreen' : ''}`}
+              >
+                {/* Informação de carregamento do campo */}
+                <div className="constellation-loading-info" style={{ 
+                  position: 'absolute', 
+                  top: '50%', 
+                  left: '50%', 
+                  transform: 'translate(-50%, -50%)',
+                  zIndex: 1,
+                  background: 'rgba(0,0,0,0.7)',
+                  color: 'white',
+                  padding: '10px 20px',
+                  borderRadius: '5px',
+                  display: loading ? 'block' : 'none'
+                }}>
+                  Carregando Campo de Constelação...
+                </div>
+                
+                <ConstellationField3D 
+                  isHost={userRole === 'therapist-provider'}
+                  sessionId={sessionId}
+                  key={`constellation-${sessionId}`}
+                  modalMode={isFullScreen}
+                  isActive={true}
+                  debug={true}
+                />
+
+                {(() => {
+                  // Código para executar imediatamente para debug
+                  console.log('Estrutura DOM na renderização:', {
+                    hasConstellationContainer: !!document.querySelector('.constellation-container'),
+                    hasField3DContainer: !!document.querySelector('.constellation-field-3d-container'),
+                    sessionRoomClass: document.querySelector('.session-room')?.className || 'não encontrado',
+                    constellationContainerDisplay: window.getComputedStyle(
+                      document.querySelector('.constellation-container') || document.createElement('div')
+                    ).display,
+                    constellationContainerVisibility: window.getComputedStyle(
+                      document.querySelector('.constellation-container') || document.createElement('div')
+                    ).visibility
+                  });
+                  return null; // Não renderiza nada
+                })()}
+                
+                {/* Botão de fullscreen */}
+                <button
+                  className="fullscreen-btn"
+                  onClick={toggleFullScreen}
+                  title={isFullScreen ? "Sair da tela cheia" : "Entrar em tela cheia"}
+                  style={{
+                    position: 'absolute',
+                    bottom: '20px',
+                    right: '20px',
+                    width: '40px',
+                    height: '40px',
+                    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    zIndex: 10,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '20px'
+                  }}
+                >
+                  {isFullScreen ? '⤓' : '⤢'}
+                </button>
+                
+                {/* Vídeo em modo PIP quando o campo de constelação está ativo */}
+                <div 
+                  ref={videoContainerRef}
+                  className={`video-container-pip ${isDragging ? 'dragging' : ''} ${isResizing ? 'resizing' : ''}`}
+                  style={{
+                    transform: `translate(${videoPosition.x}px, ${videoPosition.y}px)`,
+                    width: `${videoDimensions.width}px`,
+                    height: `${videoDimensions.height}px`,
+                    zIndex: 9999
+                  }}
+                  onMouseDown={handleMouseDown}
+                >
+                  {sessionId && isRoomMounted && MemoizedFallbackMeeting}
+                  
+                  {/* Botão para sair do modo constelação */}
+                  <button 
+                    className="exit-constellation-btn"
+                    onClick={handleConstellationToggle}
+                    title="Sair do Campo de Constelação"
+                  >
+                    ✕
+                  </button>
+                  
+                  {/* Elemento para redimensionar o vídeo */}
+                  <div 
+                    className="video-resizer video-resizer-br"
+                    onMouseDown={handleResizeStart}
+                  ></div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+        
+        {/* Ferramentas de IA - forçar exibição para o terapeuta */}
+        {(userRole === 'therapist-provider' || !userRole) && (
+          <div id="direct-ai-buttons" className="ai-toolbar-bottom" ref={aiContainerRef}>
+            <AIToolsContainer onConstellationClick={handleConstellationToggle} />
+          </div>
+        )}
+      </div>
+    </AIProvider>
+  );
+};
+
+export default SessionRoom;

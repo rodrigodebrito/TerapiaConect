@@ -9,6 +9,8 @@ const { IncomingMessage } = require('http');
 // Configurar cliente OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  timeout: 60000, // Aumentado para 60 segundos
+  maxRetries: 3
 });
 
 /**

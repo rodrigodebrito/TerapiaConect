@@ -30,13 +30,119 @@ body {
 }
 
 /* Container principal */
-.session-container {
+.session-room {
   width: 100%;
   height: 100vh;
   background-color: #1a1a1a;
   display: flex;
   flex-direction: column;
   position: relative;
+}
+
+.session-video-container {
+  width: 100%;
+  max-height: 90vh;
+  flex: 1;
+  position: relative;
+  background: #1a1a1a;
+  border-radius: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Novo container para ferramentas de IA abaixo do vídeo (versão atualizada com ID que não será removido) */
+#direct-ai-buttons.ai-toolbar-bottom {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  background-color: transparent;
+  border-top: none;
+  z-index: 900;
+  position: relative !important;
+  bottom: auto !important;
+  left: auto !important;
+  transform: none !important;
+  pointer-events: auto !important;
+  height: auto !important;
+  min-height: auto;
+}
+
+/* Ocultar completamente o container quando vazio */
+#direct-ai-buttons.ai-toolbar-bottom:empty,
+#direct-ai-buttons.ai-toolbar-bottom > div:empty {
+  display: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  background-color: transparent !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Sobrescrever estilos do AI Tools para posicionamento horizontal */
+#direct-ai-buttons.ai-toolbar-bottom .ai-buttons-container {
+  position: relative;
+  bottom: auto;
+  right: auto;
+  flex-direction: row;
+  gap: 10px;
+  justify-content: center;
+  padding: 10px;
+  margin: 0;
+}
+
+#direct-ai-buttons.ai-toolbar-bottom .ai-button,
+#direct-ai-buttons.ai-toolbar-bottom .mic-button {
+  margin: 0 5px;
+}
+
+#direct-ai-buttons.ai-toolbar-bottom .transcription-status {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  margin-left: 15px;
+}
+
+/* Garantir que o container de vídeo ocupe o espaço principal */
+.session-room .fallback-meeting {
+  width: 100%;
+  height: 100%;
+}
+
+/* Ajustes para o modo Picture-in-Picture */
+.session-video-container.pip-mode {
+  position: fixed;
+  width: 320px;
+  height: 180px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+}
+
+.session-video-container.pip-mode + #direct-ai-buttons.ai-toolbar-bottom {
+  display: none;
+}
+
+/* Ajustes para tela cheia */
+.session-video-container.fullscreen {
+  max-height: 100vh;
+  border-radius: 0;
+}
+
+.session-video-container.fullscreen + #direct-ai-buttons.ai-toolbar-bottom {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(5px);
 }
 
 .content-wrapper {
@@ -463,12 +569,20 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
-  background: #1a1a1a;
-  display: flex;
-  flex-direction: column;
-  z-index: 1000;
+  right: 0;
+  bottom: 0;
+  background-color: #1a4a7e;
+  z-index: 90;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.constellation-container.visible {
+  opacity: 1;
+  visibility: visible;
 }
 
 /* Modo tela cheia */
@@ -1543,4 +1657,18 @@ body {
 
 .session-room .ai-toolbar {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+}
+
+/* Estilos para o modo PiP do vídeo quando o campo está ativo */
+.session-room.with-constellation .session-video-container {
+  position: fixed;
+  width: 280px;
+  height: 180px;
+  right: 20px;
+  top: 20px;
+  z-index: 100;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  border: 2px solid rgba(255,255,255,0.2);
+  overflow: hidden;
 } 

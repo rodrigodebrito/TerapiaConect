@@ -37,19 +37,268 @@ input, textarea, select, button {
   font-family: inherit;
 }
 
-/* Fix para botões de IA - garantir visibilidade independente do contexto */
+/* AI Tools para toda a aplicação */
 .ai-tools-fixed {
   position: fixed !important;
   bottom: 85px !important;
   left: 0 !important;
   width: 100% !important;
-  z-index: 999999999 !important;
   display: flex !important;
   justify-content: center !important;
   align-items: center !important;
   pointer-events: none !important;
+  z-index: 2147483647 !important;
+}
+
+/* Regras adicionais para garantir a posição dos botões de IA */
+#root .ai-tools-fixed,
+body .ai-tools-fixed,
+#root .persistent-ai-tools,
+body .persistent-ai-tools,
+body [class*="ai-tools"],
+body [id*="ai-tools"] {
+  position: fixed !important;
+  bottom: 20px !important;
+  top: auto !important;
+  left: 0 !important;
+  width: 100% !important;
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+  display: flex !important;
+  justify-content: center !important;
+  transform: none !important;
+  transition: none !important;
+}
+
+/* Botões dentro dos containers de IA */
+.ai-tools-fixed button,
+.persistent-ai-tools button,
+[class*="ai-tools"] button,
+[id*="ai-tools"] button {
+  pointer-events: auto !important;
+}
+
+/* Limitar a largura da barra de ferramentas */
+.ai-toolbar,
+[class*="ai-toolbar"],
+.ai-tools-toolbar,
+.ai-buttons-container {
+  max-width: 600px !important;
+  margin: 0 auto !important;
+  display: flex !important;
+  justify-content: center !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+}
+
+/* Estilo para os botões internos da barra de ferramentas */
+.ai-toolbar button,
+[class*="ai-toolbar"] button,
+.ai-tools-toolbar button,
+.ai-buttons-container button {
+  padding: 6px 12px !important;
+  margin: 0 2px !important;
+  border-radius: 6px !important;
+  font-size: 14px !important;
+  height: auto !important;
+  min-width: 0 !important;
+  white-space: nowrap !important;
+}
+
+/* Restaurar posição dos botões quando o campo de constelação for fechado */
+body:has(.constellation-field-container) .ai-tools-fixed {
+  bottom: 20px !important;
+}
+
+body:not(:has(.constellation-field-container)) .ai-tools-fixed {
+  bottom: 85px !important;
 }
 
 .ai-toolbar {
   pointer-events: auto !important;
+}
+
+/* Estilos para tornar a barra de ferramentas de IA mais compacta */
+.ai-tools-toolbar,
+.ai-toolbar,
+[class*="ai-toolbar"],
+.ai-buttons-container,
+.ai-tools-fixed,
+.persistent-ai-tools,
+[class*="ai-tools"],
+[id*="ai-tools"] {
+  position: fixed !important;
+  bottom: 20px !important;
+  left: 0 !important;
+  width: 100% !important;
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+  transform: none !important;
+  top: auto !important;
+}
+
+.ai-tools-toolbar,
+.ai-toolbar,
+[class*="ai-toolbar"],
+.ai-buttons-container {
+  max-width: 600px !important;
+  margin: 0 auto !important;
+  display: flex !important;
+  justify-content: center !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  background-color: rgba(0, 0, 0, 0.7) !important;
+  border-radius: 10px !important;
+  padding: 10px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+}
+
+.ai-tools-toolbar button,
+.ai-toolbar button,
+[class*="ai-toolbar"] button,
+.ai-buttons-container button {
+  padding: 6px 12px !important;
+  margin: 0 2px !important;
+  border-radius: 6px !important;
+  font-size: 14px !important;
+  height: auto !important;
+  min-width: 0 !important;
+  white-space: nowrap !important;
+  background-color: #2a2a2a !important;
+  color: white !important;
+  border: 1px solid #444 !important;
+  transition: all 0.2s !important;
+}
+
+.ai-tools-toolbar button:hover,
+.ai-toolbar button:hover,
+[class*="ai-toolbar"] button:hover,
+.ai-buttons-container button:hover {
+  background-color: #3a3a3a !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Ocultar apenas o botão Reset Transcription Services */
+button[onclick*="resetTranscriptionServices"],
+button[style*="Reset Transcription Services"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
+  position: absolute !important;
+  pointer-events: none !important;
+  z-index: -9999 !important;
+  transform: scale(0) !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(100%) !important;
+}
+
+/* Estilos específicos para o botão dc3545 (Reset Transcription Services) */
+button[style*="#dc3545"] {
+  display: none !important;
+}
+
+/* Esconder elementos que podem conter o botão de reset */
+[id*="direct-ai-buttons"] button[style*="position: fixed"],
+[class*="persistent-ai-tools"] button[style*="position: fixed"],
+button[style*="bottom: 10px"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Exceção para botões que queremos manter */
+.ai-buttons-container button,
+.persistent-ai-tools button,
+.ai-toolbar button,
+#persistent-ai-tools button {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: auto !important;
+  height: auto !important;
+  min-height: auto !important;
+  position: static !important;
+  z-index: auto !important;
+  pointer-events: auto !important;
+  transform: none !important;
+  overflow: visible !important;
+  clip: auto !important;
+  clip-path: none !important;
+}
+
+/* Garantir que a barra de ferramentas AI esteja visível */
+.persistent-ai-tools,
+#persistent-ai-tools,
+.ai-tools-fixed {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  height: auto !important;
+  min-height: auto !important;
+  max-width: 600px !important;
+  width: 100% !important;
+  margin: 0 auto !important;
+  position: fixed !important;
+  bottom: 20px !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+}
+
+/* Estilos da toolbar de IA no formato original */
+.ai-toolbar-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 0;
+  background: rgba(25, 25, 35, 0.95);
+  position: relative;
+  margin-top: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.ai-toolbar-wrapper {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 0 15px;
+}
+
+.ai-button {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative !important;
+  pointer-events: auto !important;
+  min-width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  margin: 0 5px;
+  background-color: rgba(60, 60, 70, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.ai-button:hover {
+  background-color: rgba(80, 80, 90, 0.9);
+  transform: translateY(-2px);
+}
+
+/* Garantir que a visualização mobile seja adequada */
+@media (max-width: 768px) {
+  .session-room .ai-buttons-container {
+    flex-wrap: wrap;
+  }
+  
+  .session-room .button-text {
+    display: none;
+  }
 }

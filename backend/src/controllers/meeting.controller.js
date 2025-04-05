@@ -5,7 +5,6 @@
  * de sessões de videoconferência usando o serviço do Daily.co
  */
 
-const jitsiService = require('../services/jitsi.service');
 const dailyService = require('../services/daily.service');
 const prisma = require('../utils/prisma');
 
@@ -20,7 +19,7 @@ const meetingController = {
    */
   createMeeting: async (req, res) => {
     try {
-      const { roomName, provider = 'jitsi' } = req.body;
+      const { roomName, provider = 'daily' } = req.body;
       
       // Verificar se há um usuário logado (req.user é inserido pelo middleware de auth)
       if (!req.user || !req.user.id) {
@@ -30,50 +29,94 @@ const meetingController = {
       // Gerar identificador único para a sessão se não fornecido
       const sessionId = roomName || `session-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       
-      console.log(`Criando reunião. Provider: ${provider}, roomName: ${sessionId}`);
+      // Gerar um nome curto para a sala baseado no sessionId (máximo 10 caracteres)
+      // Remover prefixo 'tc-' se existir
+      let cleanSessionId = sessionId;
+      if (sessionId.startsWith('tc-')) {
+        cleanSessionId = sessionId.substring(3);
+      }
+      
+      // Limitar a 10 caracteres e sanitizar
+      const shortRoomName = cleanSessionId.substring(0, 10).replace(/[^a-zA-Z0-9-]/g, '');
+      
+      console.log(`Criando reunião. Provider: ${provider}, sessionId: ${sessionId}, shortRoomName: ${shortRoomName}`);
       
       let roomData = {};
       let url = '';
       
-      // Criar sala no provedor de videoconferência selecionado
-      if (provider === 'daily') {
-        // Usar o serviço Daily para criar a sala
-        const dailyRoom = await dailyService.validateAndGetRoom(sessionId);
-        url = dailyRoom.url;
-        roomData = {
-          dailyRoomName: dailyRoom.name,
-          dailyRoomUrl: dailyRoom.url
-        };
-        console.log('Sala Daily.co criada:', dailyRoom);
-      } else if (provider === 'dyte') {
-        // Código para o Dyte, se for necessário
-        // ...
-      } else {
-        // Jitsi (provider padrão)
-        url = `https://meet.jit.si/${sessionId}`;
-      }
+      // Criar sala no Daily.co
+      const dailyRoom = await dailyService.validateAndGetRoom(shortRoomName);
+      url = dailyRoom.url;
+      roomData = {
+        dailyRoomName: dailyRoom.name,
+        dailyRoomUrl: dailyRoom.url
+      };
+      console.log('Sala Daily.co criada:', dailyRoom);
       
       // Registrar a reunião no banco de dados
-      const meeting = await prisma.meeting.create({
-        data: {
-          sessionId,
-          status: 'active',
-          provider,
-          createdBy: {
-            connect: { id: req.user.id }
-          },
-          ...roomData
+      try {
+        // Verificar se o modelo Session existe no Prisma
+        if (!prisma || !prisma.session) {
+          console.error('Erro: Objeto prisma ou prisma.session não está disponível');
+          return res.status(500).json({ 
+            error: 'Erro interno ao tentar acessar o banco de dados',
+            details: 'O cliente Prisma não foi inicializado corretamente'
+          });
         }
-      });
-      
-      console.log(`Reunião criada, ID: ${meeting.id}, SessionID: ${sessionId}`);
-      
-      return res.status(201).json({
-        id: meeting.id,
-        sessionId,
-        url,
-        provider
-      });
+        
+        // Buscar ou criar um cliente e terapeuta dummy para testes
+        // Nota: Em produção, você deve usar IDs reais
+        const dummyTherapistId = await getDummyTherapistId();
+        const dummyClientId = await getDummyClientId();
+        const dummyAppointmentId = await getDummyAppointmentId(dummyTherapistId, dummyClientId);
+        
+        if (!dummyTherapistId || !dummyClientId || !dummyAppointmentId) {
+          return res.status(500).json({ 
+            error: 'Não foi possível criar sessão: faltam referências necessárias',
+            details: 'Terapeuta, cliente ou agendamento não encontrados'
+          });
+        }
+        
+        // Criar a sessão usando o modelo Session
+        const session = await prisma.session.create({
+          data: {
+            title: `Sessão ${shortRoomName}`,
+            scheduledDuration: 60, // 60 minutos por padrão
+            appointmentId: dummyAppointmentId,
+            therapistId: dummyTherapistId,
+            clientId: dummyClientId,
+            dyteMeetingId: dailyRoom.name,
+            dyteRoomName: dailyRoom.url,
+            status: 'SCHEDULED'
+          }
+        });
+        
+        console.log(`Sessão criada no banco, ID: ${session.id}, URL: ${url}`);
+        
+        return res.status(201).json({
+          id: session.id,
+          sessionId,
+          url,
+          provider
+        });
+      } catch (dbError) {
+        console.error('Erro ao salvar sessão no banco de dados:', dbError);
+        
+        // Incluir informações de depuração
+        console.log('Dados que tentamos salvar:', {
+          sessionId,
+          dailyRoom
+        });
+        
+        // Como já criamos a sala no Daily, retornar informações básicas mesmo com erro de BD
+        return res.status(201).json({
+          message: 'Sala criada no Daily.co, mas não foi possível registrar no banco de dados',
+          sessionId,
+          url,
+          provider,
+          error: dbError.message
+        });
+      }
     } catch (error) {
       console.error('Erro ao criar reunião:', error);
       return res.status(500).json({ error: 'Erro ao criar reunião: ' + error.message });
@@ -117,8 +160,24 @@ const meetingController = {
       // Verificar se existe uma reunião criada
       if (!session.dyteMeetingId || !session.dyteRoomName) {
         // Se não existir, criar uma nova reunião Daily.co
-        const roomName = `tc-${sessionId.substring(0, 8)}-${Date.now()}`;
-        const dailyRoom = await dailyService.createRoom(roomName, 2);
+        // Processar o ID para garantir compatibilidade com Daily.co
+        let shortId = sessionId;
+        
+        // Remover prefixo 'tc-' se existir
+        if (shortId.startsWith('tc-')) {
+          shortId = shortId.substring(3);
+        }
+        
+        // Limitar a 10 caracteres
+        shortId = shortId.substring(0, 10);
+        
+        // Sanitizar (remover caracteres não permitidos)
+        shortId = shortId.replace(/[^a-zA-Z0-9-]/g, '');
+        
+        console.log('ID de sala processado para Daily.co:', shortId, 'Original:', sessionId);
+        
+        // Criar sala usando o ID sanitizado
+        const dailyRoom = await dailyService.createRoom(shortId, 2);
         
         // Atualizar a sessão com os dados da nova sala
         await prisma.$executeRawUnsafe(`
@@ -154,14 +213,22 @@ const meetingController = {
         startAudioOff: false,
         startVideoOff: false
       });
+      
+      // Extrair apenas o nome da sala sem o domínio
+      let roomUrl = session.dyteRoomName;
+      
+      // Substituir possíveis prefixos tc- na URL final
+      roomUrl = roomUrl.replace('/tc-', '/');
+      
+      console.log('URL final para o cliente:', roomUrl);
 
       // Para compatibilidade com o cliente existente, retornamos o mesmo formato
       res.status(200).json({
         message: 'Token de participante gerado com sucesso',
         authToken: tokenResult.token,
         meetingId: session.dyteMeetingId,
-        roomName: session.dyteRoomName,
-        domain: 'terapiaconect.daily.co',
+        roomName: roomUrl,
+        domain: 'teraconect.daily.co',
         // Informações sobre o usuário
         userName: currentUser.name,
         userId: userId,
@@ -286,5 +353,107 @@ const meetingController = {
     }
   }
 };
+
+// Função auxiliar para obter um ID de terapeuta válido para testes
+async function getDummyTherapistId() {
+  try {
+    // Tentar encontrar um terapeuta existente
+    const therapist = await prisma.therapist.findFirst();
+    
+    if (therapist) {
+      return therapist.id;
+    }
+    
+    console.log('Nenhum terapeuta encontrado, considerando apenas a sala do Daily.co');
+    return null;
+  } catch (error) {
+    console.error('Erro ao buscar terapeuta:', error);
+    return null;
+  }
+}
+
+// Função auxiliar para obter um ID de cliente válido para testes
+async function getDummyClientId() {
+  try {
+    // Tentar encontrar um cliente existente
+    const client = await prisma.client.findFirst();
+    
+    if (client) {
+      return client.id;
+    }
+    
+    console.log('Nenhum cliente encontrado, considerando apenas a sala do Daily.co');
+    return null;
+  } catch (error) {
+    console.error('Erro ao buscar cliente:', error);
+    return null;
+  }
+}
+
+// Função auxiliar para obter um ID de agendamento válido para testes
+async function getDummyAppointmentId(therapistId, clientId) {
+  if (!therapistId || !clientId) return null;
+  
+  try {
+    // Tentar encontrar um agendamento existente entre este terapeuta e cliente
+    const appointment = await prisma.appointment.findFirst({
+      where: {
+        therapistId,
+        clientId
+      }
+    });
+    
+    if (appointment) {
+      return appointment.id;
+    }
+    
+    // Se não existir, criar um novo agendamento
+    const today = new Date();
+    const toolId = await getDefaultToolId();
+    
+    if (!toolId) {
+      console.log('Nenhuma ferramenta encontrada, não é possível criar agendamento');
+      return null;
+    }
+    
+    const newAppointment = await prisma.appointment.create({
+      data: {
+        therapistId,
+        clientId,
+        date: today.toISOString().split('T')[0],
+        time: '12:00',
+        duration: 60,
+        toolId,
+        mode: 'ONLINE',
+        price: 0,
+        status: 'SCHEDULED'
+      }
+    });
+    
+    console.log('Novo agendamento criado para a sessão:', newAppointment.id);
+    return newAppointment.id;
+  } catch (error) {
+    console.error('Erro ao buscar/criar agendamento:', error);
+    return null;
+  }
+}
+
+// Função para obter ID de uma ferramenta de atendimento
+async function getDefaultToolId() {
+  try {
+    // Tentar encontrar uma ferramenta existente
+    const tool = await prisma.tool.findFirst();
+    
+    if (tool) {
+      return tool.id;
+    }
+    
+    console.log('Nenhuma ferramenta encontrada');
+    return null;
+  } catch (error) {
+    console.error('Erro ao buscar ferramenta:', error);
+    return null;
+  }
+}
 
 module.exports = meetingController; 
