@@ -302,11 +302,65 @@ export const ConstellationProvider = ({ children, isHost = true, sessionId = nul
               return;
             }
             
-            // Se o evento especificar explicitamente um controlador
-            if (data.controller) {
-              const isMe = data.controller === socketInstance.id;
-              console.log(`Controle definido para: ${data.controller} (sou eu: ${isMe})`);
-              setHasControl(isMe);
+            // Se for um evento de transferência
+            if (data.action === 'transfer') {
+              // Se o controlador for 'next', qualquer cliente pode pegar o controle
+              // (primeiro que processar o evento)
+              if (data.controller === 'next' && !isHostRef.current) {
+                console.log('Recebendo controle via transferência "next" de:', data.forwardedBy);
+                
+                // Apenas um cliente deve pegar o controle para evitar conflitos
+                // Vamos usar um atraso semi-aleatório para reduzir chances de múltiplos clientes pegarem o controle simultaneamente
+                const delay = Math.floor(Math.random() * 500);
+                
+                setTimeout(() => {
+                  // Verificar se já não está com o controle (outro cliente pode ter assumido)
+                  if (!hasControl) {
+                    console.log(`Cliente ${socketInstance.id} assumindo controle após ${delay}ms de atraso`);
+                    setHasControl(true);
+                    
+                    // Notificar outros que este cliente pegou o controle
+                    emitChange({
+                      type: 'control',
+                      action: 'taken',
+                      controller: socketInstance.id,
+                      sessionId
+                    });
+                  }
+                }, delay);
+                
+                return;
+              }
+              
+              // Se o controlador for um ID específico
+              if (data.controller && data.controller !== 'next') {
+                const isMe = data.controller === socketInstance.id;
+                console.log(`Transferência de controle para: ${data.controller} (sou eu: ${isMe})`);
+                setHasControl(isMe);
+                
+                // Se for eu, confirmar que recebi o controle
+                if (isMe) {
+                  emitChange({
+                    type: 'control',
+                    action: 'taken',
+                    controller: socketInstance.id,
+                    sessionId
+                  });
+                }
+                return;
+              }
+            }
+            
+            // Se o evento for de confirmação que alguém assumiu o controle
+            if (data.action === 'taken') {
+              console.log(`Cliente ${data.controller} assumiu o controle`);
+              
+              // Se não for o próprio usuário, remover o controle
+              if (data.controller !== socketInstance.id) {
+                console.log('Removendo controle pois outro cliente assumiu');
+                setHasControl(false);
+              }
+              return;
             }
           }
           else if (data.type === 'fullSync') {
@@ -741,15 +795,84 @@ export const ConstellationProvider = ({ children, isHost = true, sessionId = nul
     setIsDraggingAny(isDragging);
   };
   
+  // Carregar configuração
+  const loadConfiguration = (configuration) => {
+    console.log('Carregando configuração:', configuration);
+    if (!configuration) return;
+    
+    try {
+      // Converter formato se necessário
+      const normalizedReps = normalizeRepresentatives(configuration.representatives || []);
+      
+      // Definir todos os estados da constelação a partir da configuração
+      setRepresentatives(normalizedReps);
+      if (configuration.cameraPosition) setCameraPosition(configuration.cameraPosition);
+      if (configuration.cameraTarget) setCameraTarget(configuration.cameraTarget);
+      if (configuration.plateRotation !== undefined) setPlateRotation(configuration.plateRotation);
+      
+      console.log('Configuração carregada com sucesso');
+    } catch (error) {
+      console.error('Erro ao carregar configuração:', error);
+    }
+  };
+  
+  // Obter participantes da sessão atual
+  const getSessionParticipants = () => {
+    let participants = [];
+    
+    // Sempre adicionar a opção "next" como um participante especial, que permite transferir para o próximo cliente disponível
+    participants.push({
+      id: "next",
+      name: "Próximo cliente disponível",
+      isSpecial: true
+    });
+    
+    // Verificar se o socket está definido
+    if (socketRef.current) {
+      try {
+        // Verificar se o socket tem acesso a participantes
+        const socketInstance = socketRef.current;
+        
+        // Logging para diagnóstico
+        console.log('Tentando obter participantes da sessão com socket ID:', socketInstance.id);
+        
+        // Adicionar o próprio usuário como uma opção (desabilitada)
+        participants.push({
+          id: socketInstance.id,
+          name: "Você (atual)",
+          isCurrentUser: true
+        });
+        
+        // Em uma implementação futura, poderíamos adicionar uma API para obter todos os participantes da sala
+        console.log('Participantes obtidos:', participants.length);
+      } catch (error) {
+        console.error('Erro ao obter participantes:', error);
+      }
+    }
+    
+    return participants;
+  };
+
   // Transferir o controle
-  const transferControl = () => {
+  const transferControl = (targetClientId = null) => {
+    // Se não for host, não pode transferir controle
+    if (!isHostRef.current) {
+      console.log('Apenas o host pode transferir controle');
+      return;
+    }
+    
+    // Se for o host, desativar controle local
     setHasControl(false);
+    
+    console.log('Transferindo controle para:', targetClientId || 'qualquer cliente');
     
     // Emit via socket
     emitChange({
       type: 'control',
       action: 'transfer',
-      controller: 'client'
+      // Se targetClientId for fornecido, usa-o, caso contrário, usa 'next' para indicar próximo cliente
+      controller: targetClientId || 'next',
+      fromHost: true
     });
   };
   
@@ -908,7 +1031,9 @@ export const ConstellationProvider = ({ children, isHost = true, sessionId = nul
         setEditColor,
         setPlateRotation: setPlateRotationAndSync,
         setCameraPosition: setCameraPositionAndSync,
-        setRepresentativeRotation
+        setRepresentativeRotation,
+        loadConfiguration,
+        getSessionParticipants
       }}
     >
       {children}
