@@ -119,6 +119,41 @@ io.on('connection', (socket) => {
     }
   });
   
+  // Manipular rotação específica de representantes
+  socket.on('representative_rotated', (data) => {
+    if (data && data.sessionId && data.representativeId) {
+      // Garantir que a rotação seja um número
+      const numericRotation = typeof data.rotation === 'object' ? data.rotation.y || 0 : Number(data.rotation);
+      
+      console.log(`[${socket.id}] Rotação de representante recebida para ID ${data.representativeId} na sessão ${data.sessionId}: ${numericRotation}`);
+      
+      // Atualizar a rotação com valor numérico garantido
+      const eventData = {
+        ...data,
+        rotation: numericRotation,
+        forwardedBy: socket.id,
+        timestamp: Date.now()
+      };
+      
+      // Repassar a rotação para todos na mesma sala, exceto o remetente
+      socket.to(data.sessionId).emit('representative_rotated', eventData);
+    }
+  });
+  
+  // Manipular sincronização completa de representantes
+  socket.on('representatives_updated', (data) => {
+    if (data && data.sessionId && data.representatives) {
+      console.log(`[${socket.id}] Atualização completa de representantes para sessão ${data.sessionId}: ${data.representatives.length} representantes`);
+      
+      // Repassar a atualização para todos na mesma sala, exceto o remetente
+      socket.to(data.sessionId).emit('representatives_updated', {
+        ...data,
+        forwardedBy: socket.id,
+        timestamp: Date.now()
+      });
+    }
+  });
+  
   // Manipular comandos de constelação
   socket.on('constellation-command', (data) => {
     if (data && data.sessionId) {

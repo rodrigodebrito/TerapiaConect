@@ -74,6 +74,7 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
   // Verificar se o contexto existe antes de desestruturar
   const context = useContext(ConstellationContext);
   const setRepresentativePosition = context?.setRepresentativePosition || (() => {});
+  const setRepresentativeRotation = context?.setRepresentativeRotation || (() => {});
   const setDraggingState = context?.setDraggingState || (() => {});
   const showNames = context?.showNames !== undefined ? context.showNames : true;
 
@@ -121,7 +122,12 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
 
       const rect = canvas.getBoundingClientRect();
       const deltaX = ((e.clientX - dragInfo.current.startX) / rect.width) * Math.PI * 2;
-      setRotation(dragInfo.current.startRotation + deltaX);
+      const newRotation = dragInfo.current.startRotation + deltaX;
+      setRotation(newRotation);
+      
+      // Importante: Sincronizar a rotação com o servidor
+      console.log('Enviando rotação durante movimento:', newRotation);
+      setRepresentativeRotation(id, newRotation);
     } else {
       // Modo de movimento
       const currentPoint = screenToPlaneCoordinates(e.clientX, e.clientY);
@@ -158,7 +164,7 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
         setRepresentativePosition(id, [finalX, 0, finalZ]);
       }
     }
-  }, [id, screenToPlaneCoordinates, setRepresentativePosition, position]);
+  }, [id, screenToPlaneCoordinates, setRepresentativePosition, setRepresentativeRotation, position]);
 
   // Manipulador de teclas
   const handleKeyDown = useCallback((e) => {
@@ -187,9 +193,16 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
       document.removeEventListener('keyup', handleKeyUp);
       
       document.body.style.cursor = 'auto';
+      
+      // Sincronizar a posição e a rotação final com o servidor
+      if (dragInfo.current.isRotating || Math.abs(rotation - dragInfo.current.startRotation) > 0.01) {
+        console.log('Sincronizando rotação final:', rotation);
+        setRepresentativeRotation(id, rotation);
+      }
+      
       setDraggingState(false);
     }
-  }, [handleMouseMove, handleKeyDown, handleKeyUp, setDraggingState]);
+  }, [handleMouseMove, handleKeyDown, handleKeyUp, setDraggingState, id, rotation, setRepresentativeRotation]);
 
   // Manipulador de clique do mouse
   const handleMouseDown = useCallback((e) => {
@@ -237,6 +250,18 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
       setLocalPosition([newPosX, newPosY, newPosZ]);
     }
   }, [position]);
+  
+  // Atualizar rotação quando vier do servidor
+  useEffect(() => {
+    if (!dragInfo.current.isDragging && representative.rotation !== undefined) {
+      const newRotation = typeof representative.rotation === 'object' 
+        ? representative.rotation.y || 0 
+        : Number(representative.rotation);
+      
+      console.log(`Representante ${id} recebeu atualização de rotação:`, newRotation);
+      setRotation(newRotation);
+    }
+  }, [representative.rotation, id]);
 
   // Carregar o modelo 3D apropriado para o tipo de representante
   const modelPath = React.useMemo(() => {
@@ -359,7 +384,6 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
     <group
       ref={modelRef}
       position={localPosition}
-      rotation={[0, rotation, 0]}
       onClick={(e) => {
         e.stopPropagation();
         onSelect(representative);
@@ -371,7 +395,7 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
       onPointerDown={handleMouseDown}
       scale={[modelScale, modelScale, modelScale]}
     >
-      {model && <primitive object={model} position={[0, 1.0, 0]} />}
+      {model && <primitive object={model} position={[0, 1.0, 0]} rotation={[0, 0, 0]} />}
       
       {showNames && (
         <Html

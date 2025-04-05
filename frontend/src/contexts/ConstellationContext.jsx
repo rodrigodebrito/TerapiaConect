@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useState, useEffect, useRef, useCallback } from 'react';
 import { v4 as uuid } from 'uuid';
 
 // Cores para os representantes
@@ -89,6 +89,107 @@ export const ConstellationProvider = ({ children, isHost = true, sessionId = nul
       console.log("Controle concedido automaticamente ao host");
     }
   }, [isHost]);
+  
+  // Função para emitir mudanças para outros participantes
+  const emitChange = useCallback((data) => {
+    const socketInstance = socketRef.current || window.constellationSocket || window.socket;
+    
+    if (socketInstance) {
+      // Verificar o estado da conexão
+      if (socketInstance.connected && sessionId) {
+        // Adicionar mais detalhes para movimentos de prato e câmera
+        if (data.type === 'plate') {
+          console.log(`Emitindo alteração de rotação do prato para ${data.rotation.toFixed(2)}`);
+        } else if (data.type === 'camera') {
+          console.log(`Emitindo alteração de câmera: Pos(${data.position.x.toFixed(1)}, ${data.position.y.toFixed(1)}, ${data.position.z.toFixed(1)})`);
+        } else if (data.type === 'representative') {
+          const rep = data.representative;
+          if (rep) {
+            // Verificar se position existe e qual formato tem (objeto ou array)
+            if (rep.position) {
+              if (rep.position.x !== undefined) {
+                // Posição como objeto {x, y, z}
+                console.log(`Emitindo alteração de representante ${rep.id} (${data.action}): ${rep.name} em Pos(${rep.position.x.toFixed(1)}, ${rep.position.y.toFixed(1)}, ${rep.position.z.toFixed(1)})`);
+              } else if (Array.isArray(rep.position)) {
+                // Posição como array [x, y, z]
+                console.log(`Emitindo alteração de representante ${rep.id} (${data.action}): ${rep.name} em Pos(${rep.position[0].toFixed(1)}, ${rep.position[1].toFixed(1)}, ${rep.position[2].toFixed(1)})`);
+              } else {
+                // Formato desconhecido, apenas logar sem toFixed
+                console.log(`Emitindo alteração de representante ${rep.id} (${data.action}): ${rep.name}`);
+              }
+            } else {
+              // Sem position, apenas logar os detalhes básicos
+              console.log(`Emitindo alteração de representante ${rep.id} (${data.action}): ${rep.name}`);
+            }
+          }
+        } else {
+          console.log('Emitindo alteração de tipo:', data.type, data.action || '');
+        }
+        
+        // Adicionar sessionId e ID do emissor aos dados
+        const eventData = {
+          ...data,
+          sessionId,
+          forwardedBy: socketInstance.id,
+          timestamp: Date.now()
+        };
+        
+        // Emitir o evento
+        try {
+          socketInstance.emit('constellation-object', eventData);
+        } catch (error) {
+          console.error("Erro ao emitir dados via socket:", error);
+        }
+      } else {
+        console.log('Socket não conectado. Estado:', socketInstance.connected ? 'conectado' : 'desconectado', 'Tentando reconectar...');
+        
+        // Tenta reconectar e então emitir
+        if (!socketInstance.connected) {
+          try {
+            socketInstance.connect();
+            
+            // Tentativa de emissão após breve atraso para dar tempo de reconexão
+            setTimeout(() => {
+              if (socketInstance.connected) {
+                const eventData = {
+                  ...data,
+                  sessionId,
+                  timestamp: Date.now()
+                };
+                console.log('Reconectado, emitindo dados após atraso:', eventData.type);
+                socketInstance.emit('constellation-object', eventData);
+              } else {
+                console.log('Não foi possível reconectar o socket');
+              }
+            }, 1000);
+          } catch (error) {
+            console.error("Erro ao tentar reconectar socket:", error);
+          }
+        }
+      }
+    } else {
+      console.log('Socket não disponível (null ou undefined)');
+      // Tenta obter o socket global novamente
+      const attemptSocket = window.socket;
+      if (attemptSocket) {
+        console.log('Encontrado socket global, tentando usar');
+        socketRef.current = attemptSocket;
+        window.constellationSocket = attemptSocket;
+        
+        const eventData = {
+          ...data,
+          sessionId,
+          timestamp: Date.now()
+        };
+      
+        try {
+          attemptSocket.emit('constellation-object', eventData);
+        } catch (error) {
+          console.error("Erro ao emitir dados via socket global:", error);
+        }
+      }
+    }
+  }, [sessionId]);
   
   // Escutar pelo socket existente no window object
   useEffect(() => {
@@ -316,106 +417,129 @@ export const ConstellationProvider = ({ children, isHost = true, sessionId = nul
     }
   }, [sessionId, isHost, cameraPosition, cameraTarget, plateRotation, representatives, hasControl]);
   
-  // Função para emitir mudanças para outros participantes
-  const emitChange = (data) => {
-    const socketInstance = socketRef.current || window.constellationSocket || window.socket;
-    
-    if (socketInstance) {
-      // Verificar o estado da conexão
-      if (socketInstance.connected && sessionId) {
-        // Adicionar mais detalhes para movimentos de prato e câmera
-        if (data.type === 'plate') {
-          console.log(`Emitindo alteração de rotação do prato para ${data.rotation.toFixed(2)}`);
-        } else if (data.type === 'camera') {
-          console.log(`Emitindo alteração de câmera: Pos(${data.position.x.toFixed(1)}, ${data.position.y.toFixed(1)}, ${data.position.z.toFixed(1)})`);
-        } else if (data.type === 'representative') {
-          const rep = data.representative;
-          if (rep) {
-            // Verificar se position existe e qual formato tem (objeto ou array)
-            if (rep.position) {
-              if (rep.position.x !== undefined) {
-                // Posição como objeto {x, y, z}
-                console.log(`Emitindo alteração de representante ${rep.id} (${data.action}): ${rep.name} em Pos(${rep.position.x.toFixed(1)}, ${rep.position.y.toFixed(1)}, ${rep.position.z.toFixed(1)})`);
-              } else if (Array.isArray(rep.position)) {
-                // Posição como array [x, y, z]
-                console.log(`Emitindo alteração de representante ${rep.id} (${data.action}): ${rep.name} em Pos(${rep.position[0].toFixed(1)}, ${rep.position[1].toFixed(1)}, ${rep.position[2].toFixed(1)})`);
-              } else {
-                // Formato desconhecido, apenas logar sem toFixed
-                console.log(`Emitindo alteração de representante ${rep.id} (${data.action}): ${rep.name}`);
-              }
-            } else {
-              // Sem position, apenas logar os detalhes básicos
-              console.log(`Emitindo alteração de representante ${rep.id} (${data.action}): ${rep.name}`);
-            }
+  // Efeito para configurar ouvintes de socket
+  useEffect(() => {
+    console.log('ConstellationContext: Configurando listeners de socket');
+    if (socketRef.current) {
+      // Escutar eventos de constelação
+      socketRef.current.on('constellation-object', (data) => {
+        if (data && data.sessionId === sessionId) {
+          console.log('Recebido objeto de constelação:', data.type);
+          
+          // Ignorar eventos que foram emitidos por nós mesmos
+          const isSelfEvent = data.forwardedBy === socketRef.current.id;
+          if (isSelfEvent) {
+            console.log(`Ignorando evento do tipo ${data.type} emitido por mim mesmo`);
+            return;
           }
-        } else {
-          console.log('Emitindo alteração de tipo:', data.type, data.action || '');
+          
+          // Processar os diferentes tipos de eventos de constelação
+          // (O código existente já trata isso no useEffect acima)
         }
-        
-        // Adicionar sessionId e ID do emissor aos dados
-        const eventData = {
-          ...data,
-          sessionId,
-          forwardedBy: socketInstance.id,
-          timestamp: Date.now()
-        };
-        
-        // Emitir o evento
-        try {
-          socketInstance.emit('constellation-object', eventData);
-        } catch (error) {
-          console.error("Erro ao emitir dados via socket:", error);
-        }
-      } else {
-        console.log('Socket não conectado. Estado:', socketInstance.connected ? 'conectado' : 'desconectado', 'Tentando reconectar...');
-        
-        // Tenta reconectar e então emitir
-        if (!socketInstance.connected) {
-          try {
-            socketInstance.connect();
-            
-            // Tentativa de emissão após breve atraso para dar tempo de reconexão
-            setTimeout(() => {
-              if (socketInstance.connected) {
-                const eventData = {
-                  ...data,
-                  sessionId,
-                  timestamp: Date.now()
-                };
-                console.log('Reconectado, emitindo dados após atraso:', eventData.type);
-                socketInstance.emit('constellation-object', eventData);
-              } else {
-                console.log('Não foi possível reconectar o socket');
-              }
-            }, 1000);
-          } catch (error) {
-            console.error("Erro ao tentar reconectar socket:", error);
-          }
-        }
-      }
-    } else {
-      console.log('Socket não disponível (null ou undefined)');
-      // Tenta obter o socket global novamente
-      const attemptSocket = window.socket;
-      if (attemptSocket) {
-        console.log('Encontrado socket global, tentando usar');
-        socketRef.current = attemptSocket;
-        window.constellationSocket = attemptSocket;
-        
-      const eventData = {
-        ...data,
-        sessionId,
-        timestamp: Date.now()
-      };
+      });
       
-        try {
-          attemptSocket.emit('constellation-object', eventData);
-        } catch (error) {
-          console.error("Erro ao emitir dados via socket global:", error);
+      // Escutar solicitações de sincronização
+      socketRef.current.on('constellation-sync-request', (data) => {
+        // Apenas responder se formos o host e tivermos controle
+        if (isHostRef.current && hasControl && data.sessionId === sessionId) {
+          console.log('Recebida solicitação de sincronização, enviando estado atual');
+          
+          // Enviar o estado completo atual
+          emitChange({
+            type: 'fullSync',
+            representatives,
+            plateRotation,
+            cameraPosition,
+            cameraTarget,
+            forceSync: true
+          });
         }
-      }
+      });
+      
+      // Escutar rotações de representantes
+      socketRef.current.on('representative_rotated', (data) => {
+        console.log('Recebido evento representative_rotated:', data);
+        
+        // Ignorar eventos enviados por este mesmo cliente
+        if (data.forwardedBy === socketRef.current.id) {
+          console.log('Ignorando evento de rotação - enviado por este cliente');
+          return;
+        }
+        
+        // Extrair informações
+        const { representativeId, rotation } = data;
+        
+        // Garantir que rotation seja um número
+        const numericRotation = typeof rotation === 'object' ? rotation.y || 0 : Number(rotation);
+        
+        console.log(`Aplicando rotação ao representante ${representativeId}: ${numericRotation}`);
+        
+        // Aplicar a rotação no estado local
+        setRepresentatives(prevReps => {
+          const updatedReps = prevReps.map(rep => {
+            if (rep.id === representativeId) {
+              console.log(`Rotação antiga: ${rep.rotation}, Nova rotação: ${numericRotation}`);
+              return { ...rep, rotation: numericRotation };
+            }
+            return rep;
+          });
+          
+          // Verificar se a atualização funcionou
+          const updatedRep = updatedReps.find(r => r.id === representativeId);
+          if (updatedRep) {
+            console.log(`Representante ${representativeId} atualizado com rotação: ${updatedRep.rotation}`);
+          } else {
+            console.warn(`Representante ${representativeId} não encontrado no estado local`);
+          }
+          
+          return updatedReps;
+        });
+      });
+      
+      // Escutar atualizações completas de representantes
+      socketRef.current.on('representatives_updated', (data) => {
+        console.log('Recebido evento representatives_updated:', data);
+        
+        // Ignorar eventos enviados por este mesmo cliente
+        if (data.forwardedBy === socketRef.current.id) {
+          console.log('Ignorando evento de atualização completa - enviado por este cliente');
+          return;
+        }
+        
+        // Combinar com o estado atual (manter os representantes locais, mas atualizar os modificados)
+        const receivedReps = data.representatives || [];
+        
+        // Atualizar estado
+        setRepresentatives(prevReps => {
+          // Criar um mapa dos representantes recebidos para busca rápida
+          const receivedRepsMap = {};
+          receivedReps.forEach(rep => {
+            receivedRepsMap[rep.id] = rep;
+          });
+          
+          // Atualizar os representantes locais
+          return prevReps.map(rep => {
+            // Se este representante estiver nos recebidos, usar as propriedades recebidas
+            if (receivedRepsMap[rep.id]) {
+              return { ...rep, ...receivedRepsMap[rep.id] };
+            }
+            // Se não estiver nos recebidos, manter como está
+            return rep;
+          });
+        });
+      });
     }
-  };
+
+    // Limpar ouvintes quando o componente for desmontado
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.off('constellation-object');
+        socketRef.current.off('constellation-sync-request');
+        socketRef.current.off('representative_rotated');
+        socketRef.current.off('representatives_updated');
+      }
+    };
+  }, [sessionId, representatives, hasControl, emitChange, cameraPosition, cameraTarget, plateRotation]);
   
   // Gerar uma cor baseada no índice
   const getColorForIndex = (index) => {
@@ -709,21 +833,28 @@ export const ConstellationProvider = ({ children, isHost = true, sessionId = nul
   const setRepresentativeRotation = (id, rotation) => {
     if (!hasControl) return;
 
-    console.log(`Atualizando rotação do representante ${id}:`, rotation);
+    // Garantir que rotation seja um número
+    const numericRotation = typeof rotation === 'object' ? rotation.y || 0 : Number(rotation);
+
+    console.log(`Atualizando rotação do representante ${id} de:`, 
+      representatives.find(r => r.id === id)?.rotation, 
+      `para:`, numericRotation);
     
     const updatedRepresentatives = representatives.map(rep =>
-      rep.id === id ? { ...rep, rotation } : rep
+      rep.id === id ? { ...rep, rotation: numericRotation } : rep
     );
     
     setRepresentatives(updatedRepresentatives);
     
     // Garantir que os eventos sejam enviados para o servidor
     if (socketRef.current && socketRef.current.connected) {
-      console.log('Enviando atualização de rotação via socket');
+      console.log('Enviando atualização de rotação via socket para ID:', id, 'Valor:', numericRotation);
+      
+      // Enviar evento de rotação específico
       socketRef.current.emit('representative_rotated', {
         sessionId,
         representativeId: id,
-        rotation,
+        rotation: numericRotation,
         forwardedBy: socketRef.current.id
       });
       
@@ -733,6 +864,8 @@ export const ConstellationProvider = ({ children, isHost = true, sessionId = nul
         representatives: updatedRepresentatives,
         forwardedBy: socketRef.current.id
       });
+    } else {
+      console.warn('Socket não disponível ou não conectado para enviar rotação');
     }
   };
   
