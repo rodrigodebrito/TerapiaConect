@@ -77,6 +77,7 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
   const setRepresentativeRotation = context?.setRepresentativeRotation || (() => {});
   const setDraggingState = context?.setDraggingState || (() => {});
   const showNames = context?.showNames !== undefined ? context.showNames : true;
+  const hasControl = context?.hasControl !== undefined ? context.hasControl : false;
 
   // Referência única para informações de arrasto
   const dragInfo = useRef({
@@ -208,6 +209,17 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
   const handleMouseDown = useCallback((e) => {
     e.stopPropagation();
     
+    // Verificar se o usuário tem controle - não permitir movimentar se não tiver
+    if (!hasControl) {
+      console.log("Usuário sem controle tentou mover o representante", representative.name);
+      
+      // Chamar a função de seleção fornecida pelas props apenas para seleção visual
+      if (onSelect) {
+        onSelect(representative);
+      }
+      return;
+    }
+    
     // Chamar a função de seleção fornecida pelas props
     if (onSelect) {
       console.log("Representative handleMouseDown: calling onSelect with", representative.name);
@@ -234,7 +246,7 @@ const Representative = ({ representative, selected, onSelect, onContextMenu }) =
 
     document.body.style.cursor = 'grabbing';
     setDraggingState(true);
-  }, [localPosition, rotation, representative, onSelect, screenToPlaneCoordinates, handleMouseMove, handleMouseUp, handleKeyDown, handleKeyUp, setDraggingState]);
+  }, [localPosition, rotation, representative, onSelect, screenToPlaneCoordinates, handleMouseMove, handleMouseUp, handleKeyDown, handleKeyUp, setDraggingState, hasControl]);
 
   // Atualizar posição quando mudar externamente
   useEffect(() => {

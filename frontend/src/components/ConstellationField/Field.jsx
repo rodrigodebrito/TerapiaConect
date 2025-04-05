@@ -98,10 +98,17 @@ const Field = ({ fieldTexture, representatives, selectedRepresentative, onSelect
   // Acessar os estados e funções do componente pai
   const context = useContext(ConstellationContext);
   const handleRepresentativeSelect = context?.handleRepresentativeSelect;
+  const hasControl = context?.hasControl !== undefined ? context.hasControl : false;
 
   // Usar o manipulador de seleção fornecido ou o do contexto
   const handleSelect = useCallback((rep) => {
     console.log("Field handleSelect called with rep:", rep ? rep.name : "null");
+    
+    // Verificar se o usuário tem controle
+    if (!hasControl) {
+      console.log("Usuário sem controle tentou selecionar um representante. Operação bloqueada.");
+      return;
+    }
     
     // Verificar se temos onSelectionChange nas props
     if (onSelectionChange) {
@@ -115,7 +122,7 @@ const Field = ({ fieldTexture, representatives, selectedRepresentative, onSelect
     } else {
       console.log("No selection handler available");
     }
-  }, [onSelectionChange, handleRepresentativeSelect]);
+  }, [onSelectionChange, handleRepresentativeSelect, hasControl]);
 
   // Verificar se temos representantes válidos
   console.log("Field representatives:", representatives);
