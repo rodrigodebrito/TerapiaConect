@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
+import { v4 as uuid } from 'uuid';
 
 // Cores para os representantes
 const REPRESENTATIVE_COLORS = [
@@ -52,7 +52,8 @@ const REPRESENTATIVE_TYPES = {
   }
 };
 
-export const ConstellationContext = createContext();
+// Exportar o contexto separadamente
+export const ConstellationContext = createContext(null);
 
 export const ConstellationProvider = ({ children, isHost = true, sessionId = null }) => {
   const [representatives, setRepresentatives] = useState([]);
@@ -67,37 +68,354 @@ export const ConstellationProvider = ({ children, isHost = true, sessionId = nul
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
   const [showNames, setShowNames] = useState(true);
-  
-  // Referência ao socket para comunicação em tempo real
+  const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 10, z: 10 });
+  const [cameraTarget, setCameraTarget] = useState({ x: 0, y: 0, z: 0 });
+  const [plateRotation, setPlateRotation] = useState(0);
   const socketRef = useRef(null);
+  // Adicionar flag para controlar a sincronização inicial - movida para fora do useEffect
+  const isInitialSync = useRef(true);
   
-  // Inicializar a conexão socket quando o componente montar
+  // Registrar o status de host em uma ref para evitar problemas de fechamento
+  const isHostRef = useRef(isHost);
+  
+  // Atualizar a ref quando isHost mudar
   useEffect(() => {
-    // Comentado até implementar backend
-    /*
-    if (sessionId) {
-      socketRef.current = io('http://localhost:3000', {
-        query: { sessionId }
-      });
-      
-      socketRef.current.on('connect', () => {
-        console.log('Conectado ao servidor');
-      });
-      
-      socketRef.current.on('representativesMoved', (updatedRepresentatives) => {
-        setRepresentatives(updatedRepresentatives);
-      });
-      
-      socketRef.current.on('controlTransferred', (newController) => {
-        setHasControl(newController === socketRef.current.id);
-      });
-      
-      return () => {
-        socketRef.current.disconnect();
-      };
+    isHostRef.current = isHost;
+    console.log("Status de host atualizado:", isHost);
+    
+    // Forçar o hasControl com base no isHost
+    if (isHost) {
+      setHasControl(true);
+      console.log("Controle concedido automaticamente ao host");
     }
-    */
-  }, [sessionId]);
+  }, [isHost]);
+  
+  // Escutar pelo socket existente no window object
+  useEffect(() => {
+    // Socket sendo criado pelo SessionRoom
+    const checkForGlobalSocket = () => {
+      if (window.constellationSocket) {
+        console.log('ConstellationContext: Usando socket existente (constellationSocket)');
+        return window.constellationSocket;
+      }
+      
+      // Tentar criar uma referência ao socket global se existir
+      if (window.socket) {
+        console.log('ConstellationContext: Usando socket global existente (window.socket)');
+        window.constellationSocket = window.socket;
+        return window.socket;
+      }
+      
+      console.log('ConstellationContext: Socket não encontrado no objeto window');
+      return null;
+    };
+    
+    const socketInstance = checkForGlobalSocket();
+    socketRef.current = socketInstance;
+    
+    if (socketInstance && sessionId) {
+      console.log('ConstellationContext: Socket configurado com ID:', socketInstance.id);
+      console.log('ConstellationContext: Estado de conexão do socket:', socketInstance.connected ? 'conectado' : 'desconectado');
+      console.log('ConstellationContext: Status do controle:', hasControl ? 'Ativo' : 'Inativo', 'Status de host:', isHostRef.current ? 'É host' : 'Não é host');
+      
+      // Configurar listeners para eventos relacionados ao campo de constelação
+      const handleConstellationObject = (data) => {
+        if (data && data.sessionId === sessionId) {
+          console.log('Recebido objeto de constelação:', data.type);
+          
+          // Ignorar eventos que foram emitidos por nós mesmos
+          const isSelfEvent = data.forwardedBy === socketInstance.id;
+          if (isSelfEvent) {
+            console.log(`Ignorando evento do tipo ${data.type} emitido por mim mesmo`);
+            return;
+          }
+          
+          if (data.type === 'representative' && data.action === 'add') {
+            // Adicionar novo representante
+            console.log('Adicionando novo representante:', data.representative);
+            setRepresentatives(prev => [...prev, data.representative]);
+          } 
+          else if (data.type === 'representative' && data.action === 'update') {
+            // Atualizar representante existente
+            console.log('Atualizando representante existente:', data.representative);
+            setRepresentatives(prev => 
+              prev.map(rep => rep.id === data.representative.id ? data.representative : rep)
+            );
+          }
+          else if (data.type === 'representative' && data.action === 'remove') {
+            // Remover representante
+            console.log('Removendo representante:', data.representativeId);
+            setRepresentatives(prev => 
+              prev.filter(rep => rep.id !== data.representativeId)
+            );
+          }
+          else if (data.type === 'move' && data.action === 'position') {
+            // Atualização específica da posição do representante
+            console.log('Atualizando posição do representante:', data.representativeId);
+            setRepresentatives(prev => prev.map(rep => {
+              if (rep.id === data.representativeId) {
+                return { ...rep, position: data.position };
+              }
+              return rep;
+            }));
+          }
+          else if (data.type === 'camera') {
+            // Atualizar posição da câmera
+            console.log(`Recebendo atualização de câmera: Pos(${data.position.x.toFixed(1)}, ${data.position.y.toFixed(1)}, ${data.position.z.toFixed(1)})`);
+            
+            // Verificar se o evento é uma atualização forçada ou se não estamos no controle
+            if (data.forceUpdate || !hasControl) {
+              console.log('Aplicando atualização de câmera');
+            setCameraPosition(data.position);
+              if (data.target) setCameraTarget(data.target);
+            } else {
+              console.log('Ignorando atualização de câmera (temos controle e não é forçada)');
+            }
+          }
+          else if (data.type === 'plate') {
+            // Atualizar rotação do prato
+            console.log(`Recebendo atualização de rotação do prato: ${data.rotation.toFixed(2)}`);
+            
+            // Verificar se o evento é uma atualização forçada ou se não estamos no controle
+            if (data.forceUpdate || !hasControl) {
+              console.log(`Aplicando rotação do prato: ${data.rotation.toFixed(2)}`);
+            setPlateRotation(data.rotation);
+            } else {
+              console.log('Ignorando atualização de rotação do prato (temos controle e não é forçada)');
+            }
+          }
+          else if (data.type === 'control') {
+            // Atualizar quem tem controle
+            console.log('Recebendo atualização de controle:', data);
+            
+            // Se o evento for para transferir controle e nós somos o host
+            if (data.action === 'transfer' && isHostRef.current) {
+              console.log('Host recebeu solicitação de transferência, mantendo controle');
+              return; // Host mantém controle
+            }
+            
+            // Se o evento for para tomar controle e não somos o host, perder controle
+            if (data.action === 'take' && !isHostRef.current) {
+              console.log('Cliente perdendo controle pois host está tomando controle');
+              setHasControl(false);
+              return;
+            }
+            
+            // Se o evento especificar explicitamente um controlador
+            if (data.controller) {
+              const isMe = data.controller === socketInstance.id;
+              console.log(`Controle definido para: ${data.controller} (sou eu: ${isMe})`);
+              setHasControl(isMe);
+            }
+          }
+          else if (data.type === 'fullSync') {
+            // Sincronização completa
+            console.log('Sincronização completa recebida:', data);
+            setRepresentatives(data.representatives || []);
+            
+            // Somente atualizar se não estiver no controle
+            if (!hasControl || (data.forceSync && !isHostRef.current)) {
+            setPlateRotation(data.plateRotation || 0);
+            setCameraPosition(data.cameraPosition || { x: 0, y: 10, z: 10 });
+            setCameraTarget(data.cameraTarget || { x: 0, y: 0, z: 0 });
+            }
+          }
+        }
+      };
+      
+      // Verificar se o listener já existe antes de adicionar
+      socketInstance.off('constellation-object', handleConstellationObject);
+      
+      // Registrar listener para objetos do campo de constelação
+      console.log('ConstellationContext: Registrando listener para evento constellation-object');
+      socketInstance.on('constellation-object', handleConstellationObject);
+      
+      // Configurar listener para depuração
+      socketInstance.on('connect', () => {
+        console.log('ConstellationContext: Socket reconectado com ID:', socketInstance.id);
+        
+        // Host sempre reafirma seu controle ao reconectar
+        if (isHostRef.current) {
+          console.log('Host reafirmando controle após conexão');
+          emitChange({
+            type: 'control',
+            action: 'take',
+            controller: socketInstance.id,
+            isHost: true
+          });
+        }
+      });
+      
+      socketInstance.on('disconnect', () => {
+        console.log('ConstellationContext: Socket desconectado');
+      });
+      
+      // Fazer sincronização inicial apenas uma vez
+      if (isInitialSync.current) {
+      // Emitir um pedido para sincronização inicial se for cliente
+        if (!isHostRef.current) {
+          console.log('Solicitando sincronização completa como cliente...');
+        const requestData = {
+          type: 'requestSync',
+          sessionId,
+          clientId: socketInstance.id,
+          timestamp: Date.now()
+        };
+        socketInstance.emit('constellation-object', requestData);
+        } else {
+          // Se for host, emitir um evento de fullSync para garantir que todos estejam sincronizados
+          console.log('Emitindo sincronização inicial como host...');
+          const syncData = {
+            type: 'fullSync',
+            sessionId,
+            representatives,
+            plateRotation,
+            cameraPosition,
+            cameraTarget,
+            timestamp: Date.now(),
+            forceSync: true
+          };
+          socketInstance.emit('constellation-object', syncData);
+          
+          // Host também afirma seu controle inicial
+          const controlData = {
+            type: 'control',
+            action: 'take',
+            controller: socketInstance.id,
+            isHost: true,
+            sessionId,
+            timestamp: Date.now()
+          };
+          socketInstance.emit('constellation-object', controlData);
+        }
+        
+        // Marcar que a sincronização inicial foi feita
+        isInitialSync.current = false;
+      }
+      
+      // Remover listener quando o componente desmontar
+      return () => {
+        socketInstance.off('constellation-object', handleConstellationObject);
+        console.log('ConstellationContext: Listener removido ao desmontar');
+      };
+    } else {
+      console.log('ConstellationContext: Socket não disponível ou sessionId não fornecido');
+      
+      // Tentar novamente após um breve atraso 
+      const retryTimer = setTimeout(() => {
+        const retrySocket = checkForGlobalSocket();
+        if (retrySocket && sessionId && retrySocket !== socketRef.current) {
+          console.log('ConstellationContext: Socket encontrado após atraso, reconfigurando...');
+          socketRef.current = retrySocket;
+          // Disparar uma atualização de estado para forçar a reexecução do useEffect
+          setHasControl(prev => prev);
+        }
+      }, 2000);
+      
+      return () => clearTimeout(retryTimer);
+    }
+  }, [sessionId, isHost, cameraPosition, cameraTarget, plateRotation, representatives, hasControl]);
+  
+  // Função para emitir mudanças para outros participantes
+  const emitChange = (data) => {
+    const socketInstance = socketRef.current || window.constellationSocket || window.socket;
+    
+    if (socketInstance) {
+      // Verificar o estado da conexão
+      if (socketInstance.connected && sessionId) {
+        // Adicionar mais detalhes para movimentos de prato e câmera
+        if (data.type === 'plate') {
+          console.log(`Emitindo alteração de rotação do prato para ${data.rotation.toFixed(2)}`);
+        } else if (data.type === 'camera') {
+          console.log(`Emitindo alteração de câmera: Pos(${data.position.x.toFixed(1)}, ${data.position.y.toFixed(1)}, ${data.position.z.toFixed(1)})`);
+        } else if (data.type === 'representative') {
+          const rep = data.representative;
+          if (rep) {
+            // Verificar se position existe e qual formato tem (objeto ou array)
+            if (rep.position) {
+              if (rep.position.x !== undefined) {
+                // Posição como objeto {x, y, z}
+                console.log(`Emitindo alteração de representante ${rep.id} (${data.action}): ${rep.name} em Pos(${rep.position.x.toFixed(1)}, ${rep.position.y.toFixed(1)}, ${rep.position.z.toFixed(1)})`);
+              } else if (Array.isArray(rep.position)) {
+                // Posição como array [x, y, z]
+                console.log(`Emitindo alteração de representante ${rep.id} (${data.action}): ${rep.name} em Pos(${rep.position[0].toFixed(1)}, ${rep.position[1].toFixed(1)}, ${rep.position[2].toFixed(1)})`);
+              } else {
+                // Formato desconhecido, apenas logar sem toFixed
+                console.log(`Emitindo alteração de representante ${rep.id} (${data.action}): ${rep.name}`);
+              }
+            } else {
+              // Sem position, apenas logar os detalhes básicos
+              console.log(`Emitindo alteração de representante ${rep.id} (${data.action}): ${rep.name}`);
+            }
+          }
+        } else {
+          console.log('Emitindo alteração de tipo:', data.type, data.action || '');
+        }
+        
+        // Adicionar sessionId e ID do emissor aos dados
+        const eventData = {
+          ...data,
+          sessionId,
+          forwardedBy: socketInstance.id,
+          timestamp: Date.now()
+        };
+        
+        // Emitir o evento
+        try {
+          socketInstance.emit('constellation-object', eventData);
+        } catch (error) {
+          console.error("Erro ao emitir dados via socket:", error);
+        }
+      } else {
+        console.log('Socket não conectado. Estado:', socketInstance.connected ? 'conectado' : 'desconectado', 'Tentando reconectar...');
+        
+        // Tenta reconectar e então emitir
+        if (!socketInstance.connected) {
+          try {
+            socketInstance.connect();
+            
+            // Tentativa de emissão após breve atraso para dar tempo de reconexão
+            setTimeout(() => {
+              if (socketInstance.connected) {
+                const eventData = {
+                  ...data,
+                  sessionId,
+                  timestamp: Date.now()
+                };
+                console.log('Reconectado, emitindo dados após atraso:', eventData.type);
+                socketInstance.emit('constellation-object', eventData);
+              } else {
+                console.log('Não foi possível reconectar o socket');
+              }
+            }, 1000);
+          } catch (error) {
+            console.error("Erro ao tentar reconectar socket:", error);
+          }
+        }
+      }
+    } else {
+      console.log('Socket não disponível (null ou undefined)');
+      // Tenta obter o socket global novamente
+      const attemptSocket = window.socket;
+      if (attemptSocket) {
+        console.log('Encontrado socket global, tentando usar');
+        socketRef.current = attemptSocket;
+        window.constellationSocket = attemptSocket;
+        
+      const eventData = {
+        ...data,
+        sessionId,
+        timestamp: Date.now()
+      };
+      
+        try {
+          attemptSocket.emit('constellation-object', eventData);
+        } catch (error) {
+          console.error("Erro ao emitir dados via socket global:", error);
+        }
+      }
+    }
+  };
   
   // Gerar uma cor baseada no índice
   const getColorForIndex = (index) => {
@@ -105,8 +423,18 @@ export const ConstellationProvider = ({ children, isHost = true, sessionId = nul
   };
   
   // Adicionar um novo representante
-  const addRepresentative = () => {
-    if (representativeName.trim() === '') return;
+  const addRepresentative = (name, type = null, color) => {
+    if (!hasControl) return;
+
+    // Criar novo representante
+    const id = `rep-${Date.now()}`;
+    
+    // Garantir que o nome seja uma string
+    const repName = typeof name === 'string' ? name : representativeName;
+    
+    // Garantir que o tipo seja válido
+    const finalType = type || selectedType || 'male_adult';
+    console.log("addRepresentative: tipo selecionado =", selectedType, "tipo final =", finalType);
     
     // Área menor para posicionamento (dentro do prato circular)
     const radius = 3;
@@ -116,30 +444,48 @@ export const ConstellationProvider = ({ children, isHost = true, sessionId = nul
     const posZ = Math.sin(angle) * distance;
     
     const newRepresentative = {
-      id: `rep-${Date.now()}`,
-      name: representativeName,
-      position: [posX, 0, posZ],
-      color: selectedColor,
-      type: selectedType,
+      id,
+      name: repName,
+      type: finalType,
+      color: color || selectedColor,
+      position: { x: posX, y: 0, z: posZ },
+      rotation: { x: 0, y: 0, z: 0 },
       isControlled: false
     };
     
-    setRepresentatives(prev => [...prev, newRepresentative]);
-    setRepresentativeName('');
+    console.log("Criando novo representante:", newRepresentative);
     
-    // Emit via socket
-    // if (socketRef.current) {
-    //   socketRef.current.emit('representativeAdded', newRepresentative);
-    // }
+    setRepresentatives(prev => [...prev, newRepresentative]);
+    
+    // Limpar campo se for adição via interface
+    if (!name) {
+    setRepresentativeName('');
+    }
+    
+    // Garantir sincronização via socket usando emitChange em vez de socket direto
+    emitChange({
+      type: 'representative',
+      action: 'add',
+      representative: newRepresentative
+    });
+    
+    return id;
   };
   
   // Selecionar um representante para mover
   const handleRepresentativeSelect = (representative) => {
-    if (!hasControl) return;
+    console.log("handleRepresentativeSelect chamado com:", representative ? representative.name : "null");
+    
+    if (!hasControl) {
+      console.log("Sem controle, ignorando seleção");
+      return;
+    }
     
     if (representative === selectedRepresentative) {
+      console.log("Desselecionando representante");
       setSelectedRepresentative(null);
     } else {
+      console.log("Selecionando representante:", representative?.name);
       setSelectedRepresentative(representative);
     }
 
@@ -166,16 +512,104 @@ export const ConstellationProvider = ({ children, isHost = true, sessionId = nul
     
     console.log(`Atualizando posição do representante ${id} para:`, position);
     
-    const updatedRepresentatives = representatives.map(rep => 
-      rep.id === id ? { ...rep, position } : rep
+    // Assegurar que a posição esteja no formato correto (objeto com x, y, z)
+    let normalizedPosition = position;
+    if (Array.isArray(position)) {
+      normalizedPosition = {
+        x: position[0] || 0,
+        y: position[1] || 0,
+        z: position[2] || 0
+      };
+    }
+    
+    // Atualizar o estado local primeiro
+    const updatedRepresentatives = representatives.map(rep =>
+      rep.id === id ? { ...rep, position: normalizedPosition } : rep
     );
     
     setRepresentatives(updatedRepresentatives);
     
-    // Emit via socket
-    // if (socketRef.current) {
-    //   socketRef.current.emit('representativesMoved', updatedRepresentatives);
-    // }
+    // Emitir evento específico de movimento para melhor desempenho
+    emitChange({
+      type: 'move',
+      action: 'position',
+      representativeId: id,
+      position: normalizedPosition
+    });
+    
+    // Enviar evento completo do representante a cada 500ms para garantir sincronização
+    // mas sem sobrecarregar a rede com atualizações constantes
+    const updatedRep = updatedRepresentatives.find(rep => rep.id === id);
+    if (updatedRep) {
+      const now = Date.now();
+      if (!updatedRep._lastFullSync || now - updatedRep._lastFullSync > 500) {
+        updatedRep._lastFullSync = now;
+        
+        // Throttle para não sobrecarregar
+    setTimeout(() => {
+      emitChange({
+        type: 'representative',
+        action: 'update',
+            representative: { ...updatedRep, _lastFullSync: undefined }
+      });
+    }, 50);
+      }
+    }
+  };
+  
+  // Atualizar a rotação do prato
+  const setPlateRotationAndSync = (rotation) => {
+    // Verificar se realmente houve mudança significativa
+    if (Math.abs(rotation - plateRotation) > 0.01) {
+      console.log(`Atualizando rotação do prato: ${rotation.toFixed(2)} (anterior: ${plateRotation.toFixed(2)})`);
+      
+      // Atualizar o estado local primeiro
+    setPlateRotation(rotation);
+      
+      // Se não tiver controle, não emitir
+      if (!hasControl) {
+        console.log('Sem controle, não emitindo rotação do prato');
+        return;
+      }
+    
+    // Emitir via socket
+    emitChange({
+      type: 'plate',
+        rotation,
+        forceUpdate: true
+    });
+    }
+  };
+  
+  // Atualizar a posição da câmera
+  const setCameraPositionAndSync = (position, target) => {
+    // Verificar se a mudança é significativa para reduzir tráfego
+    const prevPos = cameraPosition;
+    const distance = Math.sqrt(
+      Math.pow(position.x - prevPos.x, 2) + 
+      Math.pow(position.y - prevPos.y, 2) + 
+      Math.pow(position.z - prevPos.z, 2)
+    );
+    
+    if (distance > 0.1) { // Reduzido de 0.2 para 0.1 para maior sensibilidade
+      // Atualizar estados locais
+    setCameraPosition(position);
+    setCameraTarget(target || cameraTarget);
+      
+      // Se não tiver controle, não emitir
+      if (!hasControl) {
+        console.log('Sem controle, não emitindo posição da câmera');
+        return;
+      }
+    
+    // Emitir via socket
+    emitChange({
+      type: 'camera',
+      position,
+        target: target || cameraTarget,
+        forceUpdate: true
+    });
+    }
   };
   
   // Atualizar o estado de arrastar
@@ -188,143 +622,166 @@ export const ConstellationProvider = ({ children, isHost = true, sessionId = nul
     setHasControl(false);
     
     // Emit via socket
-    // if (socketRef.current) {
-    //   socketRef.current.emit('transferControl', 'client');
-    // }
-  };
-  
-  // Tomar controle de volta (apenas para o terapeuta/host)
-  const takeControl = () => {
-    if (isHost) {
-      setHasControl(true);
-      console.log('Terapeuta retomou o controle do campo');
-      
-      // Emit via socket
-      // if (socketRef.current) {
-      //   socketRef.current.emit('takeControl', 'therapist');
-      // }
-    }
+    emitChange({
+      type: 'control',
+      action: 'transfer',
+      controller: 'client'
+    });
   };
   
   // Salvar a configuração atual
   const saveConfiguration = () => {
     console.log('Configuração salva:', representatives);
-    
-    // Criar um objeto com os dados da constelação
-    const constellationData = {
-      sessionId,
-      timestamp: new Date().toISOString(),
-      representatives: representatives.map(rep => ({
-        id: rep.id,
-        name: rep.name,
-        position: rep.position,
-        color: rep.color,
-        type: rep.type
-      }))
-    };
-    
     // Implementar lógica para salvar no backend
-    // if (socketRef.current) {
-    //   socketRef.current.emit('saveConstellation', constellationData);
-    // }
     
-    // Retornar os dados para uso externo
-    return constellationData;
+    // Também podemos sincronizar o estado atual com todos
+    emitChange({
+      type: 'fullSync',
+      representatives,
+      plateRotation,
+      cameraPosition,
+      cameraTarget
+    });
   };
   
-  // Iniciar a edição de um representante
+  // Iniciar edição de um representante
   const startEditing = (rep) => {
     setEditingId(rep.id);
     setEditName(rep.name);
     setEditColor(rep.color);
   };
   
-  // Salvar a edição de um representante
+  // Salvar edição de um representante
   const saveEditing = () => {
-    if (!editingId) return;
+    if (!editingId || !hasControl) return;
     
-    console.log(`Salvando edição para representante ${editingId}:`, { nome: editName, cor: editColor });
-    
-    const updatedRepresentatives = representatives.map(rep => 
-      rep.id === editingId ? { ...rep, name: editName, color: editColor } : rep
-    );
+    const updatedRepresentatives = representatives.map(rep => {
+      if (rep.id === editingId) {
+        const updatedRep = {
+          ...rep,
+          name: editName,
+          color: editColor
+        };
+        
+        // Emitir via socket
+        emitChange({
+          type: 'representative',
+          action: 'update',
+          representative: updatedRep
+        });
+        
+        return updatedRep;
+      }
+      return rep;
+    });
     
     setRepresentatives(updatedRepresentatives);
     setEditingId(null);
-    
-    // Emit via socket
-    // if (socketRef.current) {
-    //   socketRef.current.emit('representativesMoved', updatedRepresentatives);
-    // }
   };
   
-  // Cancelar a edição
+  // Cancelar edição
   const cancelEditing = () => {
     setEditingId(null);
   };
   
   // Remover um representante
   const removeRepresentative = (id) => {
+    if (!hasControl) return;
+    
+    console.log(`Removendo representante ${id}`);
+    
     const updatedRepresentatives = representatives.filter(rep => rep.id !== id);
     
     setRepresentatives(updatedRepresentatives);
     
-    if (selectedRepresentative?.id === id) {
-      setSelectedRepresentative(null);
+    // Garantir sincronização via socket
+    if (socketRef.current && socketRef.current.connected) {
+      console.log('Enviando remoção de representante via socket:', id);
+      socketRef.current.emit('representative_removed', {
+        sessionId,
+        representativeId: id,
+        forwardedBy: socketRef.current.id
+      });
     }
-    
-    // Emit via socket
-    // if (socketRef.current) {
-    //   socketRef.current.emit('representativeRemoved', id);
-    // }
   };
+  
+  // Modificar função de rotação para garantir sincronização
+  const setRepresentativeRotation = (id, rotation) => {
+    if (!hasControl) return;
 
-  // Criar o contexto com os valores
-  const value = {
-    representatives,
-    selectedRepresentative,
-    representativeName,
-    selectedType,
-    selectedColor,
-    hasControl,
-    showDragHint,
-    editingId,
-    editName,
-    editColor,
-    isDraggingAny,
-    showNames,
+    console.log(`Atualizando rotação do representante ${id}:`, rotation);
     
-    // Setters
-    setRepresentativeName,
-    setSelectedType,
-    setSelectedColor,
-    setShowNames,
-    setEditName,
-    setEditColor,
+    const updatedRepresentatives = representatives.map(rep =>
+      rep.id === id ? { ...rep, rotation } : rep
+    );
     
-    // Ações
-    addRepresentative,
-    handleRepresentativeClick: handleRepresentativeSelect,
-    setRepresentativePosition,
-    setDraggingState,
-    transferControl,
-    takeControl,
-    saveConfiguration,
-    startEditing,
-    saveEditing,
-    cancelEditing,
-    removeRepresentative,
+    setRepresentatives(updatedRepresentatives);
     
-    // Constantes 
-    REPRESENTATIVE_COLORS,
-    REPRESENTATIVE_TYPES
+    // Garantir que os eventos sejam enviados para o servidor
+    if (socketRef.current && socketRef.current.connected) {
+      console.log('Enviando atualização de rotação via socket');
+      socketRef.current.emit('representative_rotated', {
+        sessionId,
+        representativeId: id,
+        rotation,
+        forwardedBy: socketRef.current.id
+      });
+      
+      // Enviar todas as representações para garantir sincronização completa
+      socketRef.current.emit('representatives_updated', {
+        sessionId,
+        representatives: updatedRepresentatives,
+        forwardedBy: socketRef.current.id
+      });
+    }
   };
-
+  
   return (
-    <ConstellationContext.Provider value={value}>
+    <ConstellationContext.Provider
+      value={{
+        representatives,
+        selectedRepresentative,
+        representativeName,
+        selectedType,
+        selectedColor,
+        hasControl,
+        isDraggingAny,
+        showDragHint,
+        editingId,
+        editName,
+        editColor,
+        showNames,
+        plateRotation,
+        cameraPosition,
+        cameraTarget,
+        REPRESENTATIVE_COLORS,
+        REPRESENTATIVE_TYPES,
+        setRepresentativeName,
+        setSelectedType,
+        setSelectedColor,
+        addRepresentative,
+        handleRepresentativeSelect,
+        handleContextMenu,
+        setRepresentativePosition,
+        setDraggingState,
+        startEditing,
+        saveEditing,
+        cancelEditing,
+        removeRepresentative,
+        transferControl,
+        saveConfiguration,
+        setShowNames,
+        setEditName,
+        setEditColor,
+        setPlateRotation: setPlateRotationAndSync,
+        setCameraPosition: setCameraPositionAndSync,
+        setRepresentativeRotation
+      }}
+    >
       {children}
     </ConstellationContext.Provider>
   );
-};
+}; 
 
+// Adicionar uma exportação padrão do provider para facilitar a importação
 export default ConstellationProvider; 
