@@ -13,9 +13,10 @@ const path = require('path');
 // Importação das rotas essenciais
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
-const therapistRoutes = require('./routes/therapist.routes');
-const clientRoutes = require('./routes/client.routes');
-const toolRoutes = require('./routes/tool.routes');
+// Removendo temporariamente as rotas que dependem da tabela Tool
+// const therapistRoutes = require('./routes/therapist.routes');
+// const clientRoutes = require('./routes/client.routes');
+// const toolRoutes = require('./routes/tool.routes');
 
 // Inicializar Prisma com configurações de log mínimas
 const prisma = new PrismaClient({
@@ -48,9 +49,10 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Definição das rotas essenciais
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/therapists', therapistRoutes);
-app.use('/api/clients', clientRoutes);
-app.use('/api/tools', toolRoutes);
+// Removendo temporariamente as rotas que dependem da tabela Tool
+// app.use('/api/therapists', therapistRoutes);
+// app.use('/api/clients', clientRoutes);
+// app.use('/api/tools', toolRoutes);
 
 // Rota padrão
 app.get('/', (req, res) => {
@@ -67,18 +69,41 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+// Rota para listar tabelas do banco
+app.get('/api/db-tables', async (req, res) => {
+  try {
+    const tables = await prisma.$queryRaw`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public'
+      ORDER BY table_name;
+    `;
+    
+    res.json({ 
+      status: 'success',
+      tables: tables,
+      message: 'Tabelas listadas com sucesso'
+    });
+  } catch (error) {
+    console.error('Erro ao listar tabelas:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      message: 'Erro ao listar tabelas',
+      error: error.message
+    });
+  }
+});
+
 // Rota para testar a conexão com o banco de dados
 app.get('/api/db-test', async (req, res) => {
   try {
     // Operação leve para testar conexão
     const userCount = await prisma.user.count();
-    const toolCount = await prisma.tool.count();
     
     res.json({ 
       status: 'connected', 
       stats: {
-        users: userCount,
-        tools: toolCount
+        users: userCount
       },
       message: 'Conexão com o banco de dados estabelecida com sucesso'
     });
