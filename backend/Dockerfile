@@ -10,9 +10,6 @@ WORKDIR /app
 # Copiar arquivos de dependências
 COPY package*.json ./
 
-# Remover "type": "module" do package.json para manter CommonJS
-RUN cat package.json | grep -v '"type": "module"' > package.temp.json && mv package.temp.json package.json
-
 # Instalar todas as dependências (incluindo de desenvolvimento para o Prisma)
 RUN npm install
 
@@ -28,5 +25,5 @@ RUN npx prisma generate
 # Expor porta
 EXPOSE 3000
 
-# Comando para iniciar diretamente (sem script separado)
-CMD /bin/bash -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && npm start" 
+# Comando para iniciar diretamente (sem script separado) usando a opção --no-module para ignorar ESM
+CMD /bin/bash -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node --no-warnings --no-deprecation src/index.js" 
