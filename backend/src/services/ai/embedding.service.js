@@ -1,6 +1,6 @@
-const { pipeline } = require('@xenova/transformers');
-const prisma = require('../../utils/prisma');
-const logger = require('../../utils/logger');
+import { pipeline } from '@xenova/transformers';
+import prisma from '../../utils/prisma.js';
+import logger from '../../utils/logger.js';
 
 class EmbeddingService {
   constructor() {
@@ -219,4 +219,6 @@ class EmbeddingService {
   }
 }
 
-module.exports = new EmbeddingService(); 
+// Exportando como módulo ES
+const embeddingService = new EmbeddingService();
+export default embeddingService; 

@@ -4,7 +4,7 @@
  * em qualquer lugar do código para realizar operações no banco de dados.
  */
 
-const { PrismaClient } = require('@prisma/client');
+import { PrismaClient } from '@prisma/client';
 
 // Verificar configuração de debug do Prisma no .env
 const debugPrisma = process.env.DEBUG_PRISMA === 'true';
@@ -32,4 +32,4 @@ async function testConnection() {
 testConnection();
 
 // Exportar o cliente Prisma para uso em outros arquivos
-module.exports = prisma; 
+export default prisma; 
