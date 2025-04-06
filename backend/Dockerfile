@@ -16,7 +16,65 @@ RUN npm install
 # Copiar os arquivos da aplicação
 COPY . .
 
-# Criar arquivo temporário com extensão .cjs para forçar CommonJS
+# Criar versões CommonJS (.cjs) dos módulos necessários
+# 1. Criar versão CommonJS de prisma.js
+RUN echo '/**
+ * Configuração do cliente Prisma
+ */
+const { PrismaClient } = require("@prisma/client");
+
+// Verificar configuração de debug do Prisma no .env
+const debugPrisma = process.env.DEBUG_PRISMA === "true";
+
+// Inicializa o cliente Prisma com configurações de log
+const prisma = new PrismaClient({
+  log: debugPrisma || process.env.NODE_ENV === "development" 
+    ? ["query", "info", "warn", "error"] 
+    : ["error"],
+});
+
+// Testar a conexão com o banco de dados
+async function testConnection() {
+  try {
+    await prisma.$connect();
+    console.log("Conexão com o banco de dados estabelecida com sucesso");
+    return true;
+  } catch (error) {
+    console.error("Erro ao conectar ao banco de dados:", error);
+    return false;
+  }
+}
+
+// Exportar o cliente Prisma para uso em outros arquivos
+module.exports = prisma;' > src/utils/prisma.cjs
+
+# 2. Criar versão CommonJS de logger.js
+RUN echo '/**
+ * Logger utilitário simples
+ */
+const logger = {
+  info: (message, ...args) => {
+    console.info(`[INFO] ${message}`, ...args);
+  },
+  
+  warn: (message, ...args) => {
+    console.warn(`[WARN] ${message}`, ...args);
+  },
+  
+  error: (message, ...args) => {
+    console.error(`[ERROR] ${message}`, ...args);
+  },
+  
+  debug: (message, ...args) => {
+    if (process.env.NODE_ENV !== "production") {
+      console.debug(`[DEBUG] ${message}`, ...args);
+    }
+  }
+};
+
+module.exports = logger;' > src/utils/logger.cjs
+
+# 3. Criar arquivo temporário index.cjs para forçar CommonJS
 RUN echo '// Versão CommonJS para contornar problemas com ESM' > src/index-temp.cjs && \
     echo 'require("dotenv").config();' >> src/index-temp.cjs && \
     echo 'const express = require("express");' >> src/index-temp.cjs && \
@@ -24,7 +82,7 @@ RUN echo '// Versão CommonJS para contornar problemas com ESM' > src/index-temp
     echo 'const bodyParser = require("body-parser");' >> src/index-temp.cjs && \
     echo 'const morgan = require("morgan");' >> src/index-temp.cjs && \
     echo 'const path = require("path");' >> src/index-temp.cjs && \
-    echo 'const prisma = require("./utils/prisma");' >> src/index-temp.cjs && \
+    echo 'const prisma = require("./utils/prisma.cjs");' >> src/index-temp.cjs && \
     echo 'const http = require("http");' >> src/index-temp.cjs && \
     echo 'const socketIo = require("socket.io");' >> src/index-temp.cjs && \
     echo '' >> src/index-temp.cjs && \
