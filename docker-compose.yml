@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  # Serviço do banco de dados PostgreSQL
+  db:
+    image: postgres:15-alpine
+    container_name: terapiaconect-db
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: terapiaconect
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Serviço do backend
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: terapiaconect-backend
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/terapiaconect
+      NODE_ENV: production
+
+volumes:
+  postgres_data: 

@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TerapiaConect</title>
+    <style>
+      /* Estilos globais para os botões de IA garantindo que sempre fiquem acima do iframe */
+      .ai-tools-container-direct {
+        position: fixed !important;
+        bottom: 100px !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        pointer-events: none !important;
+        z-index: 2147483647 !important;
+      }
+
+      .ai-simple-toolbar {
+        display: flex !important;
+        gap: 10px !important;
+        background-color: rgba(0, 0, 0, 0.8) !important;
+        border-radius: 50px !important;
+        padding: 8px 16px !important;
+        backdrop-filter: blur(5px) !important;
+        -webkit-backdrop-filter: blur(5px) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+        pointer-events: all !important;
+      }
+
+      .ai-simple-button {
+        background-color: #2a3e4c !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 50px !important;
+        padding: 8px 16px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        cursor: pointer !important;
+        transition: all 0.2s ease !important;
+        font-size: 14px !important;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+      }
+      
+      .ai-simple-button:hover:not(:disabled) {
+        background-color: #3a5268 !important;
+        transform: translateY(-2px) !important;
+      }
+      
+      .ai-simple-button:active:not(:disabled) {
+        transform: translateY(0) !important;
+      }
+      
+      .ai-simple-button:disabled {
+        opacity: 0.5 !important;
+        cursor: not-allowed !important;
+      }
+      
+      .ai-simple-button span[role="img"] {
+        font-size: 18px !important;
+      }
+      
+      /* Estilos de emergência para garantir que botões de IA sejam visíveis */
+      #emergency-ai-buttons {
+        position: fixed !important;
+        bottom: 80px !important;
+        left: 0 !important;
+        width: 100% !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        pointer-events: none !important;
+        z-index: 2147483647 !important;
+      }
+      
+      #emergency-ai-buttons > div {
+        display: flex !important;
+        gap: 10px !important;
+        background-color: rgba(0, 0, 0, 0.8) !important;
+        border-radius: 50px !important;
+        padding: 8px 16px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+        pointer-events: all !important;
+      }
+      
+      #emergency-ai-buttons button {
+        background-color: #2a3e4c !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 50px !important;
+        padding: 8px 16px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        cursor: pointer !important;
+        font-size: 14px !important;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+      }
+
+      /* Estilos globais para botões de AI */
+      #direct-ai-buttons {
+        position: fixed !important;
+        bottom: 80px !important;
+        left: 0 !important;
+        width: 100% !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        pointer-events: none !important;
+        z-index: 2147483647 !important;
+      }
+      
+      #direct-ai-buttons > div {
+        display: flex !important;
+        gap: 10px !important;
+        background-color: rgba(0, 0, 0, 0.8) !important;
+        border-radius: 50px !important;
+        padding: 8px 16px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+        pointer-events: all !important;
+      }
+      
+      #direct-ai-buttons button {
+        background-color: #2a3e4c !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 50px !important;
+        padding: 8px 16px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        cursor: pointer !important;
+        font-size: 14px !important;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="ai-tools-container" style="display: none;">
+      <!-- Container para os botões de IA que será controlado via JavaScript -->
+    </div>
+    <script type="module" src="/src/main.jsx"></script>
+    <script>
+      // Limpar qualquer botão de IA existente
+      function cleanupOldAIButtons() {
+        // Remover qualquer container antigo de AI
+        const oldContainers = [
+          '.ai-buttons-container',
+          '.ai-toolbar',
+          '.ai-tools-wrapper',
+          '.ai-tools-container',
+          '.ai-buttons-wrapper',
+          '.ai-tools'
+        ];
+        
+        oldContainers.forEach(selector => {
+          const elements = document.querySelectorAll(selector);
+          elements.forEach(el => {
+            if (el && el.className !== 'ai-tools-container-direct') {
+              el.remove();
+            }
+          });
+        });
+        
+        // Procurar e remover botões específicos pelo texto ou classe
+        document.querySelectorAll('button').forEach(button => {
+          const text = button.textContent || '';
+          if (
+            (text.includes('Analisar') || 
+             text.includes('Sugestões') || 
+             text.includes('Relatório')) && 
+            !button.closest('.ai-tools-container-direct')
+          ) {
+            const parent = button.parentElement;
+            if (parent && parent.children.length <= 3) {
+              parent.remove(); // Remover o container inteiro se tiver poucos filhos
+            } else {
+              button.remove(); // Remover só o botão
+            }
+          }
+        });
+      }
+
+      // Garantir que os botões de IA sempre sejam visíveis
+      document.addEventListener('DOMContentLoaded', function() {
+        // Limpar primeiro
+        cleanupOldAIButtons();
+        
+        // Verificar periodicamente e limpar botões antigos
+        setInterval(cleanupOldAIButtons, 5000);
+        
+        // Iniciar script de emergência após 5 segundos 
+        // para garantir que a página carregou completamente
+        setTimeout(createEmergencyButtons, 5000);
+      });
+      
+      // Função para criar botões de emergência
+      function createEmergencyButtons() {
+        // Verificar se já existem botões de IA funcionando
+        const existingButtons = document.querySelectorAll('.ai-simple-button, [id*="ai-"], [class*="ai-tool"]');
+        let hasVisibleButtons = false;
+        
+        existingButtons.forEach(button => {
+          if (isElementVisible(button)) {
+            hasVisibleButtons = true;
+          }
+        });
+        
+        // Se já temos botões visíveis, não precisamos criar novos
+        if (hasVisibleButtons) {
+          console.log('Botões de IA já estão visíveis, não criando botões de emergência.');
+          return;
+        }
+        
+        console.log('Nenhum botão de IA visível encontrado. Criando botões de emergência...');
+        
+        // Remover qualquer botão de emergência existente
+        const existingEmergency = document.getElementById('emergency-ai-buttons');
+        if (existingEmergency) {
+          existingEmergency.remove();
+        }
+        
+        // Obter contexto de IA se disponível
+        const aiContext = window.__AI_CONTEXT;
+        
+        // Obter ID da sessão
+        function getSessionId() {
+          try {
+            const path = window.location.pathname;
+            // Verificar várias possibilidades de formato de URL
+            const sessionMatch = path.match(/\/sessions\/([a-zA-Z0-9-]+)/);
+            if (sessionMatch && sessionMatch[1]) return sessionMatch[1];
+            
+            const roomMatch = path.match(/\/room\/([a-zA-Z0-9-]+)/);
+            if (roomMatch && roomMatch[1]) {
+              const parts = roomMatch[1].split('-');
+              return parts.length > 1 ? parts[1] : roomMatch[1];
+            }
+          } catch (err) {
+            console.error('Erro ao extrair ID de sessão:', err);
+          }
+          return 'unknown-session';
+        }
+        
+        // Handlers para os botões
+        function handleAnalyze() {
+          if (aiContext && aiContext.analyze) {
+            console.log('Chamando função de análise com sessão:', getSessionId());
+            aiContext.analyze(getSessionId());
+          } else {
+            alert('Função de análise não está disponível no momento');
+          }
+        }
+        
+        function handleSuggest() {
+          if (aiContext && aiContext.suggest) {
+            console.log('Chamando função de sugestões com sessão:', getSessionId());
+            aiContext.suggest(getSessionId());
+          } else {
+            alert('Função de sugestões não está disponível no momento');
+          }
+        }
+        
+        function handleReport() {
+          if (aiContext && aiContext.report) {
+            console.log('Chamando função de relatório com sessão:', getSessionId());
+            aiContext.report(getSessionId());
+          } else {
+            alert('Função de relatório não está disponível no momento');
+          }
+        }
+        
+        // Criar container
+        const container = document.createElement('div');
+        container.id = 'emergency-ai-buttons';
+        
+        // Criar toolbar
+        const toolbar = document.createElement('div');
+        
+        // Função para criar botão
+        function createButton(emoji, text, clickHandler) {
+          const button = document.createElement('button');
+          
+          const emojiSpan = document.createElement('span');
+          emojiSpan.style.fontSize = '18px';
+          emojiSpan.textContent = emoji;
+          
+          const textSpan = document.createElement('span');
+          textSpan.textContent = text;
+          
+          button.appendChild(emojiSpan);
+          button.appendChild(textSpan);
+          button.addEventListener('click', clickHandler);
+          
+          return button;
+        }
+        
+        // Criar botões
+        const analyzeBtn = createButton('🧠', 'Analisar', handleAnalyze);
+        const suggestBtn = createButton('💡', 'Sugestões', handleSuggest);
+        const reportBtn = createButton('📝', 'Relatório', handleReport);
+        
+        // Montar UI
+        toolbar.appendChild(analyzeBtn);
+        toolbar.appendChild(suggestBtn);
+        toolbar.appendChild(reportBtn);
+        container.appendChild(toolbar);
+        
+        // Adicionar ao body
+        document.body.appendChild(container);
+        console.log('Botões de emergência criados com sucesso');
+      }
+      
+      // Helper para verificar visibilidade
+      function isElementVisible(element) {
+        if (!element) return false;
+        
+        const style = window.getComputedStyle(element);
+        if (style.display === 'none') return false;
+        if (style.visibility !== 'visible') return false;
+        if (style.opacity === '0') return false;
+        
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      }
+
+      // Verificador de botões de IA
+      setInterval(() => {
+        if (window.location.pathname.includes('/session/') || window.location.pathname.includes('/room/')) {
+          const buttonsExist = document.getElementById('direct-ai-buttons');
+          if (!buttonsExist) {
+            console.log('Botões IA não encontrados, forçando reconstrução');
+            
+            // Remover qualquer container existente
+            document.querySelectorAll('[id*="ai-"], [class*="ai-buttons"], [class*="ai-tools"]').forEach(el => {
+              if (el.id !== 'direct-ai-buttons') {
+                el.remove();
+              }
+            });
+            
+            // Limpar botões específicos
+            document.querySelectorAll('button').forEach(btn => {
+              const text = btn.textContent || '';
+              if ((text.includes('Analisar') || text.includes('Sugestões') || text.includes('Relatório')) && 
+                  !btn.closest('#direct-ai-buttons')) {
+                const parent = btn.parentElement;
+                if (parent && parent.children.length <= 3) {
+                  parent.remove();
+                } else {
+                  btn.remove();
+                }
+              }
+            });
+            
+            // Isso forçará o useEffect no FallbackMeeting a criar novos botões
+            // na próxima verificação
+          }
+        }
+      }, 5000);
+    </script>
+  </body>
+</html> 

@@ -1,0 +1,33 @@
+# render.yaml
+services:
+  # Serviço Backend (Docker)
+  - type: web
+    name: terapiaconect-backend
+    runtime: docker
+    rootDir: backend
+    dockerfile: ./Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        sync: false # Esta variável será configurada manualmente no dashboard do Render
+      - key: JWT_SECRET
+        sync: false # Esta variável será configurada manualmente no dashboard do Render
+      - key: OPENAI_API_KEY
+        sync: false # Esta variável será configurada manualmente no dashboard do Render
+
+  # Serviço Frontend (Web)
+  - type: web
+    name: terapiaconect-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: terapiaconect-backend
+          property: url # Isso vai pegar a URL do backend automaticamente 

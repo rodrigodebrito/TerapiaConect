@@ -1,0 +1,13 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- Todos comandos dever ser compativeis com o PowerShell 
+- Os meus frontend e backend reiniciam sozinhos, não precisa pedir pra reiniciar
+- O backend roda na porta 3000 , cuidado para nao por portas erradas
+- Toda nova implementação você deve falar o que entendeu e caso tenha duvidas me pergunte
+- Toda alteração ou implementação você deve me explicar o que vai fazer os impactos e me pergutar se pode prosseguir

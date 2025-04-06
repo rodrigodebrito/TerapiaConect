@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: terapiaconect-api
+    env: node
+    buildCommand: npm install && npx prisma generate
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DAILY_API_KEY
+        sync: false 
