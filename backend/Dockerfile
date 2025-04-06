@@ -16,108 +16,118 @@ RUN npm install
 # Copiar os arquivos da aplicação
 COPY . .
 
-# Criar o arquivo index-compat.cjs para lidar com as importações de rota em formato CommonJS
-RUN cat > index-compat.cjs << 'EOF'
-require("dotenv").config();
+# Criar arquivo index-compat.cjs - Parte 1: Importações e inicialização
+RUN echo 'require("dotenv").config();' > index-compat.cjs && \
+    echo '' >> index-compat.cjs && \
+    echo 'const express = require("express");' >> index-compat.cjs && \
+    echo 'const cors = require("cors");' >> index-compat.cjs && \
+    echo 'const bodyParser = require("body-parser");' >> index-compat.cjs && \
+    echo 'const morgan = require("morgan");' >> index-compat.cjs && \
+    echo 'const path = require("path");' >> index-compat.cjs && \
+    echo 'const http = require("http");' >> index-compat.cjs && \
+    echo 'const { Server: SocketIO } = require("socket.io");' >> index-compat.cjs && \
+    echo 'const { PrismaClient } = require("@prisma/client");' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs && \
+    echo 'const prisma = new PrismaClient();' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs
 
-const express = require("express");
-const cors = require("cors");
-const bodyParser = require("body-parser");
-const morgan = require("morgan");
-const path = require("path");
-const http = require("http");
-const { Server: SocketIO } = require("socket.io");
-const { PrismaClient } = require("@prisma/client");
+# Criar arquivo index-compat.cjs - Parte 2: Importação das rotas
+RUN echo '// Importação das rotas' >> index-compat.cjs && \
+    echo 'const authRoutes = require("./src/routes/auth.routes");' >> index-compat.cjs && \
+    echo 'const therapistRoutes = require("./src/routes/therapist.routes");' >> index-compat.cjs && \
+    echo 'const clientRoutes = require("./src/routes/client.routes");' >> index-compat.cjs && \
+    echo 'const appointmentRoutes = require("./src/routes/appointment.routes");' >> index-compat.cjs && \
+    echo 'const userRoutes = require("./src/routes/user.routes");' >> index-compat.cjs && \
+    echo 'const toolRoutes = require("./src/routes/tool.routes");' >> index-compat.cjs && \
+    echo 'const uploadRoutes = require("./src/routes/upload.routes");' >> index-compat.cjs && \
+    echo 'const sessionRoutes = require("./src/routes/session.routes");' >> index-compat.cjs && \
+    echo 'const aiRoutes = require("./src/routes/ai.routes");' >> index-compat.cjs && \
+    echo 'const transcriptRoutes = require("./src/routes/transcript.routes");' >> index-compat.cjs && \
+    echo 'const insightRoutes = require("./src/routes/insight.routes");' >> index-compat.cjs && \
+    echo 'const meetingRoutes = require("./src/routes/meeting.routes");' >> index-compat.cjs && \
+    echo 'const trainingRoutes = require("./src/routes/training.routes");' >> index-compat.cjs && \
+    echo 'const transcriptionRoutes = require("./src/routes/transcription.routes");' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs
 
-const prisma = new PrismaClient();
+# Criar arquivo index-compat.cjs - Parte 3: Configuração da aplicação e servidor
+RUN echo '// Configuração da aplicação' >> index-compat.cjs && \
+    echo 'const app = express();' >> index-compat.cjs && \
+    echo 'const PORT = process.env.PORT || 3000;' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs && \
+    echo '// Criar servidor HTTP com Express' >> index-compat.cjs && \
+    echo 'const server = http.createServer(app);' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs
 
-// Importação das rotas
-const authRoutes = require("./src/routes/auth.routes");
-const therapistRoutes = require("./src/routes/therapist.routes");
-const clientRoutes = require("./src/routes/client.routes");
-const appointmentRoutes = require("./src/routes/appointment.routes");
-const userRoutes = require("./src/routes/user.routes");
-const toolRoutes = require("./src/routes/tool.routes");
-const uploadRoutes = require("./src/routes/upload.routes");
-const sessionRoutes = require("./src/routes/session.routes");
-const aiRoutes = require("./src/routes/ai.routes");
-const transcriptRoutes = require("./src/routes/transcript.routes");
-const insightRoutes = require("./src/routes/insight.routes");
-const meetingRoutes = require("./src/routes/meeting.routes");
-const trainingRoutes = require("./src/routes/training.routes");
-const transcriptionRoutes = require("./src/routes/transcription.routes");
+# Criar arquivo index-compat.cjs - Parte 4: Configuração do Socket.IO
+RUN echo '// Configurar Socket.IO com configurações otimizadas' >> index-compat.cjs && \
+    echo 'const io = new SocketIO(server, {' >> index-compat.cjs && \
+    echo '  cors: {' >> index-compat.cjs && \
+    echo '    origin: process.env.NODE_ENV === "production"' >> index-compat.cjs && \
+    echo '      ? ["https://terapiaconect.com", "https://www.terapiaconect.com"]' >> index-compat.cjs && \
+    echo '      : ["http://localhost:3001", "http://localhost:5173", "*"],' >> index-compat.cjs && \
+    echo '    methods: ["GET", "POST", "OPTIONS"],' >> index-compat.cjs && \
+    echo '    credentials: true,' >> index-compat.cjs && \
+    echo '    allowedHeaders: ["Content-Type", "Authorization", "Accept"]' >> index-compat.cjs && \
+    echo '  },' >> index-compat.cjs && \
+    echo '  allowEIO3: true,' >> index-compat.cjs && \
+    echo '  pingTimeout: 60000,' >> index-compat.cjs && \
+    echo '  transports: ["polling", "websocket"]' >> index-compat.cjs && \
+    echo '});' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs
 
-// Configuração da aplicação
-const app = express();
-const PORT = process.env.PORT || 3000;
+# Criar arquivo index-compat.cjs - Parte 5: Middleware
+RUN echo '// Middleware' >> index-compat.cjs && \
+    echo 'app.use(cors({' >> index-compat.cjs && \
+    echo '  origin: process.env.NODE_ENV === "production"' >> index-compat.cjs && \
+    echo '    ? ["https://terapiaconect.com", "https://www.terapiaconect.com"]' >> index-compat.cjs && \
+    echo '    : ["http://localhost:3001", "http://localhost:5173", "*"],' >> index-compat.cjs && \
+    echo '  credentials: true,' >> index-compat.cjs && \
+    echo '  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],' >> index-compat.cjs && \
+    echo '  allowedHeaders: ["Content-Type", "Authorization", "Accept"]' >> index-compat.cjs && \
+    echo '}));' >> index-compat.cjs && \
+    echo 'app.use(express.json({ limit: "10mb" }));' >> index-compat.cjs && \
+    echo 'app.use(express.urlencoded({ extended: true, limit: "10mb" }));' >> index-compat.cjs && \
+    echo 'app.use(bodyParser.json({ limit: "10mb" }));' >> index-compat.cjs && \
+    echo 'app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));' >> index-compat.cjs && \
+    echo 'app.use(morgan("dev"));' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs && \
+    echo '// Servir arquivos estáticos da pasta uploads' >> index-compat.cjs && \
+    echo 'app.use("/uploads", express.static(path.join(__dirname, "uploads")));' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs
 
-// Criar servidor HTTP com Express
-const server = http.createServer(app);
+# Criar arquivo index-compat.cjs - Parte 6: Definição das rotas
+RUN echo '// Definição das rotas' >> index-compat.cjs && \
+    echo 'app.use("/api/auth", authRoutes);' >> index-compat.cjs && \
+    echo 'app.use("/api/users", userRoutes);' >> index-compat.cjs && \
+    echo 'app.use("/api/clients", clientRoutes);' >> index-compat.cjs && \
+    echo 'app.use("/api/therapists", therapistRoutes);' >> index-compat.cjs && \
+    echo 'app.use("/api/appointments", appointmentRoutes);' >> index-compat.cjs && \
+    echo 'app.use("/api/tools", toolRoutes);' >> index-compat.cjs && \
+    echo 'app.use("/api/upload", uploadRoutes);' >> index-compat.cjs && \
+    echo 'app.use("/api/sessions", sessionRoutes);' >> index-compat.cjs && \
+    echo 'app.use("/api/ai", aiRoutes);' >> index-compat.cjs && \
+    echo 'app.use("/api/transcripts", transcriptRoutes);' >> index-compat.cjs && \
+    echo 'app.use("/api/insights", insightRoutes);' >> index-compat.cjs && \
+    echo 'app.use("/api/meetings", meetingRoutes);' >> index-compat.cjs && \
+    echo 'app.use("/api/training", trainingRoutes);' >> index-compat.cjs && \
+    echo 'app.use("/api/transcription", transcriptionRoutes);' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs
 
-// Configurar Socket.IO com configurações otimizadas
-const io = new SocketIO(server, {
-  cors: {
-    origin: process.env.NODE_ENV === "production"
-      ? ["https://terapiaconect.com", "https://www.terapiaconect.com"]
-      : ["http://localhost:3001", "http://localhost:5173", "*"],
-    methods: ["GET", "POST", "OPTIONS"],
-    credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization", "Accept"]
-  },
-  allowEIO3: true,
-  pingTimeout: 60000,
-  transports: ["polling", "websocket"]
-});
-
-// Middleware
-app.use(cors({
-  origin: process.env.NODE_ENV === "production"
-    ? ["https://terapiaconect.com", "https://www.terapiaconect.com"]
-    : ["http://localhost:3001", "http://localhost:5173", "*"],
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "Accept"]
-}));
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-app.use(bodyParser.json({ limit: "10mb" }));
-app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
-app.use(morgan("dev"));
-
-// Servir arquivos estáticos da pasta uploads
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-// Definição das rotas
-app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/clients", clientRoutes);
-app.use("/api/therapists", therapistRoutes);
-app.use("/api/appointments", appointmentRoutes);
-app.use("/api/tools", toolRoutes);
-app.use("/api/upload", uploadRoutes);
-app.use("/api/sessions", sessionRoutes);
-app.use("/api/ai", aiRoutes);
-app.use("/api/transcripts", transcriptRoutes);
-app.use("/api/insights", insightRoutes);
-app.use("/api/meetings", meetingRoutes);
-app.use("/api/training", trainingRoutes);
-app.use("/api/transcription", transcriptionRoutes);
-
-// Rota padrão
-app.get("/", (req, res) => {
-  res.send("API da Plataforma Terapeuta - Versão 1.0.0");
-});
-
-// Socket.IO básico
-io.on("connection", (socket) => {
-  console.log("Novo cliente conectado:", socket.id);
-});
-
-// Iniciar o servidor
-server.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT} com suporte a Socket.IO`);
-});
-EOF
+# Criar arquivo index-compat.cjs - Parte 7: Rota padrão, Socket.IO e inicialização
+RUN echo '// Rota padrão' >> index-compat.cjs && \
+    echo 'app.get("/", (req, res) => {' >> index-compat.cjs && \
+    echo '  res.send("API da Plataforma Terapeuta - Versão 1.0.0");' >> index-compat.cjs && \
+    echo '});' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs && \
+    echo '// Socket.IO básico' >> index-compat.cjs && \
+    echo 'io.on("connection", (socket) => {' >> index-compat.cjs && \
+    echo '  console.log("Novo cliente conectado:", socket.id);' >> index-compat.cjs && \
+    echo '});' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs && \
+    echo '// Iniciar o servidor' >> index-compat.cjs && \
+    echo 'server.listen(PORT, () => {' >> index-compat.cjs && \
+    echo '  console.log(`Servidor rodando na porta ${PORT} com suporte a Socket.IO`);' >> index-compat.cjs && \
+    echo '});' >> index-compat.cjs
 
 # Copiar arquivo de ambiente Docker para .env
 COPY .env.docker .env
