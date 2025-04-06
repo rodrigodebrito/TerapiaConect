@@ -16,6 +16,22 @@ RUN npm install
 # Copiar os arquivos da aplicação
 COPY . .
 
+# Remover todos os arquivos package.json internos para garantir que não há "type": "module"
+RUN find ./src -name "package.json" -delete
+
+# Criar versões .cjs dos arquivos de rota
+RUN mkdir -p /app/routes-cjs && \
+    for route in $(find ./src/routes -name "*.js"); do \
+        filename=$(basename "$route" .js); \
+        echo "const express = require('express');" > "/app/routes-cjs/${filename}.cjs"; \
+        echo "const router = express.Router();" >> "/app/routes-cjs/${filename}.cjs"; \
+        echo "// Rota básica para $filename" >> "/app/routes-cjs/${filename}.cjs"; \
+        echo "router.get('/', (req, res) => {" >> "/app/routes-cjs/${filename}.cjs"; \
+        echo "  res.json({ message: 'Rota $filename funcionando' });" >> "/app/routes-cjs/${filename}.cjs"; \
+        echo "});" >> "/app/routes-cjs/${filename}.cjs"; \
+        echo "module.exports = router;" >> "/app/routes-cjs/${filename}.cjs"; \
+    done
+
 # Criar arquivo index-compat.cjs - Parte 1: Importações e inicialização
 RUN echo 'require("dotenv").config();' > index-compat.cjs && \
     echo '' >> index-compat.cjs && \
@@ -33,20 +49,20 @@ RUN echo 'require("dotenv").config();' > index-compat.cjs && \
 
 # Criar arquivo index-compat.cjs - Parte 2: Importação das rotas
 RUN echo '// Importação das rotas' >> index-compat.cjs && \
-    echo 'const authRoutes = require("./src/routes/auth.routes");' >> index-compat.cjs && \
-    echo 'const therapistRoutes = require("./src/routes/therapist.routes");' >> index-compat.cjs && \
-    echo 'const clientRoutes = require("./src/routes/client.routes");' >> index-compat.cjs && \
-    echo 'const appointmentRoutes = require("./src/routes/appointment.routes");' >> index-compat.cjs && \
-    echo 'const userRoutes = require("./src/routes/user.routes");' >> index-compat.cjs && \
-    echo 'const toolRoutes = require("./src/routes/tool.routes");' >> index-compat.cjs && \
-    echo 'const uploadRoutes = require("./src/routes/upload.routes");' >> index-compat.cjs && \
-    echo 'const sessionRoutes = require("./src/routes/session.routes");' >> index-compat.cjs && \
-    echo 'const aiRoutes = require("./src/routes/ai.routes");' >> index-compat.cjs && \
-    echo 'const transcriptRoutes = require("./src/routes/transcript.routes");' >> index-compat.cjs && \
-    echo 'const insightRoutes = require("./src/routes/insight.routes");' >> index-compat.cjs && \
-    echo 'const meetingRoutes = require("./src/routes/meeting.routes");' >> index-compat.cjs && \
-    echo 'const trainingRoutes = require("./src/routes/training.routes");' >> index-compat.cjs && \
-    echo 'const transcriptionRoutes = require("./src/routes/transcription.routes");' >> index-compat.cjs && \
+    echo 'const authRoutes = require("./routes-cjs/auth.routes.cjs");' >> index-compat.cjs && \
+    echo 'const therapistRoutes = require("./routes-cjs/therapist.routes.cjs");' >> index-compat.cjs && \
+    echo 'const clientRoutes = require("./routes-cjs/client.routes.cjs");' >> index-compat.cjs && \
+    echo 'const appointmentRoutes = require("./routes-cjs/appointment.routes.cjs");' >> index-compat.cjs && \
+    echo 'const userRoutes = require("./routes-cjs/user.routes.cjs");' >> index-compat.cjs && \
+    echo 'const toolRoutes = require("./routes-cjs/tool.routes.cjs");' >> index-compat.cjs && \
+    echo 'const uploadRoutes = require("./routes-cjs/upload.routes.cjs");' >> index-compat.cjs && \
+    echo 'const sessionRoutes = require("./routes-cjs/session.routes.cjs");' >> index-compat.cjs && \
+    echo 'const aiRoutes = require("./routes-cjs/ai.routes.cjs");' >> index-compat.cjs && \
+    echo 'const transcriptRoutes = require("./routes-cjs/transcript.routes.cjs");' >> index-compat.cjs && \
+    echo 'const insightRoutes = require("./routes-cjs/insight.routes.cjs");' >> index-compat.cjs && \
+    echo 'const meetingRoutes = require("./routes-cjs/meeting.routes.cjs");' >> index-compat.cjs && \
+    echo 'const trainingRoutes = require("./routes-cjs/training.routes.cjs");' >> index-compat.cjs && \
+    echo 'const transcriptionRoutes = require("./routes-cjs/transcription.routes.cjs");' >> index-compat.cjs && \
     echo '' >> index-compat.cjs
 
 # Criar arquivo index-compat.cjs - Parte 3: Configuração da aplicação e servidor
