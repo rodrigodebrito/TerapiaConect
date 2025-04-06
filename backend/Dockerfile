@@ -10,6 +10,9 @@ WORKDIR /app
 # Copiar arquivos de dependências
 COPY package*.json ./
 
+# Remover a configuração "type": "module" do package.json
+RUN sed -i '/"type": "module"/d' package.json
+
 # Instalar todas as dependências (incluindo de desenvolvimento para o Prisma)
 RUN npm install
 
