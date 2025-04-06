@@ -127,4 +127,4 @@ RUN npx prisma generate
 EXPOSE 3000
 
 # Comando para iniciar usando a versão CommonJS compatível
-CMD /bin/sh -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node index-compat.cjs" 
+CMD /bin/sh -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Verificando arquivo index-compat.cjs...' && cat index-compat.cjs && echo 'Iniciando o servidor...' && node index-compat.cjs" 
