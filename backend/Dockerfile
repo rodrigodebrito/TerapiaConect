@@ -29,4 +29,4 @@ RUN npx prisma generate
 EXPOSE 3000
 
 # Comando para iniciar usando a versão CommonJS do index
-CMD /bin/bash -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node index-temp.cjs" 
+CMD /bin/sh -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node index-temp.cjs" 
