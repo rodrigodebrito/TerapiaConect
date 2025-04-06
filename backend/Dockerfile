@@ -16,67 +16,37 @@ RUN npm install
 # Copiar os arquivos da aplicação
 COPY . .
 
-# Criar versões CommonJS (.cjs) dos módulos necessários
-# 1. Criar versão CommonJS de prisma.js
-RUN echo '/**
- * Configuração do cliente Prisma
- */
-const { PrismaClient } = require("@prisma/client");
+# Criar versões CommonJS dos arquivos necessários
+RUN echo 'const { PrismaClient } = require("@prisma/client");' > src/utils/prisma.cjs && \
+    echo 'const debugPrisma = process.env.DEBUG_PRISMA === "true";' >> src/utils/prisma.cjs && \
+    echo 'const prisma = new PrismaClient({' >> src/utils/prisma.cjs && \
+    echo '  log: debugPrisma || process.env.NODE_ENV === "development"' >> src/utils/prisma.cjs && \
+    echo '    ? ["query", "info", "warn", "error"]' >> src/utils/prisma.cjs && \
+    echo '    : ["error"],' >> src/utils/prisma.cjs && \
+    echo '});' >> src/utils/prisma.cjs && \
+    echo 'module.exports = prisma;' >> src/utils/prisma.cjs
 
-// Verificar configuração de debug do Prisma no .env
-const debugPrisma = process.env.DEBUG_PRISMA === "true";
+# Criar arquivo logger.cjs
+RUN echo 'const logger = {' > src/utils/logger.cjs && \
+    echo '  info: (message, ...args) => {' >> src/utils/logger.cjs && \
+    echo '    console.info(`[INFO] ${message}`, ...args);' >> src/utils/logger.cjs && \
+    echo '  },' >> src/utils/logger.cjs && \
+    echo '  warn: (message, ...args) => {' >> src/utils/logger.cjs && \
+    echo '    console.warn(`[WARN] ${message}`, ...args);' >> src/utils/logger.cjs && \
+    echo '  },' >> src/utils/logger.cjs && \
+    echo '  error: (message, ...args) => {' >> src/utils/logger.cjs && \
+    echo '    console.error(`[ERROR] ${message}`, ...args);' >> src/utils/logger.cjs && \
+    echo '  },' >> src/utils/logger.cjs && \
+    echo '  debug: (message, ...args) => {' >> src/utils/logger.cjs && \
+    echo '    if (process.env.NODE_ENV !== "production") {' >> src/utils/logger.cjs && \
+    echo '      console.debug(`[DEBUG] ${message}`, ...args);' >> src/utils/logger.cjs && \
+    echo '    }' >> src/utils/logger.cjs && \
+    echo '  }' >> src/utils/logger.cjs && \
+    echo '};' >> src/utils/logger.cjs && \
+    echo 'module.exports = logger;' >> src/utils/logger.cjs
 
-// Inicializa o cliente Prisma com configurações de log
-const prisma = new PrismaClient({
-  log: debugPrisma || process.env.NODE_ENV === "development" 
-    ? ["query", "info", "warn", "error"] 
-    : ["error"],
-});
-
-// Testar a conexão com o banco de dados
-async function testConnection() {
-  try {
-    await prisma.$connect();
-    console.log("Conexão com o banco de dados estabelecida com sucesso");
-    return true;
-  } catch (error) {
-    console.error("Erro ao conectar ao banco de dados:", error);
-    return false;
-  }
-}
-
-// Exportar o cliente Prisma para uso em outros arquivos
-module.exports = prisma;' > src/utils/prisma.cjs
-
-# 2. Criar versão CommonJS de logger.js
-RUN echo '/**
- * Logger utilitário simples
- */
-const logger = {
-  info: (message, ...args) => {
-    console.info(`[INFO] ${message}`, ...args);
-  },
-  
-  warn: (message, ...args) => {
-    console.warn(`[WARN] ${message}`, ...args);
-  },
-  
-  error: (message, ...args) => {
-    console.error(`[ERROR] ${message}`, ...args);
-  },
-  
-  debug: (message, ...args) => {
-    if (process.env.NODE_ENV !== "production") {
-      console.debug(`[DEBUG] ${message}`, ...args);
-    }
-  }
-};
-
-module.exports = logger;' > src/utils/logger.cjs
-
-# 3. Criar arquivo temporário index.cjs para forçar CommonJS
-RUN echo '// Versão CommonJS para contornar problemas com ESM' > src/index-temp.cjs && \
-    echo 'require("dotenv").config();' >> src/index-temp.cjs && \
+# Criar arquivo index-temp.cjs
+RUN echo 'require("dotenv").config();' > src/index-temp.cjs && \
     echo 'const express = require("express");' >> src/index-temp.cjs && \
     echo 'const cors = require("cors");' >> src/index-temp.cjs && \
     echo 'const bodyParser = require("body-parser");' >> src/index-temp.cjs && \
@@ -86,7 +56,6 @@ RUN echo '// Versão CommonJS para contornar problemas com ESM' > src/index-temp
     echo 'const http = require("http");' >> src/index-temp.cjs && \
     echo 'const socketIo = require("socket.io");' >> src/index-temp.cjs && \
     echo '' >> src/index-temp.cjs && \
-    echo '// Importação das rotas' >> src/index-temp.cjs && \
     echo 'const authRoutes = require("./routes/auth.routes");' >> src/index-temp.cjs && \
     echo 'const therapistRoutes = require("./routes/therapist.routes");' >> src/index-temp.cjs && \
     echo 'const clientRoutes = require("./routes/client.routes");' >> src/index-temp.cjs && \
@@ -102,14 +71,11 @@ RUN echo '// Versão CommonJS para contornar problemas com ESM' > src/index-temp
     echo 'const trainingRoutes = require("./routes/training.routes");' >> src/index-temp.cjs && \
     echo 'const transcriptionRoutes = require("./routes/transcription.routes");' >> src/index-temp.cjs && \
     echo '' >> src/index-temp.cjs && \
-    echo '// Configuração da aplicação' >> src/index-temp.cjs && \
     echo 'const app = express();' >> src/index-temp.cjs && \
     echo 'const PORT = process.env.PORT || 3000;' >> src/index-temp.cjs && \
     echo '' >> src/index-temp.cjs && \
-    echo '// Criar servidor HTTP com Express' >> src/index-temp.cjs && \
     echo 'const server = http.createServer(app);' >> src/index-temp.cjs && \
     echo '' >> src/index-temp.cjs && \
-    echo '// Configurar Socket.IO' >> src/index-temp.cjs && \
     echo 'const io = socketIo(server, {' >> src/index-temp.cjs && \
     echo '  cors: {' >> src/index-temp.cjs && \
     echo '    origin: process.env.NODE_ENV === "production"' >> src/index-temp.cjs && \
@@ -121,7 +87,6 @@ RUN echo '// Versão CommonJS para contornar problemas com ESM' > src/index-temp
     echo '  }' >> src/index-temp.cjs && \
     echo '});' >> src/index-temp.cjs && \
     echo '' >> src/index-temp.cjs && \
-    echo '// Middleware' >> src/index-temp.cjs && \
     echo 'app.use(cors({' >> src/index-temp.cjs && \
     echo '  origin: process.env.NODE_ENV === "production"' >> src/index-temp.cjs && \
     echo '    ? ["https://terapiaconect.com", "https://www.terapiaconect.com"]' >> src/index-temp.cjs && \
@@ -136,10 +101,8 @@ RUN echo '// Versão CommonJS para contornar problemas com ESM' > src/index-temp
     echo 'app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));' >> src/index-temp.cjs && \
     echo 'app.use(morgan("dev"));' >> src/index-temp.cjs && \
     echo '' >> src/index-temp.cjs && \
-    echo '// Servir arquivos estáticos da pasta uploads' >> src/index-temp.cjs && \
     echo 'app.use("/uploads", express.static(path.join(__dirname, "../uploads")));' >> src/index-temp.cjs && \
     echo '' >> src/index-temp.cjs && \
-    echo '// Definição das rotas' >> src/index-temp.cjs && \
     echo 'app.use("/api/auth", authRoutes);' >> src/index-temp.cjs && \
     echo 'app.use("/api/users", userRoutes);' >> src/index-temp.cjs && \
     echo 'app.use("/api/clients", clientRoutes);' >> src/index-temp.cjs && \
@@ -155,12 +118,10 @@ RUN echo '// Versão CommonJS para contornar problemas com ESM' > src/index-temp
     echo 'app.use("/api/training", trainingRoutes);' >> src/index-temp.cjs && \
     echo 'app.use("/api/transcription", transcriptionRoutes);' >> src/index-temp.cjs && \
     echo '' >> src/index-temp.cjs && \
-    echo '// Rota padrão' >> src/index-temp.cjs && \
     echo 'app.get("/", (req, res) => {' >> src/index-temp.cjs && \
     echo '  res.send("API da Plataforma Terapeuta - Versão 1.0.0");' >> src/index-temp.cjs && \
     echo '});' >> src/index-temp.cjs && \
     echo '' >> src/index-temp.cjs && \
-    echo '// Iniciar o servidor com socket.io' >> src/index-temp.cjs && \
     echo 'server.listen(PORT, () => {' >> src/index-temp.cjs && \
     echo '  console.log(`Servidor rodando na porta ${PORT} com suporte a Socket.IO`);' >> src/index-temp.cjs && \
     echo '});' >> src/index-temp.cjs
