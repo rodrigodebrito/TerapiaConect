@@ -22,19 +22,8 @@ COPY .env.docker .env
 # Gerar Prisma Client
 RUN npx prisma generate
 
-# Criar script de inicialização
-RUN echo '#!/bin/bash\n\
-echo "Aguardando conexão com o banco de dados..."\n\
-npx prisma migrate deploy\n\
-echo "Iniciando o servidor..."\n\
-npm start\n\
-' > /app/docker-entrypoint.sh
-
-# Tornar o script executável
-RUN chmod +x /app/docker-entrypoint.sh
-
 # Expor porta
 EXPOSE 3000
 
-# Comando para iniciar usando o script
-CMD ["/app/docker-entrypoint.sh"] 
+# Comando para iniciar diretamente (sem script separado)
+CMD /bin/bash -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && npm start" 
