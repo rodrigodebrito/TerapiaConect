@@ -1,9 +1,6 @@
 # Usar uma imagem mais leve do Node.js
 FROM node:18-alpine
 
-# Instalar dependências necessárias
-RUN apk add --no-cache bash
-
 # Definir diretório de trabalho
 WORKDIR /app
 
@@ -19,8 +16,8 @@ RUN npm install
 # Copiar os arquivos da aplicação
 COPY . .
 
-# Criar um arquivo index personalizado que usa o arquivo original
-RUN echo 'require("./index");' > src/index-temp.cjs
+# Criar o index-temp.cjs que importa o arquivo original
+RUN echo 'module.exports = require("./src/index.js");' > index-temp.cjs
 
 # Copiar arquivo de ambiente Docker para .env
 COPY .env.docker .env
@@ -32,4 +29,4 @@ RUN npx prisma generate
 EXPOSE 3000
 
 # Comando para iniciar usando a versão CommonJS do index
-CMD /bin/bash -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node src/index-temp.cjs" 
+CMD /bin/bash -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node index-temp.cjs" 
