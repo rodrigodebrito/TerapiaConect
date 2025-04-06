@@ -10,6 +10,9 @@ WORKDIR /app
 # Copiar arquivos de dependências
 COPY package*.json ./
 
+# Remover "type": "module" do package.json para manter CommonJS
+RUN cat package.json | grep -v '"type": "module"' > package.temp.json && mv package.temp.json package.json
+
 # Instalar todas as dependências (incluindo de desenvolvimento para o Prisma)
 RUN npm install
 

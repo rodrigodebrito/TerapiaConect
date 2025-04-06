@@ -8,31 +8,38 @@
  * npm install express cors jsonwebtoken bcryptjs dotenv morgan body-parser nodemon @prisma/client
  */
 
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const bodyParser = require('body-parser');
-const morgan = require('morgan');
-const path = require('path');
-const prisma = require('./utils/prisma');
-const http = require('http');
-const socketIo = require('socket.io');
+import dotenv from 'dotenv';
+dotenv.config();
 
-// Importação das rotas
-const authRoutes = require('./routes/auth.routes');
-const therapistRoutes = require('./routes/therapist.routes');
-const clientRoutes = require('./routes/client.routes');
-const appointmentRoutes = require('./routes/appointment.routes');
-const userRoutes = require('./routes/user.routes');
-const toolRoutes = require('./routes/tool.routes');
-const uploadRoutes = require('./routes/upload.routes');
-const sessionRoutes = require('./routes/session.routes');
-const aiRoutes = require('./routes/ai.routes');
-const transcriptRoutes = require('./routes/transcript.routes');
-const insightRoutes = require('./routes/insight.routes');
-const meetingRoutes = require('./routes/meeting.routes');
-const trainingRoutes = require('./routes/training.routes');
-const transcriptionRoutes = require('./routes/transcription.routes');
+import express from 'express';
+import cors from 'cors';
+import bodyParser from 'body-parser';
+import morgan from 'morgan';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import http from 'http';
+import { Server as SocketIO } from 'socket.io';
+import prisma from './utils/prisma.js';
+
+// Obter o diretório atual em um módulo ES
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Importação das rotas (necessário converter esses arquivos também)
+import authRoutes from './routes/auth.routes.js';
+import therapistRoutes from './routes/therapist.routes.js';
+import clientRoutes from './routes/client.routes.js';
+import appointmentRoutes from './routes/appointment.routes.js';
+import userRoutes from './routes/user.routes.js';
+import toolRoutes from './routes/tool.routes.js';
+import uploadRoutes from './routes/upload.routes.js';
+import sessionRoutes from './routes/session.routes.js';
+import aiRoutes from './routes/ai.routes.js';
+import transcriptRoutes from './routes/transcript.routes.js';
+import insightRoutes from './routes/insight.routes.js';
+import meetingRoutes from './routes/meeting.routes.js';
+import trainingRoutes from './routes/training.routes.js';
+import transcriptionRoutes from './routes/transcription.routes.js';
 
 // Configuração da aplicação
 const app = express();
@@ -42,7 +49,7 @@ const PORT = process.env.PORT || 3000;
 const server = http.createServer(app);
 
 // Configurar Socket.IO com configurações otimizadas
-const io = socketIo(server, {
+const io = new SocketIO(server, {
   cors: {
     origin: process.env.NODE_ENV === 'production' 
       ? ['https://terapiaconect.com', 'https://www.terapiaconect.com'] 
@@ -280,66 +287,60 @@ io.on('connection', (socket) => {
   });
 });
 
-// Iniciar o servidor com socket.io
-server.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT} com suporte a Socket.IO`);
-});
-
-// Middleware para tratar erros do Prisma
-app.use((err, req, res, next) => {
-  // Tratamento específico para erros do Multer
-  if (err.name === 'MulterError') {
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(413).json({
-        message: 'O arquivo é muito grande. O tamanho máximo permitido é 10MB.'
-      });
-    }
-    
-    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
-      return res.status(400).json({
-        message: 'Campo de arquivo inesperado.'
-      });
-    }
-    
-    return res.status(400).json({
-      message: `Erro no upload de arquivo: ${err.message}`
-    });
-  }
-
-  if (err.name === 'PrismaClientKnownRequestError') {
-    console.error('Erro de Prisma:', err.message);
-    return res.status(400).json({ message: 'Erro na operação do banco de dados', code: err.code });
-  }
-  
-  if (err.name === 'PrismaClientValidationError') {
-    console.error('Erro de validação do Prisma:', err.message);
-    return res.status(400).json({ message: 'Erro de validação nos dados fornecidos' });
-  }
-  
-  console.error('Erro não tratado:', err);
-  res.status(500).json({ message: 'Erro interno do servidor' });
-});
-
-// Graceful shutdown
-process.on('SIGTERM', shutDown);
-process.on('SIGINT', shutDown);
-
-async function shutDown() {
-  console.log('Recebido sinal para encerramento');
-  
-  server.close(() => {
-    console.log('Servidor HTTP fechado');
-  });
-  
+// Iniciar o servidor
+async function startServer() {
   try {
-    await prisma.$disconnect();
-    console.log('Conexão com o banco de dados fechada');
-    process.exit(0);
+    // Testar conexão com o banco de dados
+    await prisma.$connect();
+    console.log('Conexão com o banco de dados estabelecida com sucesso');
+    
+    // Iniciar o servidor HTTP
+    server.listen(PORT, () => {
+      console.log(`Servidor rodando em http://localhost:${PORT}`);
+    });
+    
   } catch (error) {
-    console.error('Erro ao desconectar do banco de dados:', error);
+    console.error('Erro ao iniciar servidor:', error);
     process.exit(1);
   }
 }
 
-// Para testes
-module.exports = app; 
+// Função para encerrar o servidor graciosamente
+async function shutDown() {
+  console.log('Recebido sinal para terminar, fechando servidor...');
+  
+  try {
+    // Desconectar todos os clientes Socket.IO
+    io.disconnectSockets(true);
+    
+    // Fechar o servidor HTTP
+    server.close(() => {
+      console.log('Servidor HTTP fechado.');
+      
+      // Fechar conexão com o banco de dados
+      prisma.$disconnect()
+        .then(() => {
+          console.log('Conexão com o banco de dados fechada.');
+          process.exit(0);
+        })
+        .catch((err) => {
+          console.error('Erro ao fechar conexão com o banco de dados:', err);
+          process.exit(1);
+        });
+    });
+  } catch (error) {
+    console.error('Erro ao encerrar servidor:', error);
+    process.exit(1);
+  }
+}
+
+// Capturar sinais para shutdown gracioso
+process.on('SIGTERM', shutDown);
+process.on('SIGINT', shutDown);
+process.on('uncaughtException', (error) => {
+  console.error('Exceção não capturada:', error);
+  shutDown();
+});
+
+// Iniciar o servidor
+startServer(); 
