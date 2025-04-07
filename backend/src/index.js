@@ -740,6 +740,61 @@ app.get('/api/user/:userId', async (req, res) => {
   }
 });
 
+// Adicionar rota específica para terapeutas
+app.get('/api/therapists/user/:userId', authMiddleware, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log(`[Rota direta]: Buscando terapeuta para userId: ${userId}, solicitado por: ${req.user?.id || 'não autenticado'}`);
+    
+    const therapist = await prisma.therapist.findUnique({
+      where: { userId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+    
+    if (!therapist) {
+      return res.status(404).json({ message: 'Terapeuta não encontrado' });
+    }
+    
+    // Mapear para o formato esperado pela API
+    const mappedTherapist = {
+      id: therapist.id,
+      userId: therapist.userId,
+      name: therapist.user.name,
+      email: therapist.user.email,
+      shortBio: therapist.shortBio || '',
+      niches: therapist.niches || '',
+      customNiches: therapist.customNiches || '',
+      education: therapist.education || '',
+      experience: therapist.experience || '',
+      targetAudience: therapist.targetAudience || '',
+      differential: therapist.differential || '',
+      baseSessionPrice: therapist.baseSessionPrice || 0,
+      servicePrices: therapist.servicePrices || '',
+      sessionDuration: therapist.sessionDuration || 60,
+      profilePicture: therapist.profilePicture || '',
+      isApproved: therapist.isApproved || false,
+      attendanceMode: therapist.attendanceMode || 'BOTH',
+      city: therapist.city || '',
+      state: therapist.state || '',
+      tools: []
+    };
+    
+    return res.json(mappedTherapist);
+  } catch (error) {
+    console.error('Erro ao buscar terapeuta por ID de usuário:', error);
+    return res.status(500).json({ message: 'Erro ao buscar dados do terapeuta' });
+  }
+});
+
 // Rota de fallback (404)
 app.use('*', (req, res) => {
   res.status(404).json({
