@@ -108,8 +108,11 @@ console.log('\nCarregando rotas da API:');
 // Função para carregar um router usando require (para arquivos .cjs)
 async function loadCjsRouter(routePath) {
   try {
+    console.log(`🔄 Tentando carregar router: ${routePath}`);
+    
     // Na produção, os arquivos estão em dist
-    const fullPath = path.resolve(__dirname, routePath);
+    const fullPath = path.resolve(routePath);
+    console.log(`🔍 Caminho completo: ${fullPath}`);
     
     // Verificar se o arquivo existe antes de tentar carregá-lo
     if (!fs.existsSync(fullPath)) {
@@ -120,22 +123,45 @@ async function loadCjsRouter(routePath) {
     // Usando require dinâmico (CommonJS)
     let router;
     try {
+      console.log(`🔍 Lendo conteúdo do arquivo para verificação...`);
+      const fileContent = fs.readFileSync(fullPath, 'utf8');
+      console.log(`📄 Primeiros 100 caracteres: ${fileContent.substring(0, 100).replace(/\n/g, ' ')}...`);
+      
       // No Node.js, quando se usa o 'import' como palavra-chave do ESM,
       // você ainda pode usar require() como uma função, mas isso gera um erro
       // em tempo de execução no ambiente ESM, então precisamos usar 'createRequire'
+      console.log(`🔧 Criando require a partir de createRequire...`);
       const { createRequire } = await import('module');
       const require = createRequire(import.meta.url);
       
+      console.log(`🔄 Executando require: ${fullPath}`);
       router = require(fullPath);
+      console.log(`✅ Router carregado, tipo: ${typeof router}`);
       
       // Verificar se router é um objeto (pode ser o caso de module.exports = router)
-      if (typeof router === 'object' && router.default) {
-        router = router.default;
+      if (typeof router === 'object') {
+        console.log(`🔍 Propriedades do objeto router: ${Object.keys(router).join(', ')}`);
+        
+        if (router.default) {
+          console.log(`✅ Usando router.default`);
+          router = router.default;
+        }
+        
+        // Verificar se o objeto tem stack (indicando que é um Router do Express)
+        if (router.stack) {
+          console.log(`✅ Router tem stack (${router.stack.length} rotas)`);
+          router.stack.forEach((layer, i) => {
+            console.log(`   Rota ${i}: ${layer.regexp}`);
+          });
+        } else {
+          console.log(`⚠️ Router não tem stack - pode não ser um Router do Express válido`);
+        }
       }
       
       return router;
     } catch (error) {
       console.error(`❌ Erro ao carregar ${routePath}:`, error.message);
+      console.error(`   Stack: ${error.stack}`);
       return null;
     }
   } catch (error) {
@@ -203,21 +229,57 @@ async function processRoutesDir(routesPath) {
     jsFiles.forEach(file => console.log(`  - ${file}`));
   }
   
-  // Carregar e registrar cada rota
-  let loadedCount = 0;
-  for (const file of cjsRouteFiles) {
-    const routePath = path.join(routesPath, file);
-    console.log(`⏳ Carregando rota: ${file}`);
-    
-    const router = await loadCjsRouter(routePath);
-    if (router) {
-      app.use('/api', router);
-      console.log(`✅ Rota carregada: ${file}`);
-      loadedCount++;
-    }
-  }
+  // Tentar método alternativo de carregamento
+  console.log(`🔄 Tentando método alternativo de carregamento...`);
   
-  console.log(`📊 Rotas carregadas: ${loadedCount}/${cjsRouteFiles.length}`);
+  try {
+    // Tentativa simples com método alternativo (caso o erro seja apenas no carregamento)
+    const { createRequire } = await import('module');
+    const require = createRequire(import.meta.url);
+    
+    // Carregar e registrar cada rota
+    let loadedCount = 0;
+    for (const file of cjsRouteFiles) {
+      const routePath = path.join(routesPath, file);
+      console.log(`\n⏳ Carregando rota: ${file}`);
+      
+      try {
+        // Método 1: Carregar com nossa função
+        console.log(`🔄 Método 1: Usando loadCjsRouter`);
+        const router = await loadCjsRouter(routePath);
+        
+        if (router) {
+          app.use('/api', router);
+          console.log(`✅ Rota carregada com Método 1: ${file}`);
+          loadedCount++;
+          continue; // Se funcionou, vá para o próximo
+        }
+        
+        // Método 2: Tentar diretamente com require
+        console.log(`🔄 Método 2: Usando require diretamente`);
+        try {
+          const routerModule = require(routePath);
+          const directRouter = routerModule.default || routerModule;
+          
+          if (directRouter && typeof directRouter === 'function') {
+            app.use('/api', directRouter);
+            console.log(`✅ Rota carregada com Método 2: ${file}`);
+            loadedCount++;
+          } else {
+            console.log(`❌ Método 2 falhou: ${file} - objeto retornado não é um router válido`);
+          }
+        } catch (reqError) {
+          console.error(`❌ Método 2 falhou: ${file} - ${reqError.message}`);
+        }
+      } catch (error) {
+        console.error(`❌ Erro ao carregar rota ${file}:`, error.message);
+      }
+    }
+    
+    console.log(`📊 Rotas carregadas: ${loadedCount}/${cjsRouteFiles.length}`);
+  } catch (error) {
+    console.error(`❌ Erro no método alternativo:`, error.message);
+  }
 }
 
 // Rota padrão da API
