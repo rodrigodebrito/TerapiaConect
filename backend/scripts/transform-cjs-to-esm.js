@@ -11,7 +11,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import glob from 'glob';
+import * as glob from 'glob';
 import { transformFileSync } from '@babel/core';
 import chalk from 'chalk';
 
