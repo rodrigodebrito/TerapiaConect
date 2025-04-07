@@ -1000,5 +1000,139 @@ RUN echo 'const express = require("express");' > /app/src-cjs/routes/insight.rou
     echo '// Exportar router' >> /app/src-cjs/routes/insight.routes.cjs && \
     echo 'module.exports = router;' >> /app/src-cjs/routes/insight.routes.cjs
 
+# Criar meeting.controller.cjs para garantir compatibilidade
+RUN echo 'const prisma = require("../utils/prisma.cjs");' > /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '// Função para criar uma reunião' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo 'exports.createMeeting = async (req, res) => {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    const { sessionId, platform, roomName, status } = req.body;' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    if (!sessionId || !platform || !roomName) {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '      return res.status(400).json({ message: "ID da sessão, plataforma e nome da sala são obrigatórios" });' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    // Verificar se a sessão existe' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    const session = await prisma.session.findUnique({' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '      where: { id: sessionId }' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    if (!session) {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '      return res.status(404).json({ message: "Sessão não encontrada" });' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    // Criar reunião' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    const meeting = await prisma.meeting.create({' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '      data: {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '        sessionId,' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '        platform,' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '        roomName,' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '        status: status || "CREATED",' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '        createdAt: new Date(),' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '        updatedAt: new Date()' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '      }' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    return res.status(201).json(meeting);' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    console.error("Erro ao criar reunião:", error);' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '// Função para buscar uma reunião por ID' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo 'exports.getMeetingById = async (req, res) => {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    const { id } = req.params;' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    if (!id) {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '      return res.status(400).json({ message: "ID da reunião é obrigatório" });' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    // Buscar reunião' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    const meeting = await prisma.meeting.findUnique({' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '      where: { id }' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    if (!meeting) {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '      return res.status(404).json({ message: "Reunião não encontrada" });' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    return res.status(200).json(meeting);' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    console.error("Erro ao buscar reunião:", error);' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '// Função para buscar reuniões de uma sessão' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo 'exports.getSessionMeetings = async (req, res) => {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    const { sessionId } = req.params;' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    if (!sessionId) {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '      return res.status(400).json({ message: "ID da sessão é obrigatório" });' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    // Buscar reuniões' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    const meetings = await prisma.meeting.findMany({' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '      where: { sessionId },' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '      orderBy: { createdAt: "desc" }' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    return res.status(200).json(meetings);' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    console.error("Erro ao buscar reuniões:", error);' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '// Função para atualizar status de uma reunião' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo 'exports.updateMeetingStatus = async (req, res) => {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    const { id } = req.params;' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    const { status } = req.body;' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    if (!id || !status) {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '      return res.status(400).json({ message: "ID da reunião e status são obrigatórios" });' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    // Atualizar reunião' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    const meeting = await prisma.meeting.update({' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '      where: { id },' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '      data: {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '        status,' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '        updatedAt: new Date()' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '      }' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    return res.status(200).json(meeting);' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    console.error("Erro ao atualizar reunião:", error);' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/meeting.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/meeting.controller.cjs
+
+# Criar meeting.routes.cjs para garantir compatibilidade
+RUN echo 'const express = require("express");' > /app/src-cjs/routes/meeting.routes.cjs && \
+    echo 'const router = express.Router();' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo 'const { validateToken } = require("../middleware/auth.middleware.cjs");' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo 'const { createMeeting, getMeetingById, getSessionMeetings, updateMeetingStatus } = require("../controllers/meeting.controller.cjs");' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo '// Criar nova reunião' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo 'router.post("/", validateToken, createMeeting);' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo '// Obter reunião por ID' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo 'router.get("/:id", validateToken, getMeetingById);' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo '// Obter reuniões de uma sessão' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo 'router.get("/session/:sessionId", validateToken, getSessionMeetings);' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo '// Atualizar status de uma reunião' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo 'router.put("/:id/status", validateToken, updateMeetingStatus);' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo '// Exportar router' >> /app/src-cjs/routes/meeting.routes.cjs && \
+    echo 'module.exports = router;' >> /app/src-cjs/routes/meeting.routes.cjs
+
 # Comando para iniciar usando a versão CommonJS compatível
 CMD /bin/sh -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node index-compat.cjs" 
