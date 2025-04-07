@@ -772,37 +772,32 @@ app.get('/api/therapists/user/:userId', authMiddleware, async (req, res) => {
     });
     
     if (!therapist) {
-      return res.status(404).json({ message: 'Terapeuta não encontrado' });
+      return res.status(404).json({
+        success: false,
+        message: 'Terapeuta não encontrado'
+      });
     }
     
-    // Mapear para o formato esperado pela API
-    const mappedTherapist = {
-      id: therapist.id,
-      userId: therapist.userId,
-      name: therapist.user.name,
-      email: therapist.user.email,
-      shortBio: therapist.shortBio || '',
+    // Processar campos JSON
+    const processedTherapist = {
+      ...therapist,
       niches: safeParseJSON(therapist.niches, []),
       customNiches: safeParseJSON(therapist.customNiches, []),
-      education: therapist.education || '',
-      experience: therapist.experience || '',
-      targetAudience: therapist.targetAudience || '',
-      differential: therapist.differential || '',
-      baseSessionPrice: therapist.baseSessionPrice || 0,
-      servicePrices: therapist.servicePrices || '',
-      sessionDuration: therapist.sessionDuration || 60,
-      profilePicture: therapist.profilePicture || '',
-      isApproved: therapist.isApproved || false,
-      attendanceMode: therapist.attendanceMode || 'BOTH',
-      city: therapist.city || '',
-      state: therapist.state || '',
-      tools: safeParseJSON(therapist.customTools, []) // Usa customTools para as ferramentas
+      customTools: safeParseJSON(therapist.customTools, []),
+      targetAudience: safeParseJSON(therapist.targetAudience, therapist.targetAudience || '')
     };
     
-    return res.json(mappedTherapist);
+    return res.status(200).json({
+      success: true,
+      data: processedTherapist
+    });
   } catch (error) {
     console.error('Erro ao buscar terapeuta por ID de usuário:', error);
-    return res.status(500).json({ message: 'Erro ao buscar dados do terapeuta' });
+    return res.status(500).json({ 
+      success: false,
+      message: 'Erro ao buscar dados do terapeuta',
+      error: error.message
+    });
   }
 });
 
