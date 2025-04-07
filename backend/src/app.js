@@ -1,31 +1,35 @@
-const express = require('express');
-const cors = require('cors');
-const cookieParser = require('cookie-parser');
-const morgan = require('morgan');
-const fs = require('fs');
-const path = require('path');
-const OpenAI = require('openai');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
-const routes = require('./routes');
+import express from 'express';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import morgan from 'morgan';
+import fs from 'fs';
+import path from 'path';
+import OpenAI from 'openai';
+import { PrismaClient } from '@prisma/client';
+import { fileURLToPath } from 'url';
 
 // Importar rotas
-const authRoutes = require('./routes/auth.routes');
-const userRoutes = require('./routes/user.route');
-const adminRoutes = require('./routes/admin.route');
-const therapistRoutes = require('./routes/therapist.route');
-const clientRoutes = require('./routes/client.route');
-const subscriptionRoutes = require('./routes/subscription.route');
-const sessionRoutes = require('./routes/session.route');
-const meetingRoutes = require('./routes/meeting.routes');
-const paymentRoutes = require('./routes/payment.route');
-const aiRoutes = require('./routes/ai.routes');
-const embedRoutes = require('./routes/embedding.route');
-const chatRoutes = require('./routes/chat.route');
-const insightRoutes = require('./routes/insight.routes');
-const trainingRoutes = require('./routes/training.routes');
-const transcriptionRoutes = require('./routes/transcription.routes');
+import authRoutes from './routes/auth.routes.js';
+import userRoutes from './routes/user.route.js';
+import adminRoutes from './routes/admin.route.js';
+import therapistRoutes from './routes/therapist.route.js';
+import clientRoutes from './routes/client.route.js';
+import subscriptionRoutes from './routes/subscription.route.js';
+import sessionRoutes from './routes/session.route.js';
+import meetingRoutes from './routes/meeting.routes.js';
+import paymentRoutes from './routes/payment.route.js';
+import aiRoutes from './routes/ai.routes.js';
+import embedRoutes from './routes/embedding.route.js';
+import chatRoutes from './routes/chat.route.js';
+import insightRoutes from './routes/insight.routes.js';
+import trainingRoutes from './routes/training.routes.js';
+import transcriptionRoutes from './routes/transcription.routes.js';
 
+// Configuração de caminhos para ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const prisma = new PrismaClient();
 const app = express();
 
 // Middleware para parsear JSON
@@ -129,4 +133,10 @@ app.use('/api/embed', embedRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/insights', insightRoutes);
 app.use('/api/training', trainingRoutes);
-app.use('/api/transcription', transcriptionRoutes); 
+app.use('/api/transcription', transcriptionRoutes);
+
+// Adicionar o OpenAI como propriedade global do app para uso nos controladores
+app.locals.openai = openai;
+app.locals.prisma = prisma;
+
+export default app; 
