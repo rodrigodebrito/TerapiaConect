@@ -441,10 +441,7 @@ const getTherapistByUserId = async (req, res) => {
   try {
     const { userId } = req.params;
     
-    // Verificar se o usuário é o próprio ou um admin
-    if (req.user.id !== userId && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ message: 'Acesso não autorizado' });
-    }
+    console.log(`Buscando terapeuta para userId: ${userId}, solicitado por: ${req.user.id}`);
     
     const therapist = await prisma.therapist.findUnique({
       where: { userId },
