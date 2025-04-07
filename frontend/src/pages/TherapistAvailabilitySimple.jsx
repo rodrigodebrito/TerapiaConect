@@ -186,7 +186,7 @@ const TherapistAvailabilitySimple = () => {
       
       // Enviar para o servidor
       console.log(`Salvando disponibilidade para terapeuta ${therapistId}`);
-      const response = await api.post(`/therapists/${therapistId}/availability`, {
+      const response = await api.post(`/api/therapists/${therapistId}/availability`, {
         availability: availabilityData
       });
       

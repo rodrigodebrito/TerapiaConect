@@ -907,6 +907,114 @@ app.put('/api/therapists/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// Rota para buscar e atualizar disponibilidade do terapeuta
+app.get('/api/therapists/:therapistId/availability', authMiddleware, async (req, res) => {
+  try {
+    const { therapistId } = req.params;
+    const { month, year } = req.query;
+    
+    console.log(`[Disponibilidade] Buscando disponibilidade para terapeuta: ${therapistId}, Mês: ${month}, Ano: ${year}`);
+    
+    // Verificar se o terapeuta existe
+    const therapist = await prisma.therapist.findUnique({
+      where: { id: therapistId }
+    });
+    
+    if (!therapist) {
+      return res.status(404).json({
+        success: false,
+        message: 'Terapeuta não encontrado'
+      });
+    }
+    
+    // Buscar disponibilidade
+    const availability = await prisma.availability.findMany({
+      where: { therapistId },
+      orderBy: [
+        { dayOfWeek: 'asc' },
+        { startTime: 'asc' }
+      ]
+    });
+    
+    console.log(`[Disponibilidade] Encontradas ${availability.length} disponibilidades para o terapeuta ${therapistId}`);
+    
+    return res.status(200).json(availability);
+  } catch (error) {
+    console.error('Erro ao buscar disponibilidade do terapeuta:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar disponibilidade',
+      error: error.message
+    });
+  }
+});
+
+app.post('/api/therapists/:therapistId/availability', authMiddleware, async (req, res) => {
+  try {
+    const { therapistId } = req.params;
+    const { availability } = req.body;
+    
+    console.log(`[Disponibilidade] Atualizando disponibilidade para terapeuta: ${therapistId}`);
+    
+    // Verificar se o terapeuta existe
+    const therapist = await prisma.therapist.findUnique({
+      where: { id: therapistId }
+    });
+    
+    if (!therapist) {
+      return res.status(404).json({
+        success: false,
+        message: 'Terapeuta não encontrado'
+      });
+    }
+    
+    // Validar dados da disponibilidade
+    if (!Array.isArray(availability)) {
+      return res.status(400).json({
+        success: false,
+        message: 'A disponibilidade deve ser um array'
+      });
+    }
+    
+    console.log(`[Disponibilidade] Removendo disponibilidade atual e adicionando ${availability.length} novos slots`);
+    
+    // Atualizar disponibilidade (remover existente e adicionar nova)
+    // Primeiro, excluir todos os slots existentes
+    await prisma.availability.deleteMany({
+      where: { therapistId }
+    });
+    
+    // Depois, criar os novos slots
+    const createdSlots = [];
+    for (const slot of availability) {
+      const newSlot = await prisma.availability.create({
+        data: {
+          therapistId,
+          dayOfWeek: slot.dayOfWeek || 0,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          isRecurring: slot.isRecurring || false,
+          date: slot.date ? new Date(slot.date) : null
+        }
+      });
+      createdSlots.push(newSlot);
+    }
+    
+    return res.status(200).json({
+      success: true,
+      message: `${createdSlots.length} slots de disponibilidade atualizados`,
+      data: createdSlots
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar disponibilidade do terapeuta:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao atualizar disponibilidade',
+      error: error.message
+    });
+  }
+});
+
 // Rota de fallback (404)
 app.use('*', (req, res) => {
   res.status(404).json({

@@ -121,8 +121,15 @@ export const updateTherapistProfile = async (therapistId, profileData) => {
 
 // Obter disponibilidade do terapeuta
 export const getTherapistAvailability = async (therapistId) => {
-  const response = await api.get(`/therapists/${therapistId}/availability`);
-  return response.data;
+  try {
+    console.log(`Buscando disponibilidade para terapeuta ID: ${therapistId}`);
+    const response = await api.get(`/api/therapists/${therapistId}/availability`);
+    console.log('Resposta da API de disponibilidade:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao buscar disponibilidade:', error);
+    throw error;
+  }
 };
 
 // Atualizar disponibilidade do terapeuta
