@@ -26,15 +26,38 @@ if (fs.existsSync(distDir)) {
 // Cria o diretório dist
 fs.mkdirSync(distDir, { recursive: true });
 
-// Executa o script de transformação
-console.log(chalk.blue('🔄 Transformando arquivos de CommonJS para ES Modules...'));
-try {
-  execSync('node scripts/transform-cjs-to-esm.js', { stdio: 'inherit' });
-  console.log(chalk.green('✅ Transformação concluída com sucesso!'));
-} catch (error) {
-  console.error(chalk.red('❌ Erro durante a transformação:'), error);
-  process.exit(1);
+// Copia os arquivos diretamente para dist
+console.log(chalk.blue('📋 Copiando arquivos do projeto...'));
+
+// Função para copiar um diretório recursivamente
+function copyDir(src, dest) {
+  // Cria o diretório de destino se não existir
+  if (!fs.existsSync(dest)) {
+    fs.mkdirSync(dest, { recursive: true });
+  }
+  
+  // Lê o conteúdo do diretório de origem
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  
+  // Processa cada item no diretório
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    
+    // Se for um diretório, copia recursivamente
+    if (entry.isDirectory()) {
+      copyDir(srcPath, destPath);
+    } 
+    // Se for um arquivo, copia diretamente
+    else {
+      fs.copyFileSync(srcPath, destPath);
+      console.log(chalk.green(`✅ Copiado: ${srcPath} -> ${destPath}`));
+    }
+  }
 }
+
+// Copia o diretório src para dist
+copyDir(path.join(__dirname, 'src'), distDir);
 
 // Cria o diretório de uploads
 console.log(chalk.blue('📁 Criando diretório de uploads...'));

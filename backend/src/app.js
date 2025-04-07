@@ -12,24 +12,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Importar rotas individualmente para maior confiabilidade no ESM
-// As importações dinâmicas são menos confiáveis durante a transição CJS->ESM
-import authRoutes from './routes/auth.routes.js';
-import userRoutes from './routes/user.route.js';
-import adminRoutes from './routes/admin.route.js';
-import therapistRoutes from './routes/therapist.route.js';
-import clientRoutes from './routes/client.route.js';
-import subscriptionRoutes from './routes/subscription.route.js';
-import sessionRoutes from './routes/session.route.js';
-import meetingRoutes from './routes/meeting.routes.js';
-import paymentRoutes from './routes/payment.route.js';
-import aiRoutes from './routes/ai.routes.js';
-import embedRoutes from './routes/embedding.route.js';
-import chatRoutes from './routes/chat.route.js';
-import insightRoutes from './routes/insight.routes.js';
-import trainingRoutes from './routes/training.routes.js';
-import transcriptionRoutes from './routes/transcription.routes.js';
-
+// Rotas serão carregadas dinamicamente com tratamento de erro
 const prisma = new PrismaClient();
 const app = express();
 
@@ -119,46 +102,65 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Middleware para arquivos estáticos
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Rotas da API
-console.log('\nConfigurando rotas da API:');
+// Registrar as rotas - carregando arquivos .cjs do diretório routes
+console.log('\nCarregando rotas da API:');
 
-// Função para registrar rotas com tratamento de erro
-function registerRoute(path, router) {
+// Função para carregar um router usando require (para arquivos .cjs)
+function loadCjsRouter(routePath) {
   try {
-    if (!router || typeof router !== 'function') {
-      console.log(`❌ Rota ${path} não exporta um router válido`);
-      return false;
-    }
-    app.use(path, router);
-    console.log(`✅ Rota registrada: ${path}`);
-    return true;
+    // Na produção, os arquivos estão em dist
+    const isProduction = process.env.NODE_ENV === 'production';
+    const fullPath = isProduction 
+      ? path.join(__dirname, routePath) 
+      : path.join(__dirname, routePath);
+    
+    // Usando require dinâmico (CommonJS)
+    const router = require(fullPath);
+    return router;
   } catch (error) {
-    console.log(`❌ Erro ao registrar rota ${path}:`, error.message);
-    return false;
+    console.error(`❌ Erro ao carregar ${routePath}:`, error.message);
+    return null;
   }
 }
 
-// Registrar cada rota individualmente
+// Mapeamento de rotas para seus arquivos
+const routes = [
+  { path: '/api/auth', file: './routes/auth.routes.cjs' },
+  { path: '/api/users', file: './routes/user.route.cjs' },
+  { path: '/api/admin', file: './routes/admin.route.cjs' },
+  { path: '/api/therapists', file: './routes/therapist.route.cjs' },
+  { path: '/api/clients', file: './routes/client.route.cjs' },
+  { path: '/api/subscriptions', file: './routes/subscription.route.cjs' },
+  { path: '/api/sessions', file: './routes/session.route.cjs' },
+  { path: '/api/meeting', file: './routes/meeting.routes.cjs' },
+  { path: '/api/payments', file: './routes/payment.route.cjs' },
+  { path: '/api/ai', file: './routes/ai.routes.cjs' },
+  { path: '/api/embed', file: './routes/embedding.route.cjs' },
+  { path: '/api/chat', file: './routes/chat.route.cjs' },
+  { path: '/api/insights', file: './routes/insight.routes.cjs' },
+  { path: '/api/training', file: './routes/training.routes.cjs' },
+  { path: '/api/transcription', file: './routes/transcription.routes.cjs' },
+  { path: '/api/upload', file: './routes/upload.routes.cjs' }
+];
+
+// Registrar cada rota
 let routesRegistered = 0;
-let routesFailed = 0;
+routes.forEach(route => {
+  try {
+    const router = loadCjsRouter(route.file);
+    if (router) {
+      app.use(route.path, router);
+      console.log(`✅ Rota registrada: ${route.path}`);
+      routesRegistered++;
+    } else {
+      console.log(`❌ Rota não carregada: ${route.path}`);
+    }
+  } catch (error) {
+    console.log(`❌ Erro ao registrar rota ${route.path}:`, error.message);
+  }
+});
 
-routesRegistered += registerRoute('/api/auth', authRoutes) ? 1 : 0;
-routesRegistered += registerRoute('/api/users', userRoutes) ? 1 : 0;
-routesRegistered += registerRoute('/api/admin', adminRoutes) ? 1 : 0;
-routesRegistered += registerRoute('/api/therapists', therapistRoutes) ? 1 : 0;
-routesRegistered += registerRoute('/api/clients', clientRoutes) ? 1 : 0;
-routesRegistered += registerRoute('/api/subscriptions', subscriptionRoutes) ? 1 : 0;
-routesRegistered += registerRoute('/api/sessions', sessionRoutes) ? 1 : 0;
-routesRegistered += registerRoute('/api/meeting', meetingRoutes) ? 1 : 0;
-routesRegistered += registerRoute('/api/payments', paymentRoutes) ? 1 : 0;
-routesRegistered += registerRoute('/api/ai', aiRoutes) ? 1 : 0;
-routesRegistered += registerRoute('/api/embed', embedRoutes) ? 1 : 0;
-routesRegistered += registerRoute('/api/chat', chatRoutes) ? 1 : 0;
-routesRegistered += registerRoute('/api/insights', insightRoutes) ? 1 : 0;
-routesRegistered += registerRoute('/api/training', trainingRoutes) ? 1 : 0;
-routesRegistered += registerRoute('/api/transcription', transcriptionRoutes) ? 1 : 0;
-
-console.log(`\n📊 Rotas registradas: ${routesRegistered}/15`);
+console.log(`\n📊 Rotas registradas: ${routesRegistered}/${routes.length}`);
 
 // Rota padrão da API
 app.get('/', (req, res) => {

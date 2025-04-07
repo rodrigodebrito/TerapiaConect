@@ -19,7 +19,10 @@
     "prisma:deploy": "prisma migrate deploy",
     "convert-to-esm": "node scripts/transform-cjs-to-esm.js",
     "init": "node init-project.js",
-    "vercel-build": "npm run build && npm run prisma:generate"
+    "vercel-build": "npm run build && npm run prisma:generate",
+    "migrate": "npx prisma migrate dev",
+    "migrate:prod": "npx prisma migrate deploy",
+    "prepare-routes": "node scripts/rename-to-cjs.js"
   },
   "keywords": ["terapia", "saúde mental", "psicologia"],
   "author": "TerapiaConect",

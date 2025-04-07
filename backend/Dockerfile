@@ -3,6 +3,7 @@ FROM node:20-alpine
 WORKDIR /usr/src/app
 
 # Instala pacotes essenciais e ferramentas de build
+# Adicionamos as bibliotecas necessárias para o Prisma (libssl e openssl)
 RUN apk add --no-cache python3 make g++ git openssl openssl-dev
 
 # Copia arquivos de configuração do projeto
@@ -21,6 +22,9 @@ COPY build.js ./
 
 # Copia código fonte
 COPY src ./src/
+
+# Prepara os arquivos de rota convertendo-os para .cjs
+RUN npm run prepare-routes
 
 # Builds the application
 RUN npm run build
