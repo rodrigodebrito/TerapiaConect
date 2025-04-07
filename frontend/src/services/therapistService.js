@@ -186,7 +186,7 @@ export const getAllTherapists = async (filters = {}) => {
     
     // Verificar se a resposta está no novo formato (success/data)
     let therapistsData = [];
-    if (response.data && response.data.success && Array.isArray(response.data.data)) {
+    if (response.data && response.data.success === true && Array.isArray(response.data.data)) {
       therapistsData = response.data.data;
       console.log('Dados de terapeutas extraídos do formato success/data:', therapistsData.length);
     } 
