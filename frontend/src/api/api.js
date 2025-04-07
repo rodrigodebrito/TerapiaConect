@@ -1,8 +1,11 @@
 import axios from 'axios';
+import config from '../environments';
 
 const baseURL = process.env.NODE_ENV === 'production' 
-  ? '' 
+  ? config.apiUrl 
   : 'http://localhost:3000';
+
+console.log('API Base URL:', baseURL);
 
 const api = axios.create({
   baseURL,
@@ -32,6 +35,7 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    console.log('Requisição sendo enviada para:', config.url);
     return config;
   },
   error => Promise.reject(error)

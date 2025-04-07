@@ -27,7 +27,7 @@ const environments = {
     dailyDomain: 'teraconect.daily.co'
   },
   production: {
-    apiUrl: '/api',
+    apiUrl: 'https://terapiaconect.onrender.com/api',
     baseUrl: window.location.origin,
     dailyApiKey: 'e70077d9b78043fac2ba899cbfec34c9ab88d8dfad6dbb374e0c7722b8d8759e',
     dailyDomain: 'teraconect.daily.co'
