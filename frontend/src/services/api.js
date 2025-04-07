@@ -1,9 +1,17 @@
 import axios from 'axios';
 
+// Verificar explicitamente se estamos no ambiente Vercel
+const isVercel = typeof window !== 'undefined' && 
+                window.location.hostname.includes('vercel.app');
+
 // Configurações do baseURL, dependendo do ambiente
-const baseURL = process.env.NODE_ENV === 'production'
-  ? (process.env.REACT_APP_API_URL || '/api')
-  : 'http://localhost:3000/api';
+const baseURL = isVercel 
+  ? 'https://terapiaconect.onrender.com/api'
+  : (process.env.NODE_ENV === 'production'
+     ? (process.env.REACT_APP_API_URL || '/api')
+     : 'http://localhost:3000/api');
+
+console.log('Services API Base URL:', baseURL, 'Is Vercel:', isVercel);
 
 // Criar uma instância do axios com configuração básica
 const api = axios.create({
@@ -17,7 +25,7 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const fullUrl = `${config.baseURL}${config.url}`;
-    console.log(`Enviando requisição para: ${fullUrl}`);
+    console.log(`Enviando requisição para: ${config.method} ${fullUrl}`);
     
     // Verificar e corrigir duplo /api/ no URL
     if (config.url.startsWith('/api/') && config.baseURL.endsWith('/api')) {
@@ -43,6 +51,15 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
+    // Log detalhado do erro
+    console.error('Erro na API:', {
+      url: error.config?.url,
+      baseURL: error.config?.baseURL,
+      method: error.config?.method,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+    
     // Verificar se o erro é de autenticação (401)
     if (error.response && error.response.status === 401) {
       // Remover token inválido
