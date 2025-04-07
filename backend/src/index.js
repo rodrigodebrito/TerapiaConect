@@ -828,7 +828,10 @@ app.put('/api/therapists/:id', authMiddleware, async (req, res) => {
     });
     
     if (!existingTherapist) {
-      return res.status(404).json({ message: 'Terapeuta não encontrado' });
+      return res.status(404).json({
+        success: false,
+        message: 'Terapeuta não encontrado'
+      });
     }
     
     // Preparar dados para atualização - extraindo apenas os campos que existem no modelo
@@ -885,34 +888,27 @@ app.put('/api/therapists/:id', authMiddleware, async (req, res) => {
     // Atualizar ferramentas (simplificado)
     console.log(`Ferramentas recebidas: ${tools ? tools.length : 0}`);
     
-    // Mapear para o formato esperado pela API
-    const mappedTherapist = {
-      id: updatedTherapist.id,
-      userId: updatedTherapist.userId,
-      name: updatedTherapist.user.name,
-      email: updatedTherapist.user.email,
-      shortBio: updatedTherapist.shortBio || '',
-      niches: updatedTherapist.niches || '',
-      customNiches: updatedTherapist.customNiches || '',
-      education: updatedTherapist.education || '',
-      experience: updatedTherapist.experience || '',
-      targetAudience: updatedTherapist.targetAudience || '',
-      differential: updatedTherapist.differential || '',
-      baseSessionPrice: updatedTherapist.baseSessionPrice || 0,
-      servicePrices: updatedTherapist.servicePrices || '',
-      sessionDuration: updatedTherapist.sessionDuration || 60,
-      profilePicture: updatedTherapist.profilePicture || '',
-      isApproved: updatedTherapist.isApproved || false,
-      attendanceMode: updatedTherapist.attendanceMode || 'BOTH',
-      city: updatedTherapist.city || '',
-      state: updatedTherapist.state || '',
-      tools: tools || []
+    // Processar campos JSON para garantir consistência com o formato do GET
+    const processedTherapist = {
+      ...updatedTherapist,
+      niches: safeParseJSON(updatedTherapist.niches, []),
+      customNiches: safeParseJSON(updatedTherapist.customNiches, []),
+      customTools: safeParseJSON(updatedTherapist.customTools, []),
+      targetAudience: safeParseJSON(updatedTherapist.targetAudience, updatedTherapist.targetAudience || '')
     };
     
-    return res.json(mappedTherapist);
+    // Retornar no mesmo formato da rota GET /api/therapists/:id
+    return res.status(200).json({
+      success: true,
+      data: processedTherapist
+    });
   } catch (error) {
     console.error('Erro ao atualizar perfil do terapeuta:', error);
-    return res.status(500).json({ message: 'Erro ao atualizar dados do terapeuta', error: error.message });
+    return res.status(500).json({ 
+      success: false,
+      message: 'Erro ao atualizar dados do terapeuta', 
+      error: error.message 
+    });
   }
 });
 
