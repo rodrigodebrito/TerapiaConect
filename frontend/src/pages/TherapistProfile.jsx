@@ -501,82 +501,78 @@ const TherapistProfile = () => {
     });
   };
   
-  // Alternar a seleção de uma ferramenta e usar atualização separada
+  // Alternar seleção de ferramenta
   const toggleTool = async (toolId) => {
     try {
-      setSelectedTools(prev => {
-        // Verificar se a ferramenta já está selecionada
-        if (prev.some(t => t.toolId === toolId)) {
-          // Se estiver, remover
-          return prev.filter(t => t.toolId !== toolId);
-        } else {
-          // Se não estiver, adicionar com valores padrão
-          const toolInfo = THERAPY_TOOLS.find(t => t.id === toolId);
-          const defaultDuration = parseInt(formData.sessionDuration) || 60;
-          const defaultPrice = parseFloat(formData.baseSessionPrice) || 0;
-          
-          console.log(`Adicionando ferramenta ${toolInfo.label} com duração ${defaultDuration} e preço ${defaultPrice}`);
-          
-          return [...prev, { 
-            toolId: toolId,
-            name: toolInfo.label,
-            duration: defaultDuration,
-            price: defaultPrice
-          }];
-        }
-      });
-
-      // Se já temos um ID de terapeuta, atualizar as ferramentas separadamente
-      // para garantir que sejam salvas mesmo sem salvar o formulário completo
+      console.log(`Alternando seleção da ferramenta: ${toolId}`);
+      
+      // Verificar se a ferramenta existe
+      const toolInfo = THERAPY_TOOLS.find(t => t.id === toolId);
+      if (!toolInfo) {
+        console.error(`Ferramenta não encontrada: ${toolId}`);
+        return;
+      }
+      
+      // Verificar se a ferramenta já está selecionada
+      const isSelected = selectedTools.some(t => t.toolId === toolId);
+      console.log(`A ferramenta está selecionada? ${isSelected}`);
+      
+      let updatedTools = [];
+      
+      if (isSelected) {
+        // Remover a ferramenta se já estiver selecionada
+        console.log(`Removendo ferramenta: ${toolInfo.label}`);
+        updatedTools = selectedTools.filter(t => t.toolId !== toolId);
+      } else {
+        // Adicionar a ferramenta com valores padrão
+        const defaultDuration = parseInt(formData.sessionDuration) || 60;
+        const defaultPrice = parseFloat(formData.baseSessionPrice) || 0;
+        
+        console.log(`Adicionando ferramenta ${toolInfo.label} com duração ${defaultDuration} e preço ${defaultPrice}`);
+        
+        const newTool = { 
+          toolId: toolId,
+          name: toolInfo.label,
+          duration: defaultDuration,
+          price: defaultPrice
+        };
+        
+        updatedTools = [...selectedTools, newTool];
+      }
+      
+      // Atualizar o estado local
+      setSelectedTools(updatedTools);
+      
+      // Se já temos um ID de terapeuta, atualizar as ferramentas no servidor
       if (therapistId) {
-        // Usamos setTimeout para dar tempo de atualizar o estado selectedTools
-        setTimeout(async () => {
-          // Pegar o estado mais recente
-          const updatedTools = selectedTools.map(tool => ({
+        try {
+          // Preparar ferramentas para envio no formato esperado pelo backend
+          const toolsForApi = updatedTools.map(tool => ({
             id: tool.toolId,
             name: tool.name,
             duration: tool.duration,
             price: tool.price
           }));
-
-          if (updatedTools.some(t => t.id === toolId)) {
-            // Se a ferramenta está presente, precisamos garantir que ela foi adicionada corretamente
-            const toolInfo = THERAPY_TOOLS.find(t => t.id === toolId);
-            // Verificar se a ferramenta está na lista e adicionar se não estiver
-            if (!updatedTools.some(t => t.id === toolId)) {
-              updatedTools.push({
-                id: toolId,
-                name: toolInfo.label,
-                duration: parseInt(formData.sessionDuration) || 60,
-                price: parseFloat(formData.baseSessionPrice) || 0
-              });
-            }
-          } else {
-            // Se a ferramenta não está presente, garantir que ela foi removida
-            const toolIndex = updatedTools.findIndex(t => t.id === toolId);
-            if (toolIndex !== -1) {
-              updatedTools.splice(toolIndex, 1);
-            }
-          }
           
-          try {
-            console.log('Salvando ferramentas:', updatedTools);
-            // Usar a função específica para atualizar apenas as ferramentas
-            const response = await updateTherapistTools(therapistId, updatedTools);
-            
-            if (response && response.success) {
-              console.log('Ferramentas atualizadas com sucesso:', response.data);
-              toast.success('Ferramenta atualizada com sucesso!');
-            }
-          } catch (error) {
-            console.error('Erro ao atualizar ferramentas:', error);
-            toast.error('Erro ao salvar ferramenta. Tente novamente.');
+          console.log('Salvando ferramentas:', toolsForApi);
+          
+          // Usar a função específica para atualizar apenas as ferramentas
+          const response = await updateTherapistTools(therapistId, toolsForApi);
+          
+          if (response && response.success) {
+            console.log('Ferramentas atualizadas com sucesso:', response.data);
+            toast.success('Ferramenta atualizada com sucesso!');
+          } else {
+            console.warn('Resposta inválida do servidor:', response);
           }
-        }, 100);
+        } catch (error) {
+          console.error('Erro ao atualizar ferramentas:', error);
+          toast.error('Erro ao salvar ferramenta. Tente novamente.');
+        }
       }
     } catch (error) {
-      console.error('Erro ao alternar ferramenta:', error);
-      toast.error('Erro ao processar ferramenta');
+      console.error('Erro ao alternar seleção de ferramenta:', error);
+      toast.error('Ocorreu um erro ao processar sua solicitação.');
     }
   };
   

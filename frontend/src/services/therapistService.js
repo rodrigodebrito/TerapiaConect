@@ -495,42 +495,56 @@ export const updateTherapistTools = async (therapistId, tools) => {
     console.log('Atualizando ferramentas do terapeuta:', therapistId);
     console.log('Ferramentas para atualização:', tools);
     
+    // Se tools for undefined ou null, usar array vazio
+    const toolsToUpdate = tools || [];
+    
     // Garantir que as ferramentas estejam no formato esperado pelo backend
     let processedTools = [];
     
-    if (Array.isArray(tools)) {
-      processedTools = tools.map(tool => {
-        // Verificar se é um objeto válido com id
-        if (tool && typeof tool === 'object') {
-          // Se for uma ferramenta com ID
-          if (tool.id) {
+    if (Array.isArray(toolsToUpdate) && toolsToUpdate.length > 0) {
+      processedTools = toolsToUpdate
+        .filter(tool => tool && (tool.id || tool.toolId)) // Filtrar ferramentas inválidas
+        .map(tool => {
+          // Verificar se é um objeto válido com id
+          if (tool && typeof tool === 'object') {
+            // Se for uma ferramenta com ID
+            if (tool.id) {
+              return {
+                id: tool.id,
+                duration: parseInt(tool.duration || 60),
+                price: parseFloat(tool.price || 0)
+              };
+            }
+            // Se for uma ferramenta com toolId
+            else if (tool.toolId) {
+              return {
+                id: tool.toolId,
+                duration: parseInt(tool.duration || 60),
+                price: parseFloat(tool.price || 0)
+              };
+            }
+            // Se for uma ferramenta customizada com nome
+            else if (tool.name) {
+              return {
+                name: tool.name,
+                duration: parseInt(tool.duration || 60),
+                price: parseFloat(tool.price || 0),
+                isCustom: true
+              };
+            }
+          }
+          // Se for apenas string (ID da ferramenta)
+          else if (typeof tool === 'string') {
             return {
-              id: tool.id,
-              duration: parseInt(tool.duration || 60),
-              price: parseFloat(tool.price || 0)
+              id: tool,
+              duration: 60,
+              price: 0
             };
           }
-          // Se for uma ferramenta customizada com nome
-          else if (tool.name) {
-            return {
-              name: tool.name,
-              duration: parseInt(tool.duration || 60),
-              price: parseFloat(tool.price || 0),
-              isCustom: true
-            };
-          }
-        }
-        // Se for apenas string (ID da ferramenta)
-        else if (typeof tool === 'string') {
-          return {
-            id: tool,
-            duration: 60,
-            price: 0
-          };
-        }
-        
-        return null;
-      }).filter(Boolean); // Remover nulos
+          
+          return null;
+        })
+        .filter(Boolean); // Remover nulos
     }
     
     console.log('Ferramentas processadas para envio:', processedTools);
@@ -546,20 +560,30 @@ export const updateTherapistTools = async (therapistId, tools) => {
     console.log('Ferramentas padrão para envio:', standardTools);
     console.log('Ferramentas customizadas para envio:', customTools);
     
+    // Criar objeto de requisição adequado para o backend
     const requestData = {
-      tools: standardTools,
-      customTools: customTools
+      tools: standardTools
     };
     
+    // Adicionar customTools apenas se houver alguma
+    if (customTools && customTools.length > 0) {
+      requestData.customTools = customTools;
+    }
+    
     console.log('Dados completos para envio:', requestData);
-    const response = await api.put(`/api/therapists/${therapistId}/tools`, requestData);
+    
+    // Verificar se há uma URL de API válida
+    const apiUrl = `/api/therapists/${therapistId}/tools`;
+    console.log('URL corrigida para evitar duplicação:', api.defaults.baseURL + apiUrl);
+    
+    const response = await api.put(apiUrl, requestData);
     
     console.log('Resposta da atualização de ferramentas:', response.data);
     
     // Verificar se a resposta está no novo formato
     if (response.data && response.data.success === true) {
       console.log('Sucesso na atualização com novo formato de resposta');
-      return response.data.data || response.data;
+      return response.data;
     }
     
     return response.data;
