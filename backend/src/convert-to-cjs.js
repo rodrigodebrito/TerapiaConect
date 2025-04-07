@@ -26,6 +26,9 @@ const __dirname = path.dirname(__filename);
 // Diretório de rotas (relativo ao diretório atual)
 const routesDir = path.join(__dirname, 'routes');
 
+// Variável para armazenar o caminho real do diretório de rotas
+let routesDirPath;
+
 // Verificar e registrar o ambiente
 console.log(`${colors.magenta}🔍 Ambiente atual: ${process.env.NODE_ENV || 'development'}${colors.reset}`);
 console.log(`${colors.magenta}🔍 Diretório de trabalho: ${process.cwd()}${colors.reset}`);
