@@ -336,5 +336,48 @@ RUN npx prisma generate
 # Expor porta
 EXPOSE 3000
 
+# Criar auth.routes.cjs usando echo em vez de heredoc
+RUN echo 'const express = require("express");' > /app/src-cjs/routes/auth.routes.cjs && \
+    echo 'const { validateRefreshToken } = require("../middleware/auth.middleware.cjs");' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo 'const { login, refreshToken, register } = require("../controllers/auth.controller.cjs");' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo 'const router = express.Router();' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo '/**' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @route POST /login' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @desc Autenticar usuário e retornar token' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @access Público' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' */' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo 'router.post("/", login);' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo '/**' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @route POST /login/refresh' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @desc Atualizar token de acesso usando refresh token' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @access Público' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' */' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo 'router.post("/refresh", validateRefreshToken, refreshToken);' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo '/**' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @route POST /login/register' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @desc Registrar um novo usuário' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @access Público' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' */' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo 'router.post("/register", register);' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo 'module.exports = router;' >> /app/src-cjs/routes/auth.routes.cjs
+
+# Criar therapist.routes.cjs para garantir compatibilidade
+RUN echo 'const express = require("express");' > /app/src-cjs/routes/therapist.routes.cjs && \
+    echo 'const router = express.Router();' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo 'const { validateToken } = require("../middleware/auth.middleware.cjs");' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '// Rota básica para terapeutas' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo 'router.get("/", validateToken, (req, res) => {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '  res.json({ message: "Lista de terapeutas - rota funcionando" });' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '});' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '// Exportar router' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo 'module.exports = router;' >> /app/src-cjs/routes/therapist.routes.cjs
+
 # Comando para iniciar usando a versão CommonJS compatível
 CMD /bin/sh -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node index-compat.cjs" 
