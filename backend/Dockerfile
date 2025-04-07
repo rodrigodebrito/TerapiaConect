@@ -116,8 +116,8 @@ RUN sed -i 's/require("..\/controllers\/auth.controller")/require("..\/src-cjs\/
 
 # Corrigir manualmente o arquivo auth.routes.cjs
 RUN echo 'const express = require("express");' > /app/src-cjs/routes/auth.routes.cjs && \
-    echo 'const { validateRefreshToken } = require("../src-cjs/middleware/auth.middleware.cjs");' >> /app/src-cjs/routes/auth.routes.cjs && \
-    echo 'const { login, refreshToken, register } = require("../src-cjs/controllers/auth.controller.cjs");' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo 'const { validateRefreshToken } = require("../middleware/auth.middleware.cjs");' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo 'const { login, refreshToken, register } = require("../controllers/auth.controller.cjs");' >> /app/src-cjs/routes/auth.routes.cjs && \
     echo '' >> /app/src-cjs/routes/auth.routes.cjs && \
     echo 'const router = express.Router();' >> /app/src-cjs/routes/auth.routes.cjs && \
     echo '' >> /app/src-cjs/routes/auth.routes.cjs && \
