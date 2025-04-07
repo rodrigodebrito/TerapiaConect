@@ -129,6 +129,19 @@ function copyJsFiles() {
 }
 
 /**
+ * Função para garantir permissões de arquivos
+ */
+function setFilePermissions(filepath) {
+  try {
+    console.log(`🔐 Ajustando permissões para: ${filepath}`);
+    fs.chmodSync(filepath, 0o644); // Permissões de leitura/escrita para o proprietário e leitura para outros
+    console.log(`✅ Permissões ajustadas: ${filepath}`);
+  } catch (error) {
+    console.error(`❌ Erro ao ajustar permissões para ${filepath}:`, error.message);
+  }
+}
+
+/**
  * Função para copiar arquivos CJS diretamente para o diretório de distribuição
  */
 function copyCJSFiles() {
@@ -183,6 +196,9 @@ function copyCJSFiles() {
       } else {
         console.error(`${colors.red}❌ Verificação falhou: arquivo não existe após cópia: ${destFile}${colors.reset}`);
       }
+      
+      // Ajustar permissões
+      setFilePermissions(destFile);
     } catch (error) {
       console.error(`${colors.red}❌ Erro ao copiar ${file}:${colors.reset}`, error.message);
     }

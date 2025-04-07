@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: terapiaconect_backend
+    restart: always
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      CORS_ORIGIN: https://terapiaconect.vercel.app,https://terapiaconect.com.br,http://localhost:3001,http://localhost:5173
+    volumes:
+      - ./backend/uploads:/app/uploads 

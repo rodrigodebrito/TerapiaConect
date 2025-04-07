@@ -220,7 +220,59 @@ router.get('/profile', authenticate, authorize(['THERAPIST']), async (req, res) 
  * @desc Obter terapeuta pelo ID do usuário
  * @access Privado
  */
-router.get('/user/:userId', authenticate, getTherapistByUserId);
+router.get('/user/:userId', authenticate, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log(`Buscando terapeuta para userId: ${userId}, solicitado por: ${req.user.id}`);
+    
+    const therapist = await prisma.therapist.findUnique({
+      where: { userId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+    
+    if (!therapist) {
+      return res.status(404).json({ message: 'Terapeuta não encontrado' });
+    }
+    
+    // Mapear para o formato esperado pela API
+    const mappedTherapist = {
+      id: therapist.id,
+      userId: therapist.userId,
+      name: therapist.user.name,
+      email: therapist.user.email,
+      shortBio: therapist.shortBio || '',
+      niches: therapist.niches || '',
+      customNiches: therapist.customNiches || '',
+      education: therapist.education || '',
+      experience: therapist.experience || '',
+      targetAudience: therapist.targetAudience || '',
+      differential: therapist.differential || '',
+      baseSessionPrice: therapist.baseSessionPrice || 0,
+      servicePrices: therapist.servicePrices || '',
+      sessionDuration: therapist.sessionDuration || 60,
+      profilePicture: therapist.profilePicture || '',
+      isApproved: therapist.isApproved || false,
+      attendanceMode: therapist.attendanceMode || 'BOTH',
+      city: therapist.city || '',
+      state: therapist.state || '',
+      tools: []
+    };
+    
+    return res.json(mappedTherapist);
+  } catch (error) {
+    console.error('Erro ao buscar terapeuta por ID de usuário:', error);
+    return res.status(500).json({ message: 'Erro ao buscar dados do terapeuta' });
+  }
+});
 
 /**
  * @route POST /therapists
@@ -231,78 +283,55 @@ router.post('/', authenticate, authorize(['THERAPIST']), createTherapist);
 
 /**
  * @route GET /therapists/:id
- * @desc Rota para obter detalhes de um terapeuta
+ * @desc Obter detalhes de um terapeuta
  * @access Público
  */
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log('DEBUG: Buscando detalhes públicos do terapeuta:', id);
-
-    // Verificar se o terapeuta tem ferramentas
-    const toolCount = await prisma.therapistTool.count({
-      where: { therapistId: id }
-    });
+    console.log('Buscando detalhes do terapeuta:', id);
 
     const therapist = await prisma.therapist.findUnique({
       where: { id },
       include: {
-        user: true,
-        tools: {
-          include: {
-            tool: true
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
           }
-        },
-        availability: true,
+        }
       }
     });
-
+    
     if (!therapist) {
-      return res.status(404).json({ error: 'Terapeuta não encontrado' });
+      return res.status(404).json({ message: 'Terapeuta não encontrado' });
     }
-
-    // Formatar os dados para o frontend
-    const formattedTherapist = {
+    
+    const mappedTherapist = {
       id: therapist.id,
-      user: {
-        id: therapist.user.id,
-        name: therapist.user.name,
-        email: therapist.user.email,
-      },
+      userId: therapist.userId,
       name: therapist.user.name,
-      shortBio: therapist.shortBio,
-      bio: therapist.bio,
-      niches: therapist.niches,
-      education: therapist.education,
-      experience: therapist.experience,
-      targetAudience: therapist.targetAudience,
-      differential: therapist.differential,
-      baseSessionPrice: therapist.baseSessionPrice,
-      sessionDuration: therapist.sessionDuration,
-      profilePicture: therapist.profilePicture,
-      isApproved: therapist.isApproved,
-      attendanceMode: therapist.attendanceMode,
-      address: therapist.address,
-      neighborhood: therapist.neighborhood,
-      city: therapist.city,
-      state: therapist.state,
-      zipCode: therapist.zipCode,
-      offersFreeSession: therapist.offersFreeSession,
-      freeSessionDuration: therapist.freeSessionDuration,
-      tools: therapist.tools.map(tt => ({
-        id: tt.tool.id,
-        name: tt.tool.name,
-        description: tt.tool.description || '',
-        duration: tt.duration,
-        price: tt.price
-      })),
-      availability: therapist.availability,
+      email: therapist.user.email,
+      shortBio: therapist.shortBio || '',
+      niches: therapist.niches || '',
+      customNiches: therapist.customNiches || '',
+      education: therapist.education || '',
+      experience: therapist.experience || '',
+      targetAudience: therapist.targetAudience || '',
+      differential: therapist.differential || '',
+      baseSessionPrice: therapist.baseSessionPrice || 0,
+      servicePrices: therapist.servicePrices || '',
+      sessionDuration: therapist.sessionDuration || 60,
+      profilePicture: therapist.profilePicture || '',
+      isApproved: therapist.isApproved || false,
+      tools: []
     };
-
-    res.json(formattedTherapist);
+    
+    return res.json(mappedTherapist);
   } catch (error) {
     console.error('Erro ao buscar detalhes do terapeuta:', error);
-    res.status(500).json({ error: 'Erro ao buscar detalhes do terapeuta' });
+    return res.status(500).json({ message: 'Erro ao buscar dados do terapeuta' });
   }
 });
 

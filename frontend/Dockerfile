@@ -1,5 +1,4 @@
-# Estágio de build
-FROM node:18 AS build
+FROM node:18-alpine AS builder
 
 # Definir diretório de trabalho
 WORKDIR /app
@@ -8,25 +7,31 @@ WORKDIR /app
 COPY package*.json ./
 
 # Instalar dependências
-RUN npm install
+RUN npm ci
 
-# Copiar o resto dos arquivos da aplicação
+# Copiar os arquivos da aplicação
 COPY . .
 
-# Construir a aplicação para produção
+# Construir a aplicação
 RUN npm run build
 
-# Estágio de produção com NGINX
-FROM nginx:alpine
+# Stage 2: Imagem de execução
+FROM node:18-alpine
 
-# Copiar arquivos de build do estágio anterior
-COPY --from=build /app/dist /usr/share/nginx/html
+# Definir variáveis de ambiente
+ENV NODE_ENV=production
 
-# Expor porta 80
-EXPOSE 80
+# Definir diretório de trabalho
+WORKDIR /app
 
-# Copiar configuração personalizada do NGINX
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Instalar serve para hospedar a aplicação
+RUN npm install -g serve
 
-# Comando para iniciar NGINX
-CMD ["nginx", "-g", "daemon off;"] 
+# Copiar build da etapa anterior
+COPY --from=builder /app/dist ./dist
+
+# Expor a porta
+EXPOSE 3001
+
+# Iniciar servidor
+CMD ["serve", "-s", "dist", "-l", "3001"] 

@@ -74,6 +74,46 @@ module.exports = router;`;
   console.log(`${colors.green}✅ Arquivo de rota de exemplo criado:${colors.reset} ${exampleRoutePath}`);
 }
 
+// Criar uma rota mínima diretamente no dist
+function createMinimalRoute() {
+  console.log(`${colors.blue}📝 Criando rota mínima diretamente no dist...${colors.reset}`);
+  
+  const minimalPath = path.join(distRoutesDir, 'minimal.route.cjs');
+  const content = `// Rota mínima criada por fix-routes.js
+// Esta é a rota mais simples possível, garantida funcional
+
+const express = require('express');
+const router = express.Router();
+
+router.get('/minimal', (req, res) => {
+  res.json({
+    message: 'Rota mínima funcionando!',
+    success: true,
+    timestamp: new Date().toISOString()
+  });
+});
+
+module.exports = router;`;
+
+  try {
+    fs.writeFileSync(minimalPath, content, { mode: 0o644 });
+    console.log(`${colors.green}✅ Rota mínima criada:${colors.reset} ${minimalPath}`);
+    
+    // Verificar conteúdo do arquivo 
+    const fileContent = fs.readFileSync(minimalPath, 'utf8');
+    console.log(`${colors.blue}📄 Conteúdo do arquivo:${colors.reset}`);
+    console.log(fileContent);
+    
+    // Verificar permissões
+    const stats = fs.statSync(minimalPath);
+    const fileMode = stats.mode.toString(8).slice(-3);
+    console.log(`${colors.blue}🔐 Permissões do arquivo:${colors.reset} ${fileMode}`);
+    
+  } catch (error) {
+    console.error(`${colors.red}❌ Erro ao criar rota mínima:${colors.reset} ${error.message}`);
+  }
+}
+
 // Modificar arquivos de rota existentes
 function modifyExistingRoutes() {
   console.log(`${colors.blue}🔍 Buscando arquivos de rota existentes...${colors.reset}`);
@@ -123,6 +163,7 @@ function modifyExistingRoutes() {
 
 // Executar as funções
 createExampleRoute();
+createMinimalRoute();
 modifyExistingRoutes();
 
 console.log(`${colors.green}🎉 Script de correção de rotas concluído!${colors.reset}`); 
