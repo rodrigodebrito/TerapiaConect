@@ -784,6 +784,124 @@ app.get('/api/therapists/user/:userId', authMiddleware, async (req, res) => {
   }
 });
 
+// Rota para atualizar perfil de terapeuta
+app.put('/api/therapists/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const profileData = req.body;
+    
+    console.log(`[Rota direta]: Atualizando perfil de terapeuta ID: ${id}`);
+    console.log('Dados recebidos:', JSON.stringify(profileData, null, 2));
+    
+    // Verificar se o terapeuta existe
+    const existingTherapist = await prisma.therapist.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true
+          }
+        }
+      }
+    });
+    
+    if (!existingTherapist) {
+      return res.status(404).json({ message: 'Terapeuta não encontrado' });
+    }
+    
+    // Preparar dados para atualização
+    const {
+      shortBio,
+      niches,
+      customNiches,
+      tools,
+      customTools,
+      education,
+      experience,
+      targetAudience,
+      differential,
+      baseSessionPrice,
+      sessionDuration,
+      attendanceMode,
+      address,
+      complement,
+      neighborhood,
+      city,
+      state,
+      zipCode,
+      offersFreeSession,
+      freeSessionDuration
+    } = profileData;
+    
+    // Atualizar o terapeuta no banco de dados
+    const updatedTherapist = await prisma.therapist.update({
+      where: { id },
+      data: {
+        shortBio,
+        niches: typeof niches === 'object' ? JSON.stringify(niches) : niches,
+        customNiches: typeof customNiches === 'object' ? JSON.stringify(customNiches) : customNiches,
+        customTools: typeof customTools === 'object' ? JSON.stringify(customTools) : customTools,
+        education,
+        experience,
+        targetAudience: typeof targetAudience === 'object' ? JSON.stringify(targetAudience) : targetAudience,
+        differential,
+        baseSessionPrice: parseFloat(baseSessionPrice) || 0,
+        sessionDuration: parseInt(sessionDuration) || 60,
+        attendanceMode,
+        address,
+        complement,
+        neighborhood,
+        city,
+        state,
+        zipCode,
+        offersFreeSession: Boolean(offersFreeSession),
+        freeSessionDuration: parseInt(freeSessionDuration) || 0
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+    
+    // Atualizar ferramentas (simplificado)
+    console.log(`Ferramentas recebidas: ${tools ? tools.length : 0}`);
+    
+    // Mapear para o formato esperado pela API
+    const mappedTherapist = {
+      id: updatedTherapist.id,
+      userId: updatedTherapist.userId,
+      name: updatedTherapist.user.name,
+      email: updatedTherapist.user.email,
+      shortBio: updatedTherapist.shortBio || '',
+      niches: updatedTherapist.niches || '',
+      customNiches: updatedTherapist.customNiches || '',
+      education: updatedTherapist.education || '',
+      experience: updatedTherapist.experience || '',
+      targetAudience: updatedTherapist.targetAudience || '',
+      differential: updatedTherapist.differential || '',
+      baseSessionPrice: updatedTherapist.baseSessionPrice || 0,
+      servicePrices: updatedTherapist.servicePrices || '',
+      sessionDuration: updatedTherapist.sessionDuration || 60,
+      profilePicture: updatedTherapist.profilePicture || '',
+      isApproved: updatedTherapist.isApproved || false,
+      attendanceMode: updatedTherapist.attendanceMode || 'BOTH',
+      city: updatedTherapist.city || '',
+      state: updatedTherapist.state || '',
+      tools: tools || []
+    };
+    
+    return res.json(mappedTherapist);
+  } catch (error) {
+    console.error('Erro ao atualizar perfil do terapeuta:', error);
+    return res.status(500).json({ message: 'Erro ao atualizar dados do terapeuta', error: error.message });
+  }
+});
+
 // Rota de fallback (404)
 app.use('*', (req, res) => {
   res.status(404).json({
