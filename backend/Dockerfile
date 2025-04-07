@@ -225,6 +225,9 @@ RUN echo '// Configuração da aplicação' >> index-compat.cjs && \
     echo '' >> index-compat.cjs && \
     echo '// Criar servidor HTTP com Express' >> index-compat.cjs && \
     echo 'const server = http.createServer(app);' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs && \
+    echo '// Criar uma instância global do Prisma' >> index-compat.cjs && \
+    echo 'global.prisma = prisma;' >> index-compat.cjs && \
     echo '' >> index-compat.cjs
 
 # Adicionar configuração do Socket.IO
@@ -263,42 +266,86 @@ RUN echo '// Middleware' >> index-compat.cjs && \
     echo '' >> index-compat.cjs && \
     echo '// Servir arquivos estáticos da pasta uploads' >> index-compat.cjs && \
     echo 'app.use("/uploads", express.static(path.join(__dirname, "uploads")));' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs && \
+    echo '// Adicionar middleware para converter routes do ESM para CJS' >> index-compat.cjs && \
+    echo 'const loadOriginalRoute = async (routeName) => {' >> index-compat.cjs && \
+    echo '  try {' >> index-compat.cjs && \
+    echo '    // Caminho para o arquivo original .js (ESM)' >> index-compat.cjs && \
+    echo '    const routePath = `./src/routes/${routeName}.routes.js`;' >> index-compat.cjs && \
+    echo '    console.log(`Carregando rota original: ${routePath}`);' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs && \
+    echo '    // Usando comando require para tentar carregar a rota convertida' >> index-compat.cjs && \
+    echo '    // Isso funciona porque o babel/swc já converteu os arquivos .js para .cjs' >> index-compat.cjs && \
+    echo '    const routeModule = require(`./src-cjs/routes/${routeName}.routes.cjs`);' >> index-compat.cjs && \
+    echo '    return routeModule;' >> index-compat.cjs && \
+    echo '  } catch (error) {' >> index-compat.cjs && \
+    echo '    console.error(`Erro ao carregar rota ${routeName}:`, error);' >> index-compat.cjs && \
+    echo '    ' >> index-compat.cjs && \
+    echo '    // Fallback: retorna um router vazio' >> index-compat.cjs && \
+    echo '    const emptyRouter = express.Router();' >> index-compat.cjs && \
+    echo '    emptyRouter.all("*", (req, res) => {' >> index-compat.cjs && \
+    echo '      res.status(501).json({ ' >> index-compat.cjs && \
+    echo '        message: `Erro ao carregar rota ${routeName}`, ' >> index-compat.cjs && \
+    echo '        error: error.message' >> index-compat.cjs && \
+    echo '      });' >> index-compat.cjs && \
+    echo '    });' >> index-compat.cjs && \
+    echo '    return emptyRouter;' >> index-compat.cjs && \
+    echo '  }' >> index-compat.cjs && \
+    echo '};' >> index-compat.cjs && \
     echo '' >> index-compat.cjs
 
-# Definir rotas com tratamento de erro
-RUN echo '// Definição das rotas' >> index-compat.cjs && \
-    echo 'app.use("/api/auth", authRoutes);' >> index-compat.cjs && \
-    echo 'app.use("/api/therapists", therapistRoutes);' >> index-compat.cjs && \
+# Definir rotas com tratamento de erro - usando funções para carregar rotas originais
+RUN echo '// Carregamento dinâmico de todas as rotas' >> index-compat.cjs && \
+    echo 'const initializeRoutes = async () => {' >> index-compat.cjs && \
+    echo '  console.log("Inicializando rotas...");' >> index-compat.cjs && \
     echo '' >> index-compat.cjs && \
-    echo '// Configurar dinamicamente as rotas disponíveis' >> index-compat.cjs && \
-    echo 'if (global.routesAvailable) {' >> index-compat.cjs && \
-    echo '  const { clientRoutes, userRoutes, appointmentRoutes, toolRoutes, uploadRoutes,' >> index-compat.cjs && \
-    echo '          sessionRoutes, aiRoutes, transcriptRoutes, insightRoutes, meetingRoutes,' >> index-compat.cjs && \
-    echo '          trainingRoutes, transcriptionRoutes } = global.routesAvailable;' >> index-compat.cjs && \
+    echo '  // Lista de todas as rotas da API' >> index-compat.cjs && \
+    echo '  const routes = [' >> index-compat.cjs && \
+    echo '    { path: "/api/auth", name: "auth" },' >> index-compat.cjs && \
+    echo '    { path: "/api/users", name: "user" },' >> index-compat.cjs && \
+    echo '    { path: "/api/therapists", name: "therapist" },' >> index-compat.cjs && \
+    echo '    { path: "/api/clients", name: "client" },' >> index-compat.cjs && \
+    echo '    { path: "/api/appointments", name: "appointment" },' >> index-compat.cjs && \
+    echo '    { path: "/api/sessions", name: "session" },' >> index-compat.cjs && \
+    echo '    { path: "/api/meeting", name: "meeting" },' >> index-compat.cjs && \
+    echo '    { path: "/api/payments", name: "payment" },' >> index-compat.cjs && \
+    echo '    { path: "/api/ai", name: "ai" },' >> index-compat.cjs && \
+    echo '    { path: "/api/chat", name: "chat" },' >> index-compat.cjs && \
+    echo '    { path: "/api/insights", name: "insight" },' >> index-compat.cjs && \
+    echo '    { path: "/api/training", name: "training" },' >> index-compat.cjs && \
+    echo '    { path: "/api/transcription", name: "transcription" },' >> index-compat.cjs && \
+    echo '    { path: "/api/admin", name: "admin" },' >> index-compat.cjs && \
+    echo '    { path: "/api/embed", name: "embedding" },' >> index-compat.cjs && \
+    echo '    { path: "/api/subscriptions", name: "subscription" },' >> index-compat.cjs && \
+    echo '    { path: "/api/upload", name: "upload" },' >> index-compat.cjs && \
+    echo '    { path: "/api/tools", name: "tool" }' >> index-compat.cjs && \
+    echo '  ];' >> index-compat.cjs && \
     echo '' >> index-compat.cjs && \
-    echo '  // Adicionar rotas se estiverem disponíveis' >> index-compat.cjs && \
-    echo '  if (userRoutes) app.use("/api/users", userRoutes);' >> index-compat.cjs && \
-    echo '  if (clientRoutes) app.use("/api/clients", clientRoutes);' >> index-compat.cjs && \
-    echo '  if (appointmentRoutes) app.use("/api/appointments", appointmentRoutes);' >> index-compat.cjs && \
-    echo '  if (toolRoutes) app.use("/api/tools", toolRoutes);' >> index-compat.cjs && \
-    echo '  if (uploadRoutes) app.use("/api/upload", uploadRoutes);' >> index-compat.cjs && \
-    echo '  if (sessionRoutes) app.use("/api/sessions", sessionRoutes);' >> index-compat.cjs && \
-    echo '  if (aiRoutes) app.use("/api/ai", aiRoutes);' >> index-compat.cjs && \
-    echo '  if (transcriptRoutes) app.use("/api/transcripts", transcriptRoutes);' >> index-compat.cjs && \
-    echo '  if (insightRoutes) app.use("/api/insights", insightRoutes);' >> index-compat.cjs && \
-    echo '  if (meetingRoutes) app.use("/api/meetings", meetingRoutes);' >> index-compat.cjs && \
-    echo '  if (trainingRoutes) app.use("/api/training", trainingRoutes);' >> index-compat.cjs && \
-    echo '  if (transcriptionRoutes) app.use("/api/transcription", transcriptionRoutes);' >> index-compat.cjs && \
-    echo '}' >> index-compat.cjs && \
+    echo '  // Carregar e registrar cada rota' >> index-compat.cjs && \
+    echo '  for (const route of routes) {' >> index-compat.cjs && \
+    echo '    try {' >> index-compat.cjs && \
+    echo '      const router = await loadOriginalRoute(route.name);' >> index-compat.cjs && \
+    echo '      app.use(route.path, router);' >> index-compat.cjs && \
+    echo '      console.log(`Rota ${route.path} carregada com sucesso`);' >> index-compat.cjs && \
+    echo '    } catch (error) {' >> index-compat.cjs && \
+    echo '      console.error(`Falha ao carregar rota ${route.path}:`, error);' >> index-compat.cjs && \
+    echo '    }' >> index-compat.cjs && \
+    echo '  }' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs && \
+    echo '  // Rota de fallback para rotas não encontradas' >> index-compat.cjs && \
+    echo '  app.use("/api/*", (req, res) => {' >> index-compat.cjs && \
+    echo '    res.status(404).json({ message: `Rota não encontrada: ${req.originalUrl}` });' >> index-compat.cjs && \
+    echo '  });' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs && \
+    echo '  // Rota padrão' >> index-compat.cjs && \
+    echo '  app.get("/", (req, res) => {' >> index-compat.cjs && \
+    echo '    res.send("API da Plataforma Terapeuta - Versão 1.0.0");' >> index-compat.cjs && \
+    echo '  });' >> index-compat.cjs && \
+    echo '};' >> index-compat.cjs && \
     echo '' >> index-compat.cjs
 
-# Melhorar rota padrão
-RUN echo '// Rota padrão' >> index-compat.cjs && \
-    echo 'app.get("/", (req, res) => {' >> index-compat.cjs && \
-    echo '  res.send("API da Plataforma Terapeuta - Versão 1.0.0");' >> index-compat.cjs && \
-    echo '});' >> index-compat.cjs && \
-    echo '' >> index-compat.cjs && \
-    echo '// Configuração completa do Socket.IO' >> index-compat.cjs && \
+# Remover a definição manual das rotas individuais e usar a inicialização dinâmica
+RUN echo '// Configuração do Socket.IO' >> index-compat.cjs && \
     echo 'io.on("connection", (socket) => {' >> index-compat.cjs && \
     echo '  console.log("Novo cliente conectado:", socket.id);' >> index-compat.cjs && \
     echo '  ' >> index-compat.cjs && \
@@ -317,37 +364,6 @@ RUN echo '// Rota padrão' >> index-compat.cjs && \
     echo '    }' >> index-compat.cjs && \
     echo '  });' >> index-compat.cjs && \
     echo '  ' >> index-compat.cjs && \
-    echo '  // Manipular rotação específica de representantes' >> index-compat.cjs && \
-    echo '  socket.on("representative_rotated", (data) => {' >> index-compat.cjs && \
-    echo '    if (data && data.sessionId && data.representativeId) {' >> index-compat.cjs && \
-    echo '      const numericRotation = typeof data.rotation === "object" ? data.rotation.y || 0 : Number(data.rotation);' >> index-compat.cjs && \
-    echo '      ' >> index-compat.cjs && \
-    echo '      console.log(`[${socket.id}] Rotação de representante recebida para ID ${data.representativeId} na sessão ${data.sessionId}: ${numericRotation}`);' >> index-compat.cjs && \
-    echo '      ' >> index-compat.cjs && \
-    echo '      const eventData = {' >> index-compat.cjs && \
-    echo '        ...data,' >> index-compat.cjs && \
-    echo '        rotation: numericRotation,' >> index-compat.cjs && \
-    echo '        forwardedBy: socket.id,' >> index-compat.cjs && \
-    echo '        timestamp: Date.now()' >> index-compat.cjs && \
-    echo '      };' >> index-compat.cjs && \
-    echo '      ' >> index-compat.cjs && \
-    echo '      socket.to(data.sessionId).emit("representative_rotated", eventData);' >> index-compat.cjs && \
-    echo '    }' >> index-compat.cjs && \
-    echo '  });' >> index-compat.cjs && \
-    echo '  ' >> index-compat.cjs && \
-    echo '  // Manipular sincronização completa de representantes' >> index-compat.cjs && \
-    echo '  socket.on("representatives_updated", (data) => {' >> index-compat.cjs && \
-    echo '    if (data && data.sessionId && data.representatives) {' >> index-compat.cjs && \
-    echo '      console.log(`[${socket.id}] Atualização completa de representantes para sessão ${data.sessionId}: ${data.representatives.length} representantes`);' >> index-compat.cjs && \
-    echo '      ' >> index-compat.cjs && \
-    echo '      socket.to(data.sessionId).emit("representatives_updated", {' >> index-compat.cjs && \
-    echo '        ...data,' >> index-compat.cjs && \
-    echo '        forwardedBy: socket.id,' >> index-compat.cjs && \
-    echo '        timestamp: Date.now()' >> index-compat.cjs && \
-    echo '      });' >> index-compat.cjs && \
-    echo '    }' >> index-compat.cjs && \
-    echo '  });' >> index-compat.cjs && \
-    echo '  ' >> index-compat.cjs && \
     echo '  // Lidar com desconexão do cliente' >> index-compat.cjs && \
     echo '  socket.on("disconnect", () => {' >> index-compat.cjs && \
     echo '    console.log(`Cliente desconectado: ${socket.id}`);' >> index-compat.cjs && \
@@ -355,13 +371,18 @@ RUN echo '// Rota padrão' >> index-compat.cjs && \
     echo '});' >> index-compat.cjs && \
     echo '' >> index-compat.cjs
 
-# Iniciar o servidor com verificação de APIs externas
+# Iniciar o servidor com verificação de APIs externas - adicionando inicialização das rotas
 RUN echo '// Iniciar o servidor' >> index-compat.cjs && \
-    echo 'server.listen(PORT, () => {' >> index-compat.cjs && \
-    echo '  console.log(`Servidor rodando na porta ${PORT} com suporte a Socket.IO`);' >> index-compat.cjs && \
-    echo '  console.log(`Ambiente: ${process.env.NODE_ENV}`);' >> index-compat.cjs && \
-    echo '  console.log(`OpenAI ativada: ${!!process.env.OPENAI_API_KEY}`);' >> index-compat.cjs && \
-    echo '  console.log(`Daily.co ativado: ${!!process.env.DAILY_API_KEY}`);' >> index-compat.cjs && \
+    echo 'initializeRoutes().then(() => {' >> index-compat.cjs && \
+    echo '  server.listen(PORT, () => {' >> index-compat.cjs && \
+    echo '    console.log(`Servidor rodando na porta ${PORT} com suporte a Socket.IO`);' >> index-compat.cjs && \
+    echo '    console.log(`Ambiente: ${process.env.NODE_ENV}`);' >> index-compat.cjs && \
+    echo '    console.log(`OpenAI ativada: ${!!process.env.OPENAI_API_KEY}`);' >> index-compat.cjs && \
+    echo '    console.log(`Daily.co ativado: ${!!process.env.DAILY_API_KEY}`);' >> index-compat.cjs && \
+    echo '  });' >> index-compat.cjs && \
+    echo '}).catch(error => {' >> index-compat.cjs && \
+    echo '  console.error("Erro ao inicializar servidor:", error);' >> index-compat.cjs && \
+    echo '  process.exit(1);' >> index-compat.cjs && \
     echo '});' >> index-compat.cjs
 
 # Copiar arquivo de ambiente Docker para .env
