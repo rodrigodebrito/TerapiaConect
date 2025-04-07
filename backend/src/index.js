@@ -20,9 +20,11 @@ import fs from 'fs';
 import { PrismaClient } from '@prisma/client';
 import OpenAI from 'openai';
 import { createRequire } from 'module';
+import cookieParser from 'cookie-parser';
 
 // Utilitários e configurações
-import prisma from './utils/prisma.js';
+// Removendo a importação do prisma para evitar duplicação
+// import prisma from './utils/prisma.js';
 
 // Obter o diretório atual em um módulo ES
 const __filename = fileURLToPath(import.meta.url);
@@ -62,6 +64,7 @@ console.log('================================================================');
 
 // Inicializar app Express diretamente aqui em vez de importar de app.js
 const app = express();
+// Criar uma única instância do PrismaClient
 const prisma = new PrismaClient();
 let openai;
 
