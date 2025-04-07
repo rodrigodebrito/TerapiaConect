@@ -408,9 +408,79 @@ RUN echo 'const express = require("express");' > /app/src-cjs/routes/therapist.r
     echo 'const router = express.Router();' >> /app/src-cjs/routes/therapist.routes.cjs && \
     echo 'const { validateToken } = require("../middleware/auth.middleware.cjs");' >> /app/src-cjs/routes/therapist.routes.cjs && \
     echo '' >> /app/src-cjs/routes/therapist.routes.cjs && \
-    echo '// Rota básica para terapeutas' >> /app/src-cjs/routes/therapist.routes.cjs && \
-    echo 'router.get("/", validateToken, (req, res) => {' >> /app/src-cjs/routes/therapist.routes.cjs && \
-    echo '  res.json({ message: "Lista de terapeutas - rota funcionando" });' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '// Rota para listar terapeutas' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo 'router.get("/", async (req, res) => {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '  try {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    const {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      attendanceMode,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      maxPrice,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      minPrice,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      targetAudience,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      offersFreeSession,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      searchTerm' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    } = req.query;' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    console.log("Procurando terapeutas com os filtros:", req.query);' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    // Construir o objeto where para a busca' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    const where = {};' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    // Aplicar filtros se fornecidos' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    if (attendanceMode && attendanceMode !== "ALL") {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      where.attendanceMode = attendanceMode;' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    }' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    // Filtrar por preço' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    if (maxPrice || minPrice) {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      where.baseSessionPrice = {};' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      if (maxPrice) where.baseSessionPrice.lte = parseFloat(maxPrice);' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      if (minPrice) where.baseSessionPrice.gte = parseFloat(minPrice);' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    }' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    const therapists = await global.prisma.therapist.findMany({' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      where,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      include: {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '        user: {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '          select: {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '            id: true,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '            name: true,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '            email: true' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '          }' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '        }' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      },' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      orderBy: {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '        createdAt: "desc"' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      }' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    });' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    console.log(`Encontrados ${therapists.length} terapeutas`);' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    // Mapear para o formato esperado pelo frontend' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    const mappedTherapists = therapists.map(therapist => ({' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      id: therapist.id,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      name: therapist.user.name,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      email: therapist.user.email,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      isApproved: therapist.isApproved,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      profilePicture: therapist.profilePicture,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      attendanceMode: therapist.attendanceMode,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      shortBio: therapist.shortBio,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      baseSessionPrice: therapist.baseSessionPrice,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      sessionDuration: therapist.sessionDuration,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      niches: therapist.niches,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      targetAudience: therapist.targetAudience,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      offersFreeSession: therapist.offersFreeSession,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      freeSessionDuration: therapist.freeSessionDuration,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      city: therapist.city,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      state: therapist.state,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      rating: therapist.rating || 0,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      reviewCount: 0' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    }));' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    return res.json(mappedTherapists);' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    console.error("Erro ao buscar terapeutas:", error);' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    return res.status(500).json({ message: "Erro ao buscar terapeutas" });' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '  }' >> /app/src-cjs/routes/therapist.routes.cjs && \
     echo '});' >> /app/src-cjs/routes/therapist.routes.cjs && \
     echo '' >> /app/src-cjs/routes/therapist.routes.cjs && \
     echo '// Rota para buscar terapeuta por ID de usuário' >> /app/src-cjs/routes/therapist.routes.cjs && \
