@@ -1030,17 +1030,77 @@ app.post('/api/therapists/:therapistId/availability', authMiddleware, async (req
 app.put('/api/therapists/:therapistId/tools', authMiddleware, async (req, res) => {
   try {
     const { therapistId } = req.params;
-    const { tools, customTools = [] } = req.body;
+    const { tools = [], customTools = [] } = req.body;
     
     console.log(`[Ferramentas] Dados completos recebidos:`, JSON.stringify(req.body));
     
-    if (!tools) {
-      return res.status(400).json({
-        success: false,
-        message: 'O campo tools é obrigatório'
+    // Array vazio é um caso especial - significa remover todas as ferramentas
+    // Vamos tratar isso explicitamente
+    if (Array.isArray(tools) && tools.length === 0) {
+      console.log('[Ferramentas] Array vazio recebido - removendo todas as ferramentas');
+      
+      // Verificar se o terapeuta existe
+      const therapist = await prisma.therapist.findUnique({
+        where: { id: therapistId }
+      });
+      
+      if (!therapist) {
+        return res.status(404).json({
+          success: false,
+          message: 'Terapeuta não encontrado'
+        });
+      }
+      
+      // Verificar permissões - só o próprio terapeuta pode atualizar
+      if (therapist.userId !== req.user.id && req.user.role !== 'ADMIN') {
+        return res.status(403).json({
+          success: false,
+          message: 'Você não tem permissão para atualizar este perfil'
+        });
+      }
+      
+      // Remover todas as ferramentas do terapeuta sem criar novas
+      const updatedTherapist = await prisma.therapist.update({
+        where: { id: therapistId },
+        data: {
+          tools: {
+            deleteMany: {}  // Remove todas as relações existentes
+          },
+          // Atualizar ferramentas customizadas se existirem
+          customTools: Array.isArray(customTools) && customTools.length > 0 
+            ? JSON.stringify(customTools) 
+            : therapist.customTools // Manter as existentes se não recebeu novas
+        },
+        include: {
+          user: {
+            select: {
+              name: true,
+              email: true
+            }
+          }
+        }
+      });
+      
+      // Processar ferramentas customizadas para a resposta
+      const customToolsResponse = 
+        (typeof updatedTherapist.customTools === 'string' && updatedTherapist.customTools)
+          ? safeParseJSON(updatedTherapist.customTools, [])
+          : [];
+      
+      console.log(`[Ferramentas] Todas as ferramentas removidas com sucesso`);
+      console.log(`[Ferramentas] Ferramentas customizadas:`, JSON.stringify(customToolsResponse));
+      
+      return res.status(200).json({
+        success: true,
+        message: `Todas as ferramentas foram removidas com sucesso`,
+        data: {
+          tools: [],
+          customTools: customToolsResponse
+        }
       });
     }
     
+    // Continuar com o código original para arrays não vazios
     if (!Array.isArray(tools)) {
       return res.status(400).json({
         success: false,
