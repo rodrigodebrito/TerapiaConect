@@ -23,14 +23,14 @@ COPY build.js ./
 # Copia código fonte
 COPY src ./src/
 
-# Prepara os arquivos de rota convertendo-os para .cjs
-RUN npm run prepare-routes
-
-# Builds the application
+# Executa o build completo que inclui a preparação das rotas
 RUN npm run build
 
 # Gera o cliente Prisma
 RUN npm run prisma:generate
+
+# Verifica os arquivos na pasta dist/routes para depuração
+RUN ls -la dist/routes
 
 # Porta que o servidor vai escutar
 EXPOSE 3000

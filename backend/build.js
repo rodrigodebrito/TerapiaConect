@@ -46,10 +46,48 @@ function copyDir(src, dest) {
     
     // Se for um diretório, copia recursivamente
     if (entry.isDirectory()) {
-      copyDir(srcPath, destPath);
+      // Se for o diretório de rotas, tratamento especial
+      if (entry.name === 'routes') {
+        copyRoutesDir(srcPath, destPath);
+      } else {
+        copyDir(srcPath, destPath);
+      }
     } 
     // Se for um arquivo, copia diretamente
     else {
+      fs.copyFileSync(srcPath, destPath);
+      console.log(chalk.green(`✅ Copiado: ${srcPath} -> ${destPath}`));
+    }
+  }
+}
+
+// Função especial para copiar diretório de rotas
+function copyRoutesDir(src, dest) {
+  // Cria o diretório de destino se não existir
+  if (!fs.existsSync(dest)) {
+    fs.mkdirSync(dest, { recursive: true });
+  }
+  
+  // Lê o conteúdo do diretório de origem
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  
+  // Processa cada item no diretório
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    
+    // Se for um diretório, copia recursivamente
+    if (entry.isDirectory()) {
+      copyDir(srcPath, destPath);
+    } 
+    // Se for um arquivo .cjs, copia, mas ignora arquivos .js
+    else if (entry.name.endsWith('.cjs')) {
+      fs.copyFileSync(srcPath, destPath);
+      console.log(chalk.green(`✅ Copiado: ${srcPath} -> ${destPath}`));
+    } else if (entry.name.endsWith('.js')) {
+      console.log(chalk.yellow(`⚠️ Ignorando arquivo JS em routes: ${srcPath}`));
+    } else {
+      // Outros tipos de arquivos são copiados normalmente
       fs.copyFileSync(srcPath, destPath);
       console.log(chalk.green(`✅ Copiado: ${srcPath} -> ${destPath}`));
     }

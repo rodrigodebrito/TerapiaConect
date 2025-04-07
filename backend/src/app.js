@@ -110,15 +110,52 @@ function loadCjsRouter(routePath) {
   try {
     // Na produção, os arquivos estão em dist
     const isProduction = process.env.NODE_ENV === 'production';
-    const fullPath = isProduction 
-      ? path.join(__dirname, routePath) 
-      : path.join(__dirname, routePath);
+    let fullPath;
+    
+    if (isProduction) {
+      fullPath = path.join(__dirname, routePath);
+    } else {
+      fullPath = path.join(__dirname, routePath);
+    }
+    
+    // Verificar se o arquivo existe antes de tentar carregá-lo
+    if (!fs.existsSync(fullPath)) {
+      console.error(`❌ Arquivo não encontrado: ${fullPath}`);
+      return null;
+    }
     
     // Usando require dinâmico (CommonJS)
-    const router = require(fullPath);
-    return router;
+    let router;
+    try {
+      router = require(fullPath);
+      
+      // Verificar se router é um objeto (pode ser o caso de module.exports = router)
+      if (typeof router === 'object' && router.default) {
+        router = router.default;
+      }
+      
+      return router;
+    } catch (error) {
+      console.error(`❌ Erro ao carregar ${routePath}:`, error.message);
+      
+      // Tentar alternativa sem a extensão .cjs
+      const alternativePath = fullPath.replace('.cjs', '');
+      if (fs.existsSync(alternativePath)) {
+        try {
+          router = require(alternativePath);
+          if (typeof router === 'object' && router.default) {
+            router = router.default;
+          }
+          return router;
+        } catch (err) {
+          console.error(`❌ Também falhou ao carregar alternativa ${alternativePath}:`, err.message);
+        }
+      }
+      
+      return null;
+    }
   } catch (error) {
-    console.error(`❌ Erro ao carregar ${routePath}:`, error.message);
+    console.error(`❌ Erro ao processar ${routePath}:`, error.message);
     return null;
   }
 }

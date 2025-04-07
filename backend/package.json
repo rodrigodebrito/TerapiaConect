@@ -10,7 +10,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "setup": "npm install && npm run prisma:generate",
     "lint": "eslint src/**/*.js --fix",
-    "build": "npm run clean && npm run build:js && npm run copy-files",
+    "build": "npm run prepare-routes && npm run build:js && npm run copy-files",
     "build:js": "node build.js",
     "clean": "rimraf dist",
     "copy-files": "copyfiles -u 0 \"prisma/**/*\" \"uploads/**/*\" \".env*\" dist",
