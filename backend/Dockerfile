@@ -771,5 +771,80 @@ RUN echo 'const express = require("express");' > /app/src-cjs/routes/ai.routes.c
     echo '// Exportar router' >> /app/src-cjs/routes/ai.routes.cjs && \
     echo 'module.exports = router;' >> /app/src-cjs/routes/ai.routes.cjs
 
+# Criar transcript.controller.cjs para garantir compatibilidade
+RUN echo 'const prisma = require("../utils/prisma.cjs");' > /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '// Função para salvar transcrição' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo 'exports.saveTranscript = async (req, res) => {' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    const { sessionId, content, speakerId } = req.body;' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    if (!sessionId || !content) {' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '      return res.status(400).json({ message: "ID da sessão e conteúdo são obrigatórios" });' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    // Verificar se a sessão existe' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    const session = await prisma.session.findUnique({' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '      where: { id: sessionId }' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    if (!session) {' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '      return res.status(404).json({ message: "Sessão não encontrada" });' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    // Criar transcrição' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    const transcript = await prisma.transcript.create({' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '      data: {' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '        content,' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '        speakerId,' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '        sessionId,' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '        timestamp: new Date()' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '      }' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    return res.status(201).json(transcript);' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    console.error("Erro ao salvar transcrição:", error);' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '// Função para listar transcrições de uma sessão' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo 'exports.getSessionTranscripts = async (req, res) => {' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    const { sessionId } = req.params;' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    if (!sessionId) {' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '      return res.status(400).json({ message: "ID da sessão é obrigatório" });' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    // Buscar transcrições' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    const transcripts = await prisma.transcript.findMany({' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '      where: { sessionId },' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '      orderBy: { timestamp: "asc" }' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    return res.status(200).json(transcripts);' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    console.error("Erro ao buscar transcrições:", error);' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/transcript.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/transcript.controller.cjs
+
+# Criar transcript.routes.cjs para garantir compatibilidade
+RUN echo 'const express = require("express");' > /app/src-cjs/routes/transcript.routes.cjs && \
+    echo 'const router = express.Router();' >> /app/src-cjs/routes/transcript.routes.cjs && \
+    echo 'const { validateToken } = require("../middleware/auth.middleware.cjs");' >> /app/src-cjs/routes/transcript.routes.cjs && \
+    echo 'const { saveTranscript, getSessionTranscripts } = require("../controllers/transcript.controller.cjs");' >> /app/src-cjs/routes/transcript.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/transcript.routes.cjs && \
+    echo '// Salvar nova transcrição' >> /app/src-cjs/routes/transcript.routes.cjs && \
+    echo 'router.post("/", validateToken, saveTranscript);' >> /app/src-cjs/routes/transcript.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/transcript.routes.cjs && \
+    echo '// Obter transcrições de uma sessão' >> /app/src-cjs/routes/transcript.routes.cjs && \
+    echo 'router.get("/session/:sessionId", validateToken, getSessionTranscripts);' >> /app/src-cjs/routes/transcript.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/transcript.routes.cjs && \
+    echo '// Exportar router' >> /app/src-cjs/routes/transcript.routes.cjs && \
+    echo 'module.exports = router;' >> /app/src-cjs/routes/transcript.routes.cjs
+
 # Comando para iniciar usando a versão CommonJS compatível
 CMD /bin/sh -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node index-compat.cjs" 
