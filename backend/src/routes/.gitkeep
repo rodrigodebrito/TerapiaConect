@@ -1,0 +1,2 @@
+# Este arquivo existe apenas para garantir que a pasta routes seja incluída no Git
+# Mesmo que esteja vazia após a conversão dos arquivos .js para .cjs 
