@@ -413,6 +413,53 @@ RUN echo 'const express = require("express");' > /app/src-cjs/routes/therapist.r
     echo '  res.json({ message: "Lista de terapeutas - rota funcionando" });' >> /app/src-cjs/routes/therapist.routes.cjs && \
     echo '});' >> /app/src-cjs/routes/therapist.routes.cjs && \
     echo '' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '// Rota para buscar terapeuta por ID de usuário' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo 'router.get("/user/:userId", validateToken, async (req, res) => {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '  try {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    const { userId } = req.params;' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    ' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    // Verificar se o usuário é o próprio ou um admin' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    if (req.user.id !== userId && req.user.role !== "ADMIN") {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      return res.status(403).json({ message: "Acesso não autorizado" });' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    }' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    ' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    const therapist = await global.prisma.therapist.findUnique({' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      where: { userId },' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      include: {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '        user: {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '          select: {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '            id: true,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '            name: true,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '            email: true' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '          }' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '        }' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      }' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    });' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    ' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    if (!therapist) {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      return res.status(404).json({ message: "Terapeuta não encontrado" });' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    }' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    ' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    // Mapear para o formato esperado pela API' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    const mappedTherapist = {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      id: therapist.id,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      userId: therapist.userId,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      name: therapist.user.name,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      email: therapist.user.email,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      shortBio: therapist.shortBio,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      profilePicture: therapist.profilePicture,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      baseSessionPrice: therapist.baseSessionPrice,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      sessionDuration: therapist.sessionDuration,' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '      isApproved: therapist.isApproved' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    };' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    ' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    return res.json(mappedTherapist);' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    console.error("Erro ao buscar terapeuta por ID de usuário:", error);' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '    return res.status(500).json({ message: "Erro ao buscar dados do terapeuta" });' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '  }' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '});' >> /app/src-cjs/routes/therapist.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/therapist.routes.cjs && \
     echo '// Exportar router' >> /app/src-cjs/routes/therapist.routes.cjs && \
     echo 'module.exports = router;' >> /app/src-cjs/routes/therapist.routes.cjs
 
