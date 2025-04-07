@@ -195,11 +195,93 @@ export const createTherapistProfile = async (profileData) => {
 export const updateTherapistProfile = async (therapistId, profileData) => {
   try {
     console.log('Enviando atualização para o backend:', profileData);
-    const response = await api.put(`/api/therapists/${therapistId}`, profileData);
+    
+    // Garantir que as ferramentas estejam no formato correto
+    const formattedData = {
+      ...profileData
+    };
+    
+    // Verificar se tools existe e está no formato esperado
+    if (formattedData.tools) {
+      console.log('Ferramentas antes do processamento:', formattedData.tools);
+      
+      // Garantir que ferramentas estejam no formato esperado pelo backend
+      if (Array.isArray(formattedData.tools)) {
+        // Certificar que cada ferramenta tenha o formato esperado {id, duration, price}
+        formattedData.tools = formattedData.tools.map(tool => {
+          // Se já for um objeto completo, manter
+          if (tool && typeof tool === 'object' && tool.id) {
+            return {
+              id: tool.id,
+              duration: parseInt(tool.duration) || 60,
+              price: parseFloat(tool.price) || 0
+            };
+          }
+          
+          // Se for apenas o ID da ferramenta
+          if (typeof tool === 'string') {
+            return {
+              id: tool,
+              duration: 60,
+              price: 0
+            };
+          }
+          
+          return null;
+        }).filter(Boolean); // Remover entradas nulas
+      }
+      
+      console.log('Ferramentas processadas para envio:', formattedData.tools);
+    }
+    
+    // Processar ferramentas customizadas
+    if (formattedData.customTools) {
+      console.log('Ferramentas customizadas antes do processamento:', formattedData.customTools);
+      
+      if (Array.isArray(formattedData.customTools)) {
+        formattedData.customTools = formattedData.customTools.map(tool => {
+          if (tool && typeof tool === 'object' && tool.name) {
+            return {
+              name: tool.name,
+              duration: parseInt(tool.duration) || 60,
+              price: parseFloat(tool.price) || 0
+            };
+          }
+          return null;
+        }).filter(Boolean);
+      }
+      
+      console.log('Ferramentas customizadas processadas para envio:', formattedData.customTools);
+    }
+    
+    // Stringificar arrays se necessário para o backend
+    ['niches', 'customNiches'].forEach(field => {
+      if (Array.isArray(formattedData[field])) {
+        console.log(`Processando campo ${field} para envio:`, formattedData[field]);
+        // Manter como array, não converter para string
+      }
+    });
+    
+    console.log('Dados formatados para envio:', formattedData);
+    const response = await api.put(`/api/therapists/${therapistId}`, formattedData);
     console.log('Resposta da atualização:', response.data);
+    
+    // Verificar se as ferramentas foram atualizadas corretamente
+    if (response.data.success === true) {
+      console.log('Atualização bem-sucedida com novo formato de resposta');
+      return response.data.data || response.data;
+    }
+    
     return response.data;
   } catch (error) {
     console.error('Erro ao atualizar perfil:', error);
+    console.error('Detalhes do erro:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      url: error.config?.url,
+      method: error.config?.method
+    });
     throw error;
   }
 };
@@ -413,12 +495,83 @@ export const updateTherapistTools = async (therapistId, tools) => {
     console.log('Atualizando ferramentas do terapeuta:', therapistId);
     console.log('Ferramentas para atualização:', tools);
     
-    const response = await api.put(`/api/therapists/${therapistId}/tools`, { tools });
+    // Garantir que as ferramentas estejam no formato esperado pelo backend
+    let processedTools = [];
+    
+    if (Array.isArray(tools)) {
+      processedTools = tools.map(tool => {
+        // Verificar se é um objeto válido com id
+        if (tool && typeof tool === 'object') {
+          // Se for uma ferramenta com ID
+          if (tool.id) {
+            return {
+              id: tool.id,
+              duration: parseInt(tool.duration || 60),
+              price: parseFloat(tool.price || 0)
+            };
+          }
+          // Se for uma ferramenta customizada com nome
+          else if (tool.name) {
+            return {
+              name: tool.name,
+              duration: parseInt(tool.duration || 60),
+              price: parseFloat(tool.price || 0),
+              isCustom: true
+            };
+          }
+        }
+        // Se for apenas string (ID da ferramenta)
+        else if (typeof tool === 'string') {
+          return {
+            id: tool,
+            duration: 60,
+            price: 0
+          };
+        }
+        
+        return null;
+      }).filter(Boolean); // Remover nulos
+    }
+    
+    console.log('Ferramentas processadas para envio:', processedTools);
+    
+    // Separar ferramentas padrão e customizadas para envio
+    const standardTools = processedTools.filter(t => !t.isCustom);
+    const customTools = processedTools.filter(t => t.isCustom).map(t => {
+      // Remover a flag isCustom antes de enviar
+      const { isCustom, ...tool } = t;
+      return tool;
+    });
+    
+    console.log('Ferramentas padrão para envio:', standardTools);
+    console.log('Ferramentas customizadas para envio:', customTools);
+    
+    const requestData = {
+      tools: standardTools,
+      customTools: customTools
+    };
+    
+    console.log('Dados completos para envio:', requestData);
+    const response = await api.put(`/api/therapists/${therapistId}/tools`, requestData);
     
     console.log('Resposta da atualização de ferramentas:', response.data);
+    
+    // Verificar se a resposta está no novo formato
+    if (response.data && response.data.success === true) {
+      console.log('Sucesso na atualização com novo formato de resposta');
+      return response.data.data || response.data;
+    }
+    
     return response.data;
   } catch (error) {
     console.error('Erro ao atualizar ferramentas do terapeuta:', error);
+    console.error('Detalhes do erro:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      url: error.config?.url,
+      method: error.config?.method
+    });
     throw error;
   }
 }; 
