@@ -148,52 +148,77 @@ async function loadCjsRouter(routePath) {
 (async function loadRoutes() {
   try {
     // Definir o diretório de rotas (baseado no ambiente)
-    const routesPath = process.env.NODE_ENV === 'production' 
-      ? path.join(__dirname, 'routes')
-      : path.join(__dirname, '../dist/routes');
+    // Em produção, procura no mesmo diretório que o app.js
+    const routesPath = path.join(__dirname, 'routes');
     
     console.log(`📂 Buscando rotas em: ${routesPath}`);
+    console.log(`📂 Diretório atual (__dirname): ${__dirname}`);
     
     // Verificar se o diretório existe
     if (!fs.existsSync(routesPath)) {
       console.error(`❌ Diretório de rotas não encontrado: ${routesPath}`);
+      
+      // Tentar caminhos alternativos
+      const altPaths = [
+        path.join(process.cwd(), 'dist/routes'),
+        path.join(process.cwd(), 'routes'),
+        path.join(__dirname, '../routes')
+      ];
+      
+      for (const altPath of altPaths) {
+        console.log(`🔍 Tentando caminho alternativo: ${altPath}`);
+        if (fs.existsSync(altPath)) {
+          console.log(`✅ Diretório alternativo encontrado: ${altPath}`);
+          // Continuar com o caminho alternativo
+          processRoutesDir(altPath);
+          return;
+        }
+      }
+      
+      console.error('❌ Nenhum diretório de rotas encontrado após tentar caminhos alternativos');
       return;
     }
     
-    // Listar todos os arquivos no diretório de rotas
-    const routeFiles = fs.readdirSync(routesPath);
-    console.log(`🔍 Arquivos encontrados: ${routeFiles.length}`);
-    
-    // Filtrar apenas arquivos .cjs
-    const cjsRouteFiles = routeFiles.filter(file => file.endsWith('.cjs'));
-    console.log(`🔍 Arquivos .cjs encontrados: ${cjsRouteFiles.length}`);
-    
-    // Ignorar completamente arquivos .js
-    const jsFiles = routeFiles.filter(file => file.endsWith('.js') && !file.endsWith('.cjs'));
-    if (jsFiles.length > 0) {
-      console.log(`⚠️ Ignorando ${jsFiles.length} arquivos .js no diretório de rotas:`);
-      jsFiles.forEach(file => console.log(`  - ${file}`));
-    }
-    
-    // Carregar e registrar cada rota
-    let loadedCount = 0;
-    for (const file of cjsRouteFiles) {
-      const routePath = path.join(routesPath, file);
-      console.log(`⏳ Carregando rota: ${file}`);
-      
-      const router = await loadCjsRouter(routePath);
-      if (router) {
-        app.use('/api', router);
-        console.log(`✅ Rota carregada: ${file}`);
-        loadedCount++;
-      }
-    }
-    
-    console.log(`📊 Rotas carregadas: ${loadedCount}/${cjsRouteFiles.length}`);
+    // Processar o diretório de rotas encontrado
+    processRoutesDir(routesPath);
   } catch (error) {
     console.error('❌ Erro ao carregar rotas:', error.message);
   }
 })();
+
+// Função para processar o diretório de rotas
+async function processRoutesDir(routesPath) {
+  // Listar todos os arquivos no diretório de rotas
+  const routeFiles = fs.readdirSync(routesPath);
+  console.log(`🔍 Arquivos encontrados: ${routeFiles.length}`);
+  
+  // Filtrar apenas arquivos .cjs
+  const cjsRouteFiles = routeFiles.filter(file => file.endsWith('.cjs'));
+  console.log(`🔍 Arquivos .cjs encontrados: ${cjsRouteFiles.length}`);
+  
+  // Ignorar completamente arquivos .js
+  const jsFiles = routeFiles.filter(file => file.endsWith('.js') && !file.endsWith('.cjs'));
+  if (jsFiles.length > 0) {
+    console.log(`⚠️ Ignorando ${jsFiles.length} arquivos .js no diretório de rotas:`);
+    jsFiles.forEach(file => console.log(`  - ${file}`));
+  }
+  
+  // Carregar e registrar cada rota
+  let loadedCount = 0;
+  for (const file of cjsRouteFiles) {
+    const routePath = path.join(routesPath, file);
+    console.log(`⏳ Carregando rota: ${file}`);
+    
+    const router = await loadCjsRouter(routePath);
+    if (router) {
+      app.use('/api', router);
+      console.log(`✅ Rota carregada: ${file}`);
+      loadedCount++;
+    }
+  }
+  
+  console.log(`📊 Rotas carregadas: ${loadedCount}/${cjsRouteFiles.length}`);
+}
 
 // Rota padrão da API
 app.get('/', (req, res) => {
