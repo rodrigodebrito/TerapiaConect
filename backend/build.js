@@ -68,12 +68,48 @@ function compileWithSWC() {
   console.log(`\n${colors.yellow}🔄 Compilando o código com SWC...${colors.reset}`);
   
   try {
-    execSync('npx swc ./src -d ./dist --ignore "**/*.cjs"', { stdio: 'inherit' });
-    console.log(`${colors.green}✅ Código compilado com sucesso${colors.reset}`);
+    // Verificar se o SWC está disponível
+    try {
+      execSync('npx swc --version', { stdio: 'ignore' });
+      console.log(`${colors.green}✅ SWC encontrado, usando para compilação${colors.reset}`);
+      execSync('npx swc ./src -d ./dist --ignore "**/*.cjs"', { stdio: 'inherit' });
+    } catch (swcError) {
+      console.log(`${colors.yellow}⚠️ SWC não encontrado, usando método alternativo de cópia...${colors.reset}`);
+      // Método alternativo: copiar os arquivos JS e ignorar arquivos CJS
+      copyJsFiles();
+    }
+    console.log(`${colors.green}✅ Código compilado/copiado com sucesso${colors.reset}`);
   } catch (error) {
-    console.error(`${colors.red}❌ Erro ao compilar o código:${colors.reset}`, error.message);
+    console.error(`${colors.red}❌ Erro ao processar o código:${colors.reset}`, error.message);
     process.exit(1);
   }
+}
+
+/**
+ * Função alternativa para copiar arquivos JS quando SWC não estiver disponível
+ */
+function copyJsFiles() {
+  const copyDir = (srcPath, destPath) => {
+    if (!fs.existsSync(destPath)) {
+      fs.mkdirSync(destPath, { recursive: true });
+    }
+    
+    const entries = fs.readdirSync(srcPath, { withFileTypes: true });
+    
+    for (const entry of entries) {
+      const srcFilePath = path.join(srcPath, entry.name);
+      const destFilePath = path.join(destPath, entry.name);
+      
+      if (entry.isDirectory()) {
+        copyDir(srcFilePath, destFilePath);
+      } else if (entry.name.endsWith('.js') && !entry.name.endsWith('.cjs')) {
+        fs.copyFileSync(srcFilePath, destFilePath);
+        console.log(`${colors.green}✅ Copiado:${colors.reset} ${srcFilePath} -> ${destFilePath}`);
+      }
+    }
+  };
+  
+  copyDir(srcDir, distDir);
 }
 
 /**
