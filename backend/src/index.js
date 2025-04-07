@@ -217,10 +217,27 @@ try {
 }
 
 // Adicionar rotas de autenticação
+// Rota base de auth para testes
+app.get('/api/auth', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'API de autenticação está funcionando',
+    endpoints: [
+      '/api/auth/login',
+      '/api/auth/register',
+      '/api/auth/refresh-token',
+      '/api/auth/logout'
+    ]
+  });
+});
+
 // Rota de login
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    
+    // Logging para debug
+    console.log(`👤 Tentativa de login para: ${email}`);
     
     // Verificar se o usuário existe
     const user = await prisma.user.findUnique({
@@ -228,6 +245,7 @@ app.post('/api/auth/login', async (req, res) => {
     });
     
     if (!user) {
+      console.log(`❌ Usuário não encontrado: ${email}`);
       return res.status(401).json({
         success: false,
         message: 'Credenciais inválidas'
@@ -237,11 +255,14 @@ app.post('/api/auth/login', async (req, res) => {
     // Verificar senha (implementação básica, em produção use bcrypt)
     // Na implementação real, você usaria bcrypt.compare
     if (password !== user.password) {
+      console.log(`❌ Senha incorreta para: ${email}`);
       return res.status(401).json({
         success: false,
         message: 'Credenciais inválidas'
       });
     }
+    
+    console.log(`✅ Login bem-sucedido para: ${email}`);
     
     // Gerar token JWT (implementação básica)
     const token = 'jwt-token-simulado'; // Em produção, use jwt.sign
@@ -260,6 +281,58 @@ app.post('/api/auth/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro na rota /api/auth/login:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+});
+
+// Rota de registro (simplificada)
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { name, email, password, role = 'CLIENT' } = req.body;
+    
+    // Verificar se o usuário já existe
+    const existingUser = await prisma.user.findUnique({
+      where: { email }
+    });
+    
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'E-mail já está em uso'
+      });
+    }
+    
+    // Criar novo usuário
+    const newUser = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password, // Em produção, use bcrypt.hash
+        role
+      }
+    });
+    
+    // Gerar token JWT
+    const token = 'jwt-token-simulado'; // Em produção, use jwt.sign
+    
+    return res.status(201).json({
+      success: true,
+      data: {
+        user: {
+          id: newUser.id,
+          name: newUser.name,
+          email: newUser.email,
+          role: newUser.role
+        },
+        token
+      }
+    });
+  } catch (error) {
+    console.error('Erro na rota /api/auth/register:', error);
     return res.status(500).json({
       success: false,
       message: 'Erro interno do servidor',
