@@ -168,6 +168,13 @@ async function loadCjsRouter(routePath) {
     const cjsRouteFiles = routeFiles.filter(file => file.endsWith('.cjs'));
     console.log(`🔍 Arquivos .cjs encontrados: ${cjsRouteFiles.length}`);
     
+    // Ignorar completamente arquivos .js
+    const jsFiles = routeFiles.filter(file => file.endsWith('.js') && !file.endsWith('.cjs'));
+    if (jsFiles.length > 0) {
+      console.log(`⚠️ Ignorando ${jsFiles.length} arquivos .js no diretório de rotas:`);
+      jsFiles.forEach(file => console.log(`  - ${file}`));
+    }
+    
     // Carregar e registrar cada rota
     let loadedCount = 0;
     for (const file of cjsRouteFiles) {
