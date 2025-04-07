@@ -5,7 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import chalk from 'chalk';
-import rimraf from 'rimraf';
+import * as rimraf from 'rimraf';
 
 // Obtém o diretório do script atual usando ES Modules
 const __filename = fileURLToPath(import.meta.url);
