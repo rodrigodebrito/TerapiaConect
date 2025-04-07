@@ -50,7 +50,8 @@ const allowedOrigins = [
   'http://localhost:5173',
   'https://terapia-conect-frontend.vercel.app',
   'https://terapiaconect.vercel.app',
-  'https://terapiaconect.com.br'
+  'https://terapiaconect.com.br',
+  'https://theraconnect.com.br'
 ];
 
 // Configuração unificada de CORS - permitindo origens específicas em produção

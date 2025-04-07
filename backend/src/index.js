@@ -57,7 +57,8 @@ const allowedOrigins = [
   'https://www.terapiaconect.com',
   'https://terapiaconect.vercel.app', 
   'https://terapia-conect-frontend.vercel.app',
-  'https://terapiaconect.com.br'
+  'https://terapiaconect.com.br',
+  'https://theraconnect.com.br'
 ];
 
 // Configurar Socket.IO com configurações otimizadas
