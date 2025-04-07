@@ -7,7 +7,7 @@ export const getTherapistByUserId = async (userId) => {
     console.log(`Buscando terapeuta para o usuário com ID: ${userId}`);
     
     // Garantir que a rota não tenha /api/ duplicado
-    const response = await api.get(`/therapists/user/${userId}`);
+    const response = await api.get(`/api/therapists/user/${userId}`);
     
     console.log('Resposta do perfil de terapeuta por userId:', response.data);
     
@@ -57,7 +57,7 @@ export const getTherapistByUserId = async (userId) => {
 export const getTherapistById = async (therapistId) => {
   try {
     console.log(`Buscando terapeuta com ID: ${therapistId}`);
-    const response = await api.get(`/therapists/${therapistId}`);
+    const response = await api.get(`/api/therapists/${therapistId}`);
     console.log('Resposta detalhada do perfil:', response.data);
     
     // Verificar se a resposta está no novo formato com success e data
@@ -97,7 +97,7 @@ export const getTherapistById = async (therapistId) => {
 export const createTherapistProfile = async (profileData) => {
   try {
     console.log('Enviando criação para o backend:', profileData);
-    const response = await api.post('/therapists', profileData);
+    const response = await api.post('/api/therapists', profileData);
     console.log('Resposta da criação:', response.data);
     return response.data;
   } catch (error) {
@@ -110,7 +110,7 @@ export const createTherapistProfile = async (profileData) => {
 export const updateTherapistProfile = async (therapistId, profileData) => {
   try {
     console.log('Enviando atualização para o backend:', profileData);
-    const response = await api.put(`/therapists/${therapistId}`, profileData);
+    const response = await api.put(`/api/therapists/${therapistId}`, profileData);
     console.log('Resposta da atualização:', response.data);
     return response.data;
   } catch (error) {
@@ -134,8 +134,15 @@ export const getTherapistAvailability = async (therapistId) => {
 
 // Atualizar disponibilidade do terapeuta
 export const updateTherapistAvailability = async (therapistId, availabilityData) => {
-  const response = await api.post(`/therapists/${therapistId}/availability`, { availability: availabilityData });
-  return response.data;
+  try {
+    console.log(`Atualizando disponibilidade para terapeuta ID: ${therapistId}`);
+    const response = await api.post(`/api/therapists/${therapistId}/availability`, { availability: availabilityData });
+    console.log('Resposta da API de atualização de disponibilidade:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao atualizar disponibilidade:', error);
+    throw error;
+  }
 };
 
 // Buscar todos os terapeutas (para diretório público)
@@ -174,15 +181,26 @@ export const getAllTherapists = async (filters = {}) => {
     }
 
     console.log('Parâmetros construídos:', params.toString());
-    const response = await api.get('/therapists', { params });
+    const response = await api.get('/api/therapists', { params });
     console.log('Resposta recebida:', response.data);
     
-    if (!Array.isArray(response.data)) {
+    // Verificar se a resposta está no novo formato (success/data)
+    let therapistsData = [];
+    if (response.data && response.data.success && Array.isArray(response.data.data)) {
+      therapistsData = response.data.data;
+      console.log('Dados de terapeutas extraídos do formato success/data:', therapistsData.length);
+    } 
+    // Formato antigo (array direto)
+    else if (Array.isArray(response.data)) {
+      therapistsData = response.data;
+      console.log('Dados de terapeutas no formato antigo (array direto):', therapistsData.length);
+    }
+    else {
       console.error('Resposta inválida da API:', response.data);
       throw new Error('Formato de resposta inválido');
     }
 
-    return response.data.map(therapist => {
+    return therapistsData.map(therapist => {
       try {
         return {
           ...therapist,
@@ -251,10 +269,10 @@ export const uploadProfilePicture = async (therapistId, formData) => {
   }
   
   try {
-    console.log('Enviando imagem para:', `/therapists/${therapistId}/upload-picture`);
+    console.log('Enviando imagem para:', `/api/therapists/${therapistId}/upload-picture`);
     console.log('Conteúdo do FormData:', formData.get('profilePicture'));
     
-    const response = await api.post(`/therapists/${therapistId}/upload-picture`, formData, {
+    const response = await api.post(`/api/therapists/${therapistId}/upload-picture`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

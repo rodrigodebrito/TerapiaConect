@@ -288,7 +288,7 @@ const TherapistAvailabilitySimple = () => {
         
         // Verificar se temos um perfil de terapeuta
         console.log('Buscando perfil de terapeuta para o usuário:', user.id);
-        const response = await api.get(`/therapists/user/${user.id}`);
+        const response = await api.get(`/api/therapists/user/${user.id}`);
         console.log('Resposta do perfil de terapeuta:', response.data);
         
         // Verificar formato da resposta
