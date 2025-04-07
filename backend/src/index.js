@@ -231,6 +231,70 @@ app.get('/api/auth', (req, res) => {
   });
 });
 
+// Rota POST /api/auth que redireciona para /api/auth/login
+app.post('/api/auth', (req, res) => {
+  console.log('POST /api/auth recebido - redirecionando para /api/auth/login');
+  // Tenta reutilizar a mesma lógica do login
+  const loginHandler = app._router.stack
+    .filter(layer => layer.route?.path === '/api/auth/login' && layer.route?.methods.post)
+    .map(layer => layer.handle)[0];
+    
+  if (loginHandler) {
+    console.log('✅ Handler de login encontrado, redirecionando requisição');
+    return loginHandler(req, res);
+  } else {
+    console.log('❌ Handler de login não encontrado, processando localmente');
+    
+    // Lógica inline de login se o handler não for encontrado
+    try {
+      const { email, password } = req.body;
+      console.log(`👤 Tentativa de login para: ${email} (via /api/auth)`);
+      
+      // Verificar credenciais e retornar resposta
+      prisma.user.findUnique({
+        where: { email }
+      }).then(user => {
+        if (!user || user.password !== password) {
+          return res.status(401).json({
+            success: false,
+            message: 'Credenciais inválidas'
+          });
+        }
+        
+        // Gerar token JWT (implementação básica)
+        const token = 'jwt-token-simulado'; 
+        
+        return res.status(200).json({
+          success: true,
+          data: {
+            user: {
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              role: user.role
+            },
+            token
+          }
+        });
+      }).catch(error => {
+        console.error('Erro ao processar login:', error);
+        return res.status(500).json({
+          success: false,
+          message: 'Erro interno do servidor',
+          error: error.message
+        });
+      });
+    } catch (error) {
+      console.error('Erro na rota POST /api/auth:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      });
+    }
+  }
+});
+
 // Rota de login
 app.post('/api/auth/login', async (req, res) => {
   try {
