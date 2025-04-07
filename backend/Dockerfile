@@ -9,8 +9,8 @@ RUN apk add --no-cache openssl
 # Copia package.json e package-lock.json
 COPY package*.json ./
 
-# Instala as dependências do projeto
-RUN npm ci
+# Instala as dependências do projeto (usando install em vez de ci)
+RUN npm install
 
 # Copia os arquivos do projeto
 COPY . .
