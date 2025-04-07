@@ -8,11 +8,15 @@ import OpenAI from 'openai';
 import { PrismaClient } from '@prisma/client';
 import { fileURLToPath } from 'url';
 
+// Importar controladores diretamente
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+
 // Configuração de caminhos para ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Rotas serão carregadas dinamicamente com tratamento de erro
+// Rotas serão registradas diretamente
 const prisma = new PrismaClient();
 const app = express();
 
@@ -102,7 +106,191 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Middleware para arquivos estáticos
 app.use(express.static(path.join(__dirname, '../public')));
 
-// ROTA DE TESTE FIXA PARA DEBUG
+// =================== REGISTRO DE ROTAS DIRETO NO APP ===================
+
+// -------- Rotas de Autenticação (auth.routes) --------
+// Middleware de autenticação
+const authMiddleware = require('./middleware/auth.middleware.cjs');
+// Controllers
+const authController = require('./controllers/auth.controller.js');
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const result = await authController.login(req, res);
+    return result;
+  } catch (error) {
+    console.error('Erro na rota /api/auth/login:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+});
+
+app.post('/api/auth/refresh-token', async (req, res) => {
+  try {
+    const result = await authController.refreshToken(req, res);
+    return result;
+  } catch (error) {
+    console.error('Erro na rota /api/auth/refresh-token:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+});
+
+app.post('/api/auth/logout', async (req, res) => {
+  try {
+    const result = await authController.logout(req, res);
+    return result;
+  } catch (error) {
+    console.error('Erro na rota /api/auth/logout:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+});
+
+// -------- Rotas de Usuário (user.routes) --------
+const userController = require('./controllers/user.controller.js');
+
+// Rota para criar um novo usuário
+app.post('/api/users', async (req, res) => {
+  try {
+    const result = await userController.createUser(req, res);
+    return result;
+  } catch (error) {
+    console.error('Erro na rota /api/users:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+});
+
+// Rota para buscar usuário por ID
+app.get('/api/users/:id', async (req, res) => {
+  try {
+    const result = await userController.getUserById(req, res);
+    return result;
+  } catch (error) {
+    console.error(`Erro na rota /api/users/${req.params.id}:`, error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+});
+
+// Rotas protegidas com autenticação
+app.get('/api/users/me', authMiddleware, async (req, res) => {
+  try {
+    const result = await userController.getCurrentUser(req, res);
+    return result;
+  } catch (error) {
+    console.error('Erro na rota /api/users/me:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+});
+
+// -------- Rotas de Terapeuta (therapist.routes) --------
+const therapistController = require('./controllers/therapist.controller.js');
+
+// Buscar todos os terapeutas
+app.get('/api/therapists', async (req, res) => {
+  try {
+    const result = await therapistController.getAllTherapists(req, res);
+    return result;
+  } catch (error) {
+    console.error('Erro na rota /api/therapists:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+});
+
+// Buscar terapeuta por ID
+app.get('/api/therapists/:id', async (req, res) => {
+  try {
+    const result = await therapistController.getTherapistById(req, res);
+    return result;
+  } catch (error) {
+    console.error(`Erro na rota /api/therapists/${req.params.id}:`, error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+});
+
+// Buscar todos os terapeutas aprovados
+app.get('/api/approved-therapists', async (req, res) => {
+  try {
+    const result = await therapistController.getApprovedTherapists(req, res);
+    return result;
+  } catch (error) {
+    console.error('Erro na rota /api/approved-therapists:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+});
+
+// Buscar usuário por ID (para perfil de terapeuta)
+app.get('/api/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        therapist: {
+          include: {
+            specialty: true,
+            approach: true
+          }
+        }
+      }
+    });
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuário não encontrado'
+      });
+    }
+    
+    return res.status(200).json({
+      success: true,
+      data: user
+    });
+  } catch (error) {
+    console.error(`Erro na rota /api/user/${req.params.userId}:`, error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+});
+
+// -------- Rotas de Teste (sempre funcionarão) --------
 app.get('/api/test', (req, res) => {
   res.status(200).json({
     message: 'API funcionando - rota de teste fixa',
@@ -116,201 +304,6 @@ app.get('/api/test/:id', (req, res) => {
     message: 'API funcionando - rota com parâmetro fixa',
     id: req.params.id,
     success: true,
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Registrar as rotas - carregando arquivos .cjs do diretório routes
-console.log('\nCarregando rotas da API:');
-
-// Função para carregar um router usando require (para arquivos .cjs)
-async function loadCjsRouter(routePath) {
-  try {
-    console.log(`🔄 Tentando carregar router: ${routePath}`);
-    
-    // Na produção, os arquivos estão em dist
-    const fullPath = path.resolve(routePath);
-    console.log(`🔍 Caminho completo: ${fullPath}`);
-    
-    // Verificar se o arquivo existe antes de tentar carregá-lo
-    if (!fs.existsSync(fullPath)) {
-      console.error(`❌ Arquivo não encontrado: ${fullPath}`);
-      return null;
-    }
-    
-    // Usando require dinâmico (CommonJS)
-    let router;
-    try {
-      console.log(`🔍 Lendo conteúdo do arquivo para verificação...`);
-      const fileContent = fs.readFileSync(fullPath, 'utf8');
-      console.log(`📄 Primeiros 100 caracteres: ${fileContent.substring(0, 100).replace(/\n/g, ' ')}...`);
-      
-      // No Node.js, quando se usa o 'import' como palavra-chave do ESM,
-      // você ainda pode usar require() como uma função, mas isso gera um erro
-      // em tempo de execução no ambiente ESM, então precisamos usar 'createRequire'
-      console.log(`🔧 Criando require a partir de createRequire...`);
-      const { createRequire } = await import('module');
-      const require = createRequire(import.meta.url);
-      
-      console.log(`🔄 Executando require: ${fullPath}`);
-      router = require(fullPath);
-      console.log(`✅ Router carregado, tipo: ${typeof router}`);
-      
-      // Verificar se router é um objeto (pode ser o caso de module.exports = router)
-      if (typeof router === 'object') {
-        console.log(`🔍 Propriedades do objeto router: ${Object.keys(router).join(', ')}`);
-        
-        if (router.default) {
-          console.log(`✅ Usando router.default`);
-          router = router.default;
-        }
-        
-        // Verificar se o objeto tem stack (indicando que é um Router do Express)
-        if (router.stack) {
-          console.log(`✅ Router tem stack (${router.stack.length} rotas)`);
-          router.stack.forEach((layer, i) => {
-            console.log(`   Rota ${i}: ${layer.regexp}`);
-          });
-        } else {
-          console.log(`⚠️ Router não tem stack - pode não ser um Router do Express válido`);
-        }
-      }
-      
-      return router;
-    } catch (error) {
-      console.error(`❌ Erro ao carregar ${routePath}:`, error.message);
-      console.error(`   Stack: ${error.stack}`);
-      return null;
-    }
-  } catch (error) {
-    console.error(`❌ Erro ao processar ${routePath}:`, error.message);
-    return null;
-  }
-}
-
-// Carregar rotas dinamicamente
-(async function loadRoutes() {
-  try {
-    // Definir o diretório de rotas (baseado no ambiente)
-    // Em produção, procura no mesmo diretório que o app.js
-    const routesPath = path.join(__dirname, 'routes');
-    
-    console.log(`📂 Buscando rotas em: ${routesPath}`);
-    console.log(`📂 Diretório atual (__dirname): ${__dirname}`);
-    
-    // Verificar se o diretório existe
-    if (!fs.existsSync(routesPath)) {
-      console.error(`❌ Diretório de rotas não encontrado: ${routesPath}`);
-      
-      // Tentar caminhos alternativos
-      const altPaths = [
-        path.join(process.cwd(), 'dist/routes'),
-        path.join(process.cwd(), 'routes'),
-        path.join(__dirname, '../routes')
-      ];
-      
-      for (const altPath of altPaths) {
-        console.log(`🔍 Tentando caminho alternativo: ${altPath}`);
-        if (fs.existsSync(altPath)) {
-          console.log(`✅ Diretório alternativo encontrado: ${altPath}`);
-          // Continuar com o caminho alternativo
-          processRoutesDir(altPath);
-          return;
-        }
-      }
-      
-      console.error('❌ Nenhum diretório de rotas encontrado após tentar caminhos alternativos');
-      return;
-    }
-    
-    // Processar o diretório de rotas encontrado
-    processRoutesDir(routesPath);
-  } catch (error) {
-    console.error('❌ Erro ao carregar rotas:', error.message);
-  }
-})();
-
-// Função para processar o diretório de rotas
-async function processRoutesDir(routesPath) {
-  try {
-    // Listar todos os arquivos no diretório de rotas
-    const routeFiles = fs.readdirSync(routesPath);
-    console.log(`🔍 Arquivos encontrados: ${routeFiles.length}`);
-    
-    // Filtrar apenas arquivos .cjs
-    const cjsRouteFiles = routeFiles.filter(file => file.endsWith('.cjs'));
-    console.log(`🔍 Arquivos .cjs encontrados: ${cjsRouteFiles.length}`);
-    
-    // Ignorar completamente arquivos .js
-    const jsFiles = routeFiles.filter(file => file.endsWith('.js') && !file.endsWith('.cjs'));
-    if (jsFiles.length > 0) {
-      console.log(`⚠️ Ignorando ${jsFiles.length} arquivos .js no diretório de rotas:`);
-      jsFiles.forEach(file => console.log(`  - ${file}`));
-    }
-    
-    // Tentar método alternativo de carregamento
-    console.log(`🔄 Tentando método alternativo de carregamento...`);
-    
-    try {
-      // Tentativa simples com método alternativo (caso o erro seja apenas no carregamento)
-      const { createRequire } = await import('module');
-      const require = createRequire(import.meta.url);
-      
-      // Carregar e registrar cada rota
-      let loadedCount = 0;
-      for (const file of cjsRouteFiles) {
-        const routePath = path.join(routesPath, file);
-        console.log(`\n⏳ Carregando rota: ${file}`);
-        
-        try {
-          // Método 1: Carregar com nossa função
-          console.log(`🔄 Método 1: Usando loadCjsRouter`);
-          const router = await loadCjsRouter(routePath);
-          
-          if (router) {
-            app.use('/api', router);
-            console.log(`✅ Rota carregada com Método 1: ${file}`);
-            loadedCount++;
-            continue; // Se funcionou, vá para o próximo
-          }
-          
-          // Método 2: Tentar diretamente com require
-          console.log(`🔄 Método 2: Usando require diretamente`);
-          try {
-            const routerModule = require(routePath);
-            const directRouter = routerModule.default || routerModule;
-            
-            if (directRouter && typeof directRouter === 'function') {
-              app.use('/api', directRouter);
-              console.log(`✅ Rota carregada com Método 2: ${file}`);
-              loadedCount++;
-            } else {
-              console.log(`❌ Método 2 falhou: ${file} - objeto retornado não é um router válido`);
-            }
-          } catch (reqError) {
-            console.error(`❌ Método 2 falhou: ${file} - ${reqError.message}`);
-          }
-        } catch (error) {
-          console.error(`❌ Erro ao carregar rota ${file}:`, error.message);
-        }
-      }
-      
-      console.log(`📊 Rotas carregadas: ${loadedCount}/${cjsRouteFiles.length}`);
-    } catch (error) {
-      console.error(`❌ Erro no método alternativo:`, error.message);
-    }
-  } catch (error) {
-    console.error(`❌ Erro ao listar arquivos no diretório ${routesPath}:`, error.message);
-  }
-}
-
-// Rota padrão da API
-app.get('/', (req, res) => {
-  res.json({
-    name: 'TerapiaConect API',
-    version: '1.0.0',
-    status: 'online',
-    environment: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString()
   });
 });
@@ -362,6 +355,17 @@ app.get('/api/routes', (req, res) => {
   });
 });
 
+// Rota padrão da API
+app.get('/', (req, res) => {
+  res.json({
+    name: 'TerapiaConect API',
+    version: '1.0.0',
+    status: 'online',
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Rota de fallback (404)
 app.use('*', (req, res) => {
   res.status(404).json({
@@ -373,5 +377,7 @@ app.use('*', (req, res) => {
 // Adicionar o OpenAI como propriedade global do app para uso nos controladores
 app.locals.openai = openai;
 app.locals.prisma = prisma;
+
+console.log(`📊 Rotas registradas manualmente (${app._router.stack.filter(m => m.route).length} rotas diretas)`);
 
 export default app; 
