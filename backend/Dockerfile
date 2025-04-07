@@ -675,15 +675,14 @@ RUN echo 'const express = require("express");' > /app/src-cjs/routes/session.rou
     echo '// Exportar router' >> /app/src-cjs/routes/session.routes.cjs && \
     echo 'module.exports = router;' >> /app/src-cjs/routes/session.routes.cjs
 
-# Criar ai.controller.cjs para garantir compatibilidade
+# Atualizar ai.controller.cjs para a nova API da OpenAI
 RUN echo 'const prisma = require("../utils/prisma.cjs");' > /app/src-cjs/controllers/ai.controller.cjs && \
-    echo 'const { Configuration, OpenAIApi } = require("openai");' >> /app/src-cjs/controllers/ai.controller.cjs && \
+    echo 'const OpenAI = require("openai");' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '' >> /app/src-cjs/controllers/ai.controller.cjs && \
-    echo '// Configuração da API OpenAI' >> /app/src-cjs/controllers/ai.controller.cjs && \
-    echo 'const configuration = new Configuration({' >> /app/src-cjs/controllers/ai.controller.cjs && \
+    echo '// Configuração da API OpenAI com a nova SDK' >> /app/src-cjs/controllers/ai.controller.cjs && \
+    echo 'const openai = new OpenAI({' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '  apiKey: process.env.OPENAI_API_KEY,' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '});' >> /app/src-cjs/controllers/ai.controller.cjs && \
-    echo 'const openai = new OpenAIApi(configuration);' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '// Função para analisar texto usando IA' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo 'exports.analyzeText = async (req, res) => {' >> /app/src-cjs/controllers/ai.controller.cjs && \
@@ -698,7 +697,7 @@ RUN echo 'const prisma = require("../utils/prisma.cjs");' > /app/src-cjs/control
     echo '      return res.status(500).json({ message: "API de IA não configurada" });' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '    }' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '' >> /app/src-cjs/controllers/ai.controller.cjs && \
-    echo '    const response = await openai.createChatCompletion({' >> /app/src-cjs/controllers/ai.controller.cjs && \
+    echo '    const response = await openai.chat.completions.create({' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '      model: process.env.OPENAI_MODEL || "gpt-3.5-turbo",' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '      messages: [' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '        { role: "system", content: "Você é um assistente terapêutico que analisa textos." },' >> /app/src-cjs/controllers/ai.controller.cjs && \
@@ -708,7 +707,7 @@ RUN echo 'const prisma = require("../utils/prisma.cjs");' > /app/src-cjs/control
     echo '      temperature: 0.7,' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '    });' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '' >> /app/src-cjs/controllers/ai.controller.cjs && \
-    echo '    const analysis = response.data.choices[0]?.message?.content;' >> /app/src-cjs/controllers/ai.controller.cjs && \
+    echo '    const analysis = response.choices[0]?.message?.content;' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '    // Registrar análise no banco de dados' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '    const savedAnalysis = await prisma.aiAnalysis.create({' >> /app/src-cjs/controllers/ai.controller.cjs && \
@@ -739,7 +738,7 @@ RUN echo 'const prisma = require("../utils/prisma.cjs");' > /app/src-cjs/control
     echo '      return res.status(500).json({ message: "API de IA não configurada" });' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '    }' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '' >> /app/src-cjs/controllers/ai.controller.cjs && \
-    echo '    const response = await openai.createChatCompletion({' >> /app/src-cjs/controllers/ai.controller.cjs && \
+    echo '    const response = await openai.chat.completions.create({' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '      model: process.env.OPENAI_MODEL || "gpt-3.5-turbo",' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '      messages: [' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '        { role: "system", content: "Você é um assistente terapêutico que gera sugestões úteis." },' >> /app/src-cjs/controllers/ai.controller.cjs && \
@@ -749,7 +748,7 @@ RUN echo 'const prisma = require("../utils/prisma.cjs");' > /app/src-cjs/control
     echo '      temperature: 0.7,' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '    });' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '' >> /app/src-cjs/controllers/ai.controller.cjs && \
-    echo '    const suggestions = response.data.choices[0]?.message?.content;' >> /app/src-cjs/controllers/ai.controller.cjs && \
+    echo '    const suggestions = response.choices[0]?.message?.content;' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '    return res.status(200).json({ suggestions });' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '  } catch (error) {' >> /app/src-cjs/controllers/ai.controller.cjs && \
     echo '    console.error("Erro ao gerar sugestões:", error?.response?.data || error);' >> /app/src-cjs/controllers/ai.controller.cjs && \
