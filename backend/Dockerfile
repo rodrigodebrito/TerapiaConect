@@ -1355,5 +1355,167 @@ RUN echo 'const express = require("express");' > /app/src-cjs/routes/training.ro
     echo '// Exportar router' >> /app/src-cjs/routes/training.routes.cjs && \
     echo 'module.exports = router;' >> /app/src-cjs/routes/training.routes.cjs
 
+# Create transcription.controller.cjs
+RUN mkdir -p /app/src-cjs/controllers && \
+    echo "const { Configuration, OpenAIApi } = require('openai');" > /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "const fs = require('fs');" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "const prisma = require('../utils/prisma.cjs');" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "const configuration = new Configuration({" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  apiKey: process.env.OPENAI_API_KEY," >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "});" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "const openai = new OpenAIApi(configuration);" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "// Criar transcrição" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "async function createTranscription(req, res) {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  try {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    const { patientId, sessionDate, audioUrl } = req.body;" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    if (!patientId || !sessionDate || !audioUrl) {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "      return res.status(400).json({ error: 'PatientId, sessionDate e audioUrl são obrigatórios' });" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    }" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    // Simular transcrição com OpenAI (em produção, usaria o áudio real)" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    const transcription = await generateTranscription(audioUrl);" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    // Salvar a transcrição no banco de dados" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    const savedTranscription = await prisma.transcription.create({" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "      data: {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "        patientId," >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "        sessionDate: new Date(sessionDate)," >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "        audioUrl," >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "        content: transcription," >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "        status: 'COMPLETED'" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "      }" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    });" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    return res.json(savedTranscription);" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  } catch (error) {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    console.error('Erro ao criar transcrição:', error);" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    return res.status(500).json({ error: 'Erro ao processar a transcrição' });" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  }" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "}" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "// Obter todas as transcrições de um paciente" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "async function getTranscriptionsByPatient(req, res) {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  try {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    const { patientId } = req.params;" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    const transcriptions = await prisma.transcription.findMany({" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "      where: { patientId }" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    });" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    return res.json(transcriptions);" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  } catch (error) {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    console.error('Erro ao buscar transcrições:', error);" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    return res.status(500).json({ error: 'Erro ao buscar transcrições' });" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  }" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "}" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "// Obter uma transcrição específica por ID" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "async function getTranscriptionById(req, res) {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  try {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    const { id } = req.params;" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    const transcription = await prisma.transcription.findUnique({" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "      where: { id }" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    });" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    if (!transcription) {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "      return res.status(404).json({ error: 'Transcrição não encontrada' });" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    }" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    return res.json(transcription);" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  } catch (error) {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    console.error('Erro ao buscar transcrição:', error);" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    return res.status(500).json({ error: 'Erro ao buscar transcrição' });" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  }" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "}" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "// Analisar transcrição para identificar padrões e insights" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "async function analyzeTranscription(req, res) {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  try {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    const { id } = req.params;" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    const transcription = await prisma.transcription.findUnique({" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "      where: { id }" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    });" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    if (!transcription) {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "      return res.status(404).json({ error: 'Transcrição não encontrada' });" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    }" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    // Analisar a transcrição com OpenAI" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    const analysis = await analyzeWithAI(transcription.content);" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    // Atualizar a transcrição com a análise" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    const updatedTranscription = await prisma.transcription.update({" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "      where: { id }," >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "      data: { analysis }" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    });" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    return res.json(updatedTranscription);" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  } catch (error) {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    console.error('Erro ao analisar transcrição:', error);" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    return res.status(500).json({ error: 'Erro ao analisar transcrição' });" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  }" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "}" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "// Função auxiliar para gerar transcrição com OpenAI (simulada)" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "async function generateTranscription(audioUrl) {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  // Em um ambiente real, usaríamos a API de transcrição do OpenAI com o arquivo de áudio" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  // Para simulação, estamos retornando um texto predefinido" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  return 'Esta é uma transcrição simulada de uma sessão de terapia. O paciente expressou preocupações sobre ansiedade e estresse no trabalho. Discutimos técnicas de respiração e mindfulness para gerenciar esses sintomas.';" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "}" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "// Função auxiliar para analisar a transcrição com OpenAI" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "async function analyzeWithAI(transcriptionContent) {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  try {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    const prompt = `Analise a seguinte transcrição de uma sessão de terapia e identifique os principais temas, emoções, preocupações e sugira possíveis abordagens terapêuticas: ${transcriptionContent}`;" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    const response = await openai.createCompletion({" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "      model: 'text-davinci-003'," >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "      prompt," >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "      max_tokens: 500," >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "      temperature: 0.7," >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    });" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    return response.data.choices[0].text.trim();" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  } catch (error) {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    console.error('Erro na análise com OpenAI:', error);" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "    return 'Não foi possível analisar a transcrição devido a um erro.';" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  }" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "}" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "module.exports = {" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  createTranscription," >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  getTranscriptionsByPatient," >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  getTranscriptionById," >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "  analyzeTranscription" >> /app/src-cjs/controllers/transcription.controller.cjs && \
+    echo "};" >> /app/src-cjs/controllers/transcription.controller.cjs
+
+# Create transcription.routes.cjs
+RUN mkdir -p /app/src-cjs/routes && \
+    echo "const express = require('express');" > /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "const { validateToken } = require('../middleware/auth.middleware.cjs');" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "const {" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "  createTranscription," >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "  getTranscriptionsByPatient," >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "  getTranscriptionById," >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "  analyzeTranscription" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "} = require('../controllers/transcription.controller.cjs');" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "const router = express.Router();" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "// Rota para criar uma nova transcrição" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "router.post('/', validateToken, createTranscription);" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "// Rota para obter todas as transcrições de um paciente" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "router.get('/patient/:patientId', validateToken, getTranscriptionsByPatient);" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "// Rota para obter uma transcrição específica" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "router.get('/:id', validateToken, getTranscriptionById);" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "// Rota para analisar uma transcrição" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "router.post('/:id/analyze', validateToken, analyzeTranscription);" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "" >> /app/src-cjs/routes/transcription.routes.cjs && \
+    echo "module.exports = router;" >> /app/src-cjs/routes/transcription.routes.cjs
+
 # Comando para iniciar usando a versão CommonJS compatível
 CMD /bin/sh -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node index-compat.cjs" 
