@@ -18,6 +18,7 @@ import { fileURLToPath } from 'url';
 import http from 'http';
 import { Server as SocketIO } from 'socket.io';
 import fs from 'fs';
+import { PrismaClient } from '@prisma/client';
 
 // Utilitários e configurações
 import prisma from './utils/prisma.js';
@@ -33,6 +34,7 @@ const routesFiles = fs.readdirSync(routesDir).filter(file => file.endsWith('.js'
 // Configuração da aplicação
 const app = express();
 const PORT = process.env.PORT || 3000;
+const ENV = process.env.NODE_ENV || 'development';
 
 // Criar servidor HTTP com Express
 const server = http.createServer(app);
@@ -124,6 +126,42 @@ io.engine.on('connection_error', (err) => {
 // Expor o objeto io para que os controladores possam usá-lo
 app.locals.io = io;
 
+// Logs de diagnóstico do ambiente
+console.log('==================== DIAGNÓSTICO DE AMBIENTE ====================');
+console.log(`📝 Node.js versão: ${process.version}`);
+console.log(`📝 Ambiente: ${ENV}`);
+console.log(`📝 Diretório atual: ${process.cwd()}`);
+console.log(`📝 Diretório do script: ${__dirname}`);
+
+// Verificar diretórios importantes
+const directories = [
+  { name: 'routes', path: path.join(__dirname, 'routes') },
+  { name: 'routes (parent)', path: path.join(__dirname, '../routes') },
+  { name: 'dist/routes', path: path.join(process.cwd(), 'dist/routes') },
+  { name: 'controllers', path: path.join(__dirname, 'controllers') },
+  { name: 'uploads', path: path.join(__dirname, '../uploads') }
+];
+
+console.log('\n📂 Verificando diretórios importantes:');
+directories.forEach(dir => {
+  const exists = fs.existsSync(dir.path);
+  console.log(`📁 ${dir.name}: ${dir.path} - ${exists ? '✅ Existe' : '❌ Não existe'}`);
+  
+  if (exists && dir.name.includes('routes')) {
+    try {
+      const files = fs.readdirSync(dir.path);
+      console.log(`   Arquivos (${files.length}): ${files.join(', ')}`);
+    } catch (error) {
+      console.error(`   ❌ Erro ao listar arquivos: ${error.message}`);
+    }
+  }
+});
+
+console.log('================================================================\n');
+
+// Prisma client
+const prismaClient = new PrismaClient();
+
 // Iniciar o servidor
 Promise.all(routePromises).then(results => {
   const successCount = results.filter(r => r.success).length;
@@ -137,7 +175,7 @@ Promise.all(routePromises).then(results => {
       name: 'TerapiaConect API',
       version: '1.0.0',
       status: 'online',
-      environment: process.env.NODE_ENV || 'development',
+      environment: ENV,
       timestamp: new Date().toISOString()
     });
   });
@@ -153,16 +191,20 @@ Promise.all(routePromises).then(results => {
 
   // Iniciar o servidor na porta especificada
   server.listen(PORT, () => {
-    console.log(`\n🚀 Servidor rodando na porta ${PORT} (${process.env.NODE_ENV || 'development'})`);
+    console.log(`🚀 Servidor rodando na porta ${PORT} (${ENV})`);
     console.log(`📅 ${new Date().toLocaleString()}`);
     
     // Verificar conexão com banco de dados
-    prisma
+    prismaClient
       .$connect()
-      .then(() => console.log('📦 Conectado ao banco de dados'))
+      .then(() => {
+        console.log('📦 Conectado ao banco de dados');
+        console.log('Conexão com o banco de dados estabelecida com sucesso');
+      })
       .catch(err => {
         console.error('❌ Erro ao conectar ao banco de dados:', err.message);
         console.error('❌ Erro detalhado:', err);
+        process.exit(1);
       });
   });
   
@@ -193,4 +235,23 @@ Promise.all(routePromises).then(results => {
 }).catch(error => {
   console.error('❌ Erro fatal ao iniciar o servidor:', error);
   process.exit(1);
-}); 
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM recebido, fechando conexões...');
+  server.close(() => {
+    console.log('Servidor HTTP fechado');
+    prismaClient.$disconnect()
+      .then(() => {
+        console.log('Conexão do banco de dados fechada');
+        process.exit(0);
+      })
+      .catch(error => {
+        console.error('Erro ao desconectar banco de dados:', error);
+        process.exit(1);
+      });
+  });
+});
+
+export default server; 

@@ -135,7 +135,7 @@ function copyCJSFiles() {
   console.log(`\n${colors.yellow}📂 Copiando arquivos .cjs para o diretório de distribuição...${colors.reset}`);
   
   if (!fs.existsSync(routesDir)) {
-    console.log(`${colors.red}⚠️ Diretório de rotas não encontrado:${colors.reset} ${routesDir}`);
+    console.error(`${colors.red}⚠️ Diretório de rotas não encontrado:${colors.reset} ${routesDir}`);
     return;
   }
   
@@ -151,16 +151,49 @@ function copyCJSFiles() {
   
   console.log(`${colors.blue}🔍 Encontrados ${cjsFiles.length} arquivos .cjs para copiar${colors.reset}`);
   
+  // Para debug: lista todos os arquivos nos diretórios
+  console.log(`${colors.magenta}🔍 Conteúdo do diretório de origem (${routesDir}):${colors.reset}`);
+  fs.readdirSync(routesDir).forEach(file => console.log(`  - ${file}`));
+  
+  console.log(`${colors.magenta}🔍 Conteúdo do diretório de destino antes da cópia (${distRoutesDir}):${colors.reset}`);
+  if (fs.existsSync(distRoutesDir)) {
+    fs.readdirSync(distRoutesDir).forEach(file => console.log(`  - ${file}`));
+  } else {
+    console.log(`  (diretório não existe)`);
+  }
+  
   for (const file of cjsFiles) {
     const srcFile = path.join(routesDir, file);
     const destFile = path.join(distRoutesDir, file);
     
     try {
+      // Verificações adicionais
+      if (!fs.existsSync(srcFile)) {
+        console.error(`${colors.red}❌ Arquivo de origem não existe:${colors.reset} ${srcFile}`);
+        continue;
+      }
+      
       fs.copyFileSync(srcFile, destFile);
       console.log(`${colors.green}✅ Copiado:${colors.reset} ${file}`);
+      
+      // Verificação após cópia
+      if (fs.existsSync(destFile)) {
+        const size = fs.statSync(destFile).size;
+        console.log(`${colors.green}   → Verificado: ${destFile} (${size} bytes)${colors.reset}`);
+      } else {
+        console.error(`${colors.red}❌ Verificação falhou: arquivo não existe após cópia: ${destFile}${colors.reset}`);
+      }
     } catch (error) {
       console.error(`${colors.red}❌ Erro ao copiar ${file}:${colors.reset}`, error.message);
     }
+  }
+  
+  // Verificação final do conteúdo do diretório de destino
+  console.log(`${colors.magenta}🔍 Conteúdo do diretório de destino após a cópia (${distRoutesDir}):${colors.reset}`);
+  if (fs.existsSync(distRoutesDir)) {
+    fs.readdirSync(distRoutesDir).forEach(file => console.log(`  - ${file}`));
+  } else {
+    console.log(`  (diretório não existe)`);
   }
 }
 
