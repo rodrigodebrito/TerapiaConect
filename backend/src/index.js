@@ -924,17 +924,530 @@ app.use('*', (req, res) => {
   });
 });
 
+// Adicionar rotas do Daily.co
+app.post('/api/daily/room', authMiddleware, async (req, res) => {
+  try {
+    const { roomName, expiresInMinutes = 60 } = req.body;
+    
+    console.log(`[Daily.co] Criando sala: ${roomName}, expira em: ${expiresInMinutes} minutos`);
+    
+    // Simular criação de sala do Daily.co
+    const roomData = {
+      id: `room-${Date.now()}`,
+      name: roomName || `room-${Date.now()}`,
+      url: `https://teraconect.daily.co/${roomName || `room-${Date.now()}`}`,
+      created_at: new Date().toISOString(),
+      privacy: 'private',
+      expires_in: expiresInMinutes * 60
+    };
+    
+    return res.status(200).json({
+      success: true,
+      data: roomData
+    });
+  } catch (error) {
+    console.error('Erro ao criar sala Daily.co:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao criar sala de videoconferência',
+      error: error.message
+    });
+  }
+});
+
+app.post('/api/daily/token', authMiddleware, async (req, res) => {
+  try {
+    const { roomName, isOwner, userName, userId } = req.body;
+    
+    console.log(`[Daily.co] Gerando token para sala: ${roomName}, usuário: ${userName}, isOwner: ${isOwner}`);
+    
+    // Simular criação de token do Daily.co
+    const token = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+    
+    return res.status(200).json({
+      success: true,
+      token,
+      roomName,
+      userName,
+      userId,
+      isOwner
+    });
+  } catch (error) {
+    console.error('Erro ao gerar token Daily.co:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao gerar token de videoconferência',
+      error: error.message
+    });
+  }
+});
+
+// Rotas para o sistema de chat e mensagens
+app.get('/api/messages/:sessionId', authMiddleware, async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    
+    console.log(`[Mensagens] Buscando mensagens para sessão: ${sessionId}`);
+    
+    // Buscar mensagens da sessão
+    const messages = await prisma.message.findMany({
+      where: { 
+        sessionId 
+      },
+      orderBy: {
+        createdAt: 'asc'
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            name: true,
+            role: true
+          }
+        }
+      }
+    });
+    
+    return res.status(200).json({
+      success: true,
+      data: messages
+    });
+  } catch (error) {
+    console.error('Erro ao buscar mensagens:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar mensagens',
+      error: error.message
+    });
+  }
+});
+
+app.post('/api/messages', authMiddleware, async (req, res) => {
+  try {
+    const { content, sessionId, senderId, type = 'TEXT' } = req.body;
+    
+    console.log(`[Mensagens] Nova mensagem para sessão: ${sessionId}, tipo: ${type}`);
+    
+    // Criar nova mensagem
+    const message = await prisma.message.create({
+      data: {
+        content,
+        type,
+        session: {
+          connect: { id: sessionId }
+        },
+        sender: {
+          connect: { id: senderId }
+        }
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            name: true,
+            role: true
+          }
+        }
+      }
+    });
+    
+    // Aqui, em uma implementação completa, você emitiria um evento via Socket.io
+    
+    return res.status(201).json({
+      success: true,
+      data: message
+    });
+  } catch (error) {
+    console.error('Erro ao criar mensagem:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao enviar mensagem',
+      error: error.message
+    });
+  }
+});
+
+// Configuração do Socket.io
+const server = http.createServer(app);
+const io = new SocketIO(server, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
+// Middleware do Socket.io para autenticação
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  
+  if (!token) {
+    return next(new Error('Authentication error: Token not provided'));
+  }
+  
+  // Em uma implementação real, verificaria o token JWT
+  // Para fins de demonstração, aceitamos qualquer token
+  socket.user = { id: 'user-id-placeholder' };
+  next();
+});
+
+// Eventos do Socket.io
+io.on('connection', (socket) => {
+  console.log(`Socket conectado: ${socket.id}`);
+  
+  // Entrar em uma sala específica
+  socket.on('join', (sessionId) => {
+    console.log(`Usuário entrando na sala: ${sessionId}`);
+    socket.join(sessionId);
+    socket.emit('joined', { sessionId });
+  });
+  
+  // Enviar mensagem
+  socket.on('message', async (data) => {
+    try {
+      const { content, sessionId, senderId, type = 'TEXT' } = data;
+      
+      console.log(`[Socket] Nova mensagem para sessão: ${sessionId}, tipo: ${type}`);
+      
+      // Criar mensagem no banco de dados
+      const message = await prisma.message.create({
+        data: {
+          content,
+          type,
+          session: {
+            connect: { id: sessionId }
+          },
+          sender: {
+            connect: { id: senderId }
+          }
+        },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              name: true,
+              role: true
+            }
+          }
+        }
+      });
+      
+      // Emitir para todos na sala
+      io.to(sessionId).emit('message', message);
+    } catch (error) {
+      console.error('Erro ao processar mensagem via Socket:', error);
+      socket.emit('error', { message: 'Erro ao processar mensagem' });
+    }
+  });
+  
+  // Status de digitação
+  socket.on('typing', (data) => {
+    const { sessionId, user, isTyping } = data;
+    socket.to(sessionId).emit('typing', { user, isTyping });
+  });
+  
+  // Deixar a sala
+  socket.on('leave', (sessionId) => {
+    console.log(`Usuário saindo da sala: ${sessionId}`);
+    socket.leave(sessionId);
+  });
+  
+  // Desconexão
+  socket.on('disconnect', () => {
+    console.log(`Socket desconectado: ${socket.id}`);
+  });
+});
+
+// Rotas para gerenciamento de sessões de terapia
+app.post('/api/sessions', authMiddleware, async (req, res) => {
+  try {
+    const { 
+      therapistId, 
+      clientId, 
+      scheduledDate, 
+      duration = 60, 
+      status = 'SCHEDULED',
+      price,
+      description
+    } = req.body;
+    
+    console.log(`[Sessões] Criando nova sessão: Terapeuta ${therapistId}, Cliente ${clientId}`);
+    
+    // Criar nova sessão no banco de dados
+    const session = await prisma.session.create({
+      data: {
+        therapist: {
+          connect: { id: therapistId }
+        },
+        client: {
+          connect: { id: clientId }
+        },
+        scheduledDate: new Date(scheduledDate),
+        duration,
+        status,
+        price: parseFloat(price) || 0,
+        description
+      },
+      include: {
+        therapist: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true
+              }
+            }
+          }
+        },
+        client: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    return res.status(201).json({
+      success: true,
+      data: session
+    });
+  } catch (error) {
+    console.error('Erro ao criar sessão:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao criar sessão',
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/sessions', authMiddleware, async (req, res) => {
+  try {
+    const { userId, role, status, startDate, endDate } = req.query;
+    
+    console.log(`[Sessões] Buscando sessões para usuário: ${userId}, role: ${role}`);
+    
+    // Filtros para a consulta
+    const where = {};
+    
+    // Filtrar por papel (terapeuta ou cliente)
+    if (userId && role) {
+      if (role.toUpperCase() === 'THERAPIST') {
+        where.therapist = { userId };
+      } else if (role.toUpperCase() === 'CLIENT') {
+        where.client = { userId };
+      }
+    }
+    
+    // Filtrar por status
+    if (status) {
+      where.status = status;
+    }
+    
+    // Filtrar por intervalo de datas
+    if (startDate || endDate) {
+      where.scheduledDate = {};
+      
+      if (startDate) {
+        where.scheduledDate.gte = new Date(startDate);
+      }
+      
+      if (endDate) {
+        where.scheduledDate.lte = new Date(endDate);
+      }
+    }
+    
+    // Buscar sessões no banco de dados
+    const sessions = await prisma.session.findMany({
+      where,
+      orderBy: {
+        scheduledDate: 'asc'
+      },
+      include: {
+        therapist: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true
+              }
+            }
+          }
+        },
+        client: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    return res.status(200).json({
+      success: true,
+      data: sessions
+    });
+  } catch (error) {
+    console.error('Erro ao buscar sessões:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar sessões',
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/sessions/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log(`[Sessões] Buscando detalhes da sessão: ${id}`);
+    
+    // Buscar sessão no banco de dados
+    const session = await prisma.session.findUnique({
+      where: { id },
+      include: {
+        therapist: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true
+              }
+            }
+          }
+        },
+        client: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true
+              }
+            }
+          }
+        },
+        messages: {
+          orderBy: {
+            createdAt: 'asc'
+          },
+          include: {
+            sender: {
+              select: {
+                id: true,
+                name: true,
+                role: true
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sessão não encontrada'
+      });
+    }
+    
+    return res.status(200).json({
+      success: true,
+      data: session
+    });
+  } catch (error) {
+    console.error('Erro ao buscar detalhes da sessão:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar detalhes da sessão',
+      error: error.message
+    });
+  }
+});
+
+app.put('/api/sessions/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    
+    console.log(`[Sessões] Atualizando sessão: ${id}`);
+    console.log('Dados para atualização:', JSON.stringify(updateData, null, 2));
+    
+    // Verificar se a sessão existe
+    const existingSession = await prisma.session.findUnique({
+      where: { id }
+    });
+    
+    if (!existingSession) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sessão não encontrada'
+      });
+    }
+    
+    // Atualizar sessão no banco de dados
+    const updatedSession = await prisma.session.update({
+      where: { id },
+      data: updateData,
+      include: {
+        therapist: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true
+              }
+            }
+          }
+        },
+        client: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    return res.status(200).json({
+      success: true,
+      data: updatedSession
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar sessão:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao atualizar sessão',
+      error: error.message
+    });
+  }
+});
+
 // Conectar ao banco de dados antes de iniciar o servidor
 prisma.$connect()
   .then(() => {
     console.log('Conexão com o banco de dados estabelecida com sucesso');
     console.log('📦 Conectado ao banco de dados');
     
-    // Iniciar o servidor
+    // Iniciar o servidor usando o objeto server do Socket.io
     const PORT = process.env.PORT || 3000;
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log(`🚀 Servidor rodando na porta ${PORT} (${process.env.NODE_ENV || 'development'})`);
       console.log(`📅 ${new Date().toLocaleString()}`);
+      console.log(`🔌 Socket.io configurado e pronto para conexões`);
     });
   })
   .catch((error) => {
