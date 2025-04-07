@@ -160,7 +160,10 @@ Promise.all(routePromises).then(results => {
     prisma
       .$connect()
       .then(() => console.log('📦 Conectado ao banco de dados'))
-      .catch(err => console.error('❌ Erro ao conectar ao banco de dados:', err.message));
+      .catch(err => {
+        console.error('❌ Erro ao conectar ao banco de dados:', err.message);
+        console.error('❌ Erro detalhado:', err);
+      });
   });
   
   // Configuração do Socket.IO

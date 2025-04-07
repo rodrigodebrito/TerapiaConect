@@ -3,7 +3,7 @@ FROM node:20-alpine
 WORKDIR /usr/src/app
 
 # Instala pacotes essenciais e ferramentas de build
-RUN apk add --no-cache python3 make g++ git
+RUN apk add --no-cache python3 make g++ git openssl openssl-dev
 
 # Copia arquivos de configuração do projeto
 COPY package*.json ./

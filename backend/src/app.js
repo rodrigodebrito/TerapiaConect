@@ -8,7 +8,12 @@ import OpenAI from 'openai';
 import { PrismaClient } from '@prisma/client';
 import { fileURLToPath } from 'url';
 
-// Importar rotas
+// Configuração de caminhos para ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Importar rotas individualmente para maior confiabilidade no ESM
+// As importações dinâmicas são menos confiáveis durante a transição CJS->ESM
 import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.route.js';
 import adminRoutes from './routes/admin.route.js';
@@ -24,10 +29,6 @@ import chatRoutes from './routes/chat.route.js';
 import insightRoutes from './routes/insight.routes.js';
 import trainingRoutes from './routes/training.routes.js';
 import transcriptionRoutes from './routes/transcription.routes.js';
-
-// Configuração de caminhos para ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const prisma = new PrismaClient();
 const app = express();
@@ -119,21 +120,64 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use(express.static(path.join(__dirname, '../public')));
 
 // Rotas da API
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/therapists', therapistRoutes);
-app.use('/api/clients', clientRoutes);
-app.use('/api/subscriptions', subscriptionRoutes);
-app.use('/api/sessions', sessionRoutes);
-app.use('/api/meeting', meetingRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/ai', aiRoutes);
-app.use('/api/embed', embedRoutes);
-app.use('/api/chat', chatRoutes);
-app.use('/api/insights', insightRoutes);
-app.use('/api/training', trainingRoutes);
-app.use('/api/transcription', transcriptionRoutes);
+console.log('\nConfigurando rotas da API:');
+
+// Função para registrar rotas com tratamento de erro
+function registerRoute(path, router) {
+  try {
+    if (!router || typeof router !== 'function') {
+      console.log(`❌ Rota ${path} não exporta um router válido`);
+      return false;
+    }
+    app.use(path, router);
+    console.log(`✅ Rota registrada: ${path}`);
+    return true;
+  } catch (error) {
+    console.log(`❌ Erro ao registrar rota ${path}:`, error.message);
+    return false;
+  }
+}
+
+// Registrar cada rota individualmente
+let routesRegistered = 0;
+let routesFailed = 0;
+
+routesRegistered += registerRoute('/api/auth', authRoutes) ? 1 : 0;
+routesRegistered += registerRoute('/api/users', userRoutes) ? 1 : 0;
+routesRegistered += registerRoute('/api/admin', adminRoutes) ? 1 : 0;
+routesRegistered += registerRoute('/api/therapists', therapistRoutes) ? 1 : 0;
+routesRegistered += registerRoute('/api/clients', clientRoutes) ? 1 : 0;
+routesRegistered += registerRoute('/api/subscriptions', subscriptionRoutes) ? 1 : 0;
+routesRegistered += registerRoute('/api/sessions', sessionRoutes) ? 1 : 0;
+routesRegistered += registerRoute('/api/meeting', meetingRoutes) ? 1 : 0;
+routesRegistered += registerRoute('/api/payments', paymentRoutes) ? 1 : 0;
+routesRegistered += registerRoute('/api/ai', aiRoutes) ? 1 : 0;
+routesRegistered += registerRoute('/api/embed', embedRoutes) ? 1 : 0;
+routesRegistered += registerRoute('/api/chat', chatRoutes) ? 1 : 0;
+routesRegistered += registerRoute('/api/insights', insightRoutes) ? 1 : 0;
+routesRegistered += registerRoute('/api/training', trainingRoutes) ? 1 : 0;
+routesRegistered += registerRoute('/api/transcription', transcriptionRoutes) ? 1 : 0;
+
+console.log(`\n📊 Rotas registradas: ${routesRegistered}/15`);
+
+// Rota padrão da API
+app.get('/', (req, res) => {
+  res.json({
+    name: 'TerapiaConect API',
+    version: '1.0.0',
+    status: 'online',
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Rota de fallback (404)
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Rota não encontrada: ${req.originalUrl}`
+  });
+});
 
 // Adicionar o OpenAI como propriedade global do app para uso nos controladores
 app.locals.openai = openai;
