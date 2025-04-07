@@ -581,5 +581,23 @@ RUN echo 'const express = require("express");' > /app/src-cjs/routes/appointment
     echo '// Exportar router' >> /app/src-cjs/routes/appointment.routes.cjs && \
     echo 'module.exports = router;' >> /app/src-cjs/routes/appointment.routes.cjs
 
+# Criar user.routes.cjs para garantir compatibilidade
+RUN echo 'const express = require("express");' > /app/src-cjs/routes/user.routes.cjs && \
+    echo 'const router = express.Router();' >> /app/src-cjs/routes/user.routes.cjs && \
+    echo 'const { validateToken } = require("../middleware/auth.middleware.cjs");' >> /app/src-cjs/routes/user.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/user.routes.cjs && \
+    echo '// Rota básica para usuários' >> /app/src-cjs/routes/user.routes.cjs && \
+    echo 'router.get("/profile", validateToken, (req, res) => {' >> /app/src-cjs/routes/user.routes.cjs && \
+    echo '  res.json({ message: "Perfil do usuário - rota funcionando", userId: req.user.id });' >> /app/src-cjs/routes/user.routes.cjs && \
+    echo '});' >> /app/src-cjs/routes/user.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/user.routes.cjs && \
+    echo '// Rota para listar usuários' >> /app/src-cjs/routes/user.routes.cjs && \
+    echo 'router.get("/", validateToken, (req, res) => {' >> /app/src-cjs/routes/user.routes.cjs && \
+    echo '  res.json({ message: "Lista de usuários - rota funcionando" });' >> /app/src-cjs/routes/user.routes.cjs && \
+    echo '});' >> /app/src-cjs/routes/user.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/user.routes.cjs && \
+    echo '// Exportar router' >> /app/src-cjs/routes/user.routes.cjs && \
+    echo 'module.exports = router;' >> /app/src-cjs/routes/user.routes.cjs
+
 # Comando para iniciar usando a versão CommonJS compatível
 CMD /bin/sh -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node index-compat.cjs" 
