@@ -289,10 +289,25 @@ const TherapistAvailabilitySimple = () => {
         // Verificar se temos um perfil de terapeuta
         console.log('Buscando perfil de terapeuta para o usuário:', user.id);
         const response = await api.get(`/therapists/user/${user.id}`);
+        console.log('Resposta do perfil de terapeuta:', response.data);
         
-        if (response.data && response.data.id) {
-          console.log('Perfil de terapeuta encontrado:', response.data.id);
-          setTherapistId(response.data.id);
+        // Verificar formato da resposta
+        let therapistData = null;
+        
+        // Verificar se a resposta está no novo formato (success/data)
+        if (response.data && response.data.success && response.data.data) {
+          therapistData = response.data.data;
+          console.log('Dados do terapeuta (novo formato):', therapistData);
+        } 
+        // Formato antigo (objeto direto)
+        else if (response.data && response.data.id) {
+          therapistData = response.data;
+          console.log('Dados do terapeuta (formato antigo):', therapistData);
+        }
+        
+        if (therapistData && therapistData.id) {
+          console.log('Perfil de terapeuta encontrado:', therapistData.id);
+          setTherapistId(therapistData.id);
         } else {
           console.error('Perfil de terapeuta não encontrado');
           toast.error('Perfil de terapeuta não encontrado');
