@@ -846,5 +846,159 @@ RUN echo 'const express = require("express");' > /app/src-cjs/routes/transcript.
     echo '// Exportar router' >> /app/src-cjs/routes/transcript.routes.cjs && \
     echo 'module.exports = router;' >> /app/src-cjs/routes/transcript.routes.cjs
 
+# Criar insight.controller.cjs para garantir compatibilidade
+RUN echo 'const prisma = require("../utils/prisma.cjs");' > /app/src-cjs/controllers/insight.controller.cjs && \
+    echo 'const OpenAI = require("openai");' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '// Configuração da API OpenAI' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo 'const openai = new OpenAI({' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '  apiKey: process.env.OPENAI_API_KEY,' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '});' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '// Função para salvar um insight' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo 'exports.saveInsight = async (req, res) => {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    const { sessionId, content, type } = req.body;' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    if (!sessionId || !content) {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      return res.status(400).json({ message: "ID da sessão e conteúdo são obrigatórios" });' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    // Verificar se a sessão existe' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    const session = await prisma.session.findUnique({' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      where: { id: sessionId }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    if (!session) {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      return res.status(404).json({ message: "Sessão não encontrada" });' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    // Criar insight' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    const insight = await prisma.insight.create({' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      data: {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '        content,' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '        type: type || "GENERAL",' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '        sessionId,' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '        userId: req.user.id,' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '        createdAt: new Date()' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    return res.status(201).json(insight);' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    console.error("Erro ao salvar insight:", error);' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '// Função para obter insights de uma sessão' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo 'exports.getSessionInsights = async (req, res) => {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    const { sessionId } = req.params;' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    if (!sessionId) {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      return res.status(400).json({ message: "ID da sessão é obrigatório" });' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    // Buscar insights' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    const insights = await prisma.insight.findMany({' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      where: { sessionId },' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      orderBy: { createdAt: "asc" }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    return res.status(200).json(insights);' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    console.error("Erro ao buscar insights:", error);' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '// Função para gerar insights a partir de transcrições' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo 'exports.generateInsights = async (req, res) => {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    const { sessionId } = req.params;' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    if (!sessionId) {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      return res.status(400).json({ message: "ID da sessão é obrigatório" });' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    if (!process.env.OPENAI_API_KEY) {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      return res.status(500).json({ message: "API de IA não configurada" });' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    // Buscar transcrições da sessão' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    const transcripts = await prisma.transcript.findMany({' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      where: { sessionId },' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      orderBy: { timestamp: "asc" }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    if (!transcripts.length) {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      return res.status(404).json({ message: "Nenhuma transcrição encontrada para esta sessão" });' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    // Combinar transcrições em um único texto' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    const transcriptText = transcripts.map(t => `${t.speakerId ? `[${t.speakerId}]: ` : ""}${t.content}`).join("\\n");' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    // Gerar insights usando IA' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    const response = await openai.chat.completions.create({' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      model: process.env.OPENAI_MODEL || "gpt-3.5-turbo",' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      messages: [' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '        { role: "system", content: "Você é um assistente terapêutico que analisa transcrições de sessões e gera insights úteis." },' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '        { role: "user", content: `Analise a seguinte transcrição de uma sessão terapêutica e forneça 3-5 insights relevantes, um por linha:\\n\\n${transcriptText}` }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      ],' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      max_tokens: 1000,' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      temperature: 0.7,' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    const insightsText = response.choices[0]?.message?.content;' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    if (!insightsText) {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      return res.status(500).json({ message: "Falha ao gerar insights" });' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    // Dividir o texto em insights individuais' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    const insightLines = insightsText.split("\\n").filter(line => line.trim());' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    // Salvar cada insight no banco de dados' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    const savedInsights = [];' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    for (const line of insightLines) {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      if (line.trim()) {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '        const insight = await prisma.insight.create({' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '          data: {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '            content: line.trim(),' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '            type: "AI_GENERATED",' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '            sessionId,' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '            userId: req.user.id,' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '            createdAt: new Date()' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '          }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '        });' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '        savedInsights.push(insight);' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '      }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    return res.status(201).json(savedInsights);' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    console.error("Erro ao gerar insights:", error);' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/insight.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/insight.controller.cjs
+
+# Criar insight.routes.cjs para garantir compatibilidade
+RUN echo 'const express = require("express");' > /app/src-cjs/routes/insight.routes.cjs && \
+    echo 'const router = express.Router();' >> /app/src-cjs/routes/insight.routes.cjs && \
+    echo 'const { validateToken } = require("../middleware/auth.middleware.cjs");' >> /app/src-cjs/routes/insight.routes.cjs && \
+    echo 'const { saveInsight, getSessionInsights, generateInsights } = require("../controllers/insight.controller.cjs");' >> /app/src-cjs/routes/insight.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/insight.routes.cjs && \
+    echo '// Salvar novo insight' >> /app/src-cjs/routes/insight.routes.cjs && \
+    echo 'router.post("/", validateToken, saveInsight);' >> /app/src-cjs/routes/insight.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/insight.routes.cjs && \
+    echo '// Obter insights de uma sessão' >> /app/src-cjs/routes/insight.routes.cjs && \
+    echo 'router.get("/session/:sessionId", validateToken, getSessionInsights);' >> /app/src-cjs/routes/insight.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/insight.routes.cjs && \
+    echo '// Gerar insights usando IA' >> /app/src-cjs/routes/insight.routes.cjs && \
+    echo 'router.post("/generate/:sessionId", validateToken, generateInsights);' >> /app/src-cjs/routes/insight.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/insight.routes.cjs && \
+    echo '// Exportar router' >> /app/src-cjs/routes/insight.routes.cjs && \
+    echo 'module.exports = router;' >> /app/src-cjs/routes/insight.routes.cjs
+
 # Comando para iniciar usando a versão CommonJS compatível
 CMD /bin/sh -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node index-compat.cjs" 
