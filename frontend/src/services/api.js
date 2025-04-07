@@ -24,15 +24,25 @@ const api = axios.create({
 // Interceptor para adicionar token de autorização em todas requisições
 api.interceptors.request.use(
   (config) => {
-    const fullUrl = `${config.baseURL}${config.url}`;
-    console.log(`Enviando requisição para: ${config.method} ${fullUrl}`);
+    // Verificar e corrigir formatação da URL
+    const isUrlStartingWithSlash = config.url.startsWith('/');
     
-    // Verificar e corrigir duplo /api/ no URL
-    if (config.url.startsWith('/api/') && config.baseURL.endsWith('/api')) {
-      // Remove o /api/ duplicado no início da URL
-      config.url = config.url.substring(4);
-      console.log(`URL corrigida para evitar duplicação: ${config.baseURL}${config.url}`);
+    // Construir URL completa para logging
+    let fullUrl = '';
+    if (config.baseURL.endsWith('/api') && isUrlStartingWithSlash) {
+      // Remover possível duplicação de /api/ no início da URL
+      if (config.url.startsWith('/api/')) {
+        config.url = config.url.substring(4); // Remove o /api/ duplicado
+        fullUrl = `${config.baseURL}${config.url}`;
+        console.log(`URL corrigida para evitar duplicação: ${fullUrl}`);
+      } else {
+        fullUrl = `${config.baseURL}${config.url}`;
+      }
+    } else {
+      fullUrl = `${config.baseURL}${config.url}`;
     }
+    
+    console.log(`Enviando requisição para: ${config.method} ${fullUrl}`);
     
     const token = localStorage.getItem('token');
     if (token) {

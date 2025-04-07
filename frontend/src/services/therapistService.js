@@ -5,7 +5,10 @@ import { getFullImageUrl } from '../utils/constants';
 export const getTherapistByUserId = async (userId) => {
   try {
     console.log(`Buscando terapeuta para o usuário com ID: ${userId}`);
+    
+    // Garantir que a rota não tenha /api/ duplicado
     const response = await api.get(`/therapists/user/${userId}`);
+    
     console.log('Resposta do perfil de terapeuta por userId:', response.data);
     
     if (!response.data || !response.data.id) {
@@ -18,6 +21,15 @@ export const getTherapistByUserId = async (userId) => {
     // Se for erro 404, significa que não existe perfil de terapeuta para este usuário
     if (error.response && error.response.status === 404) {
       console.log('Perfil de terapeuta não encontrado para este usuário');
+      
+      // Log adicional para depuração
+      console.log('Detalhes do erro 404:', {
+        url: error.config?.url,
+        baseURL: error.config?.baseURL,
+        method: error.config?.method,
+        fullUrl: `${error.config?.baseURL}${error.config?.url}`
+      });
+      
       return null;
     }
     
