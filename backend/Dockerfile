@@ -1134,5 +1134,226 @@ RUN echo 'const express = require("express");' > /app/src-cjs/routes/meeting.rou
     echo '// Exportar router' >> /app/src-cjs/routes/meeting.routes.cjs && \
     echo 'module.exports = router;' >> /app/src-cjs/routes/meeting.routes.cjs
 
+# Criar training.controller.cjs para garantir compatibilidade
+RUN echo 'const prisma = require("../utils/prisma.cjs");' > /app/src-cjs/controllers/training.controller.cjs && \
+    echo 'const OpenAI = require("openai");' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '// Configuração da API OpenAI' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo 'const openai = new OpenAI({' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '  apiKey: process.env.OPENAI_API_KEY,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '});' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '// Função para adicionar material de treinamento' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo 'exports.addTrainingMaterial = async (req, res) => {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    const { title, content, type, category, source } = req.body;' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    if (!title || !content || !type || !category) {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      return res.status(400).json({ message: "Título, conteúdo, tipo e categoria são obrigatórios" });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    // Criar material de treinamento' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    const trainingMaterial = await prisma.trainingMaterial.create({' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      data: {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        title,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        content,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        type,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        category,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        source: source || "MANUAL",' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        userId: req.user.id,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        isProcessed: false,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        createdAt: new Date(),' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        updatedAt: new Date()' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    return res.status(201).json(trainingMaterial);' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    console.error("Erro ao adicionar material de treinamento:", error);' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '// Função para listar materiais de treinamento por categoria' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo 'exports.getTrainingMaterialsByCategory = async (req, res) => {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    const { category } = req.params;' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    if (!category) {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      return res.status(400).json({ message: "Categoria é obrigatória" });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    // Buscar materiais de treinamento por categoria' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    const trainingMaterials = await prisma.trainingMaterial.findMany({' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      where: { category },' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      orderBy: { createdAt: "desc" }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    return res.status(200).json(trainingMaterials);' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    console.error("Erro ao buscar materiais de treinamento:", error);' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '// Função para obter um material de treinamento por ID' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo 'exports.getTrainingMaterialById = async (req, res) => {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    const { id } = req.params;' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    if (!id) {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      return res.status(400).json({ message: "ID é obrigatório" });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    // Buscar material de treinamento por ID' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    const trainingMaterial = await prisma.trainingMaterial.findUnique({' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      where: { id }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    if (!trainingMaterial) {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      return res.status(404).json({ message: "Material de treinamento não encontrado" });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    return res.status(200).json(trainingMaterial);' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    console.error("Erro ao buscar material de treinamento:", error);' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '// Função para processar material de treinamento' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo 'exports.processMaterial = async (req, res) => {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    const { id } = req.params;' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    if (!id) {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      return res.status(400).json({ message: "ID é obrigatório" });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    // Buscar material para processamento' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    const material = await prisma.trainingMaterial.findUnique({' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      where: { id }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    if (!material) {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      return res.status(404).json({ message: "Material não encontrado" });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    if (!process.env.OPENAI_API_KEY) {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      return res.status(500).json({ message: "API de IA não configurada" });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    // Processar o conteúdo com a OpenAI' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    const response = await openai.chat.completions.create({' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      model: process.env.OPENAI_MODEL || "gpt-3.5-turbo",' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      messages: [' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        { role: "system", content: "Você é um assistente especializado em processar materiais de treinamento para terapeutas." },' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        { role: "user", content: `Extraia os principais insights e conceitos deste material: ${material.content}` }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      ],' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      max_tokens: 1000,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      temperature: 0.7,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    const processedContent = response.choices[0]?.message?.content;' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    // Atualizar o material com o conteúdo processado' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    const updatedMaterial = await prisma.trainingMaterial.update({' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      where: { id },' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      data: {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        processedContent,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        isProcessed: true,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        updatedAt: new Date()' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    return res.status(200).json(updatedMaterial);' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    console.error("Erro ao processar material:", error);' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '// Função para enriquecer análise usando materiais de treinamento' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo 'exports.enhanceAnalysis = async (req, res) => {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    const { categories, originalAnalysis } = req.body;' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    if (!categories || !originalAnalysis) {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      return res.status(400).json({ message: "Categorias e análise original são obrigatórias" });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    if (!process.env.OPENAI_API_KEY) {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      return res.status(500).json({ message: "API de IA não configurada" });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    // Buscar materiais de treinamento relevantes' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    const materials = await prisma.trainingMaterial.findMany({' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      where: {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        category: { in: categories },' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        isProcessed: true' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      },' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      select: {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        id: true,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        title: true,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        category: true,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        processedContent: true' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    if (!materials.length) {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      return res.status(404).json({ message: "Nenhum material encontrado para as categorias especificadas" });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    // Preparar contexto com os materiais relevantes' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    const context = materials.map(m => `Material: ${m.title} (${m.category})\\n${m.processedContent}\\n\\n`).join("");' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    // Enriquecer análise com a OpenAI' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    const response = await openai.chat.completions.create({' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      model: process.env.OPENAI_MODEL || "gpt-3.5-turbo",' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      messages: [' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        { role: "system", content: "Você é um assistente terapêutico que enriquece análises com conhecimentos de materiais de treinamento." },' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '        { role: "user", content: `Enriqueça esta análise usando os materiais de referência:\\n\\nAnálise original: ${originalAnalysis}\\n\\nMateriais de referência:\\n${context}` }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      ],' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      max_tokens: 1500,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      temperature: 0.7,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    const enhancedAnalysis = response.choices[0]?.message?.content;' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    // Retornar análise enriquecida e referências usadas' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    return res.status(200).json({' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      enhancedAnalysis,' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '      referencedMaterials: materials.map(m => ({ id: m.id, title: m.title, category: m.category }))' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    console.error("Erro ao enriquecer análise:", error);' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/training.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/training.controller.cjs
+
+# Criar training.routes.cjs para garantir compatibilidade
+RUN echo 'const express = require("express");' > /app/src-cjs/routes/training.routes.cjs && \
+    echo 'const router = express.Router();' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo 'const { validateToken } = require("../middleware/auth.middleware.cjs");' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo 'const { addTrainingMaterial, getTrainingMaterialsByCategory, getTrainingMaterialById, processMaterial, enhanceAnalysis } = require("../controllers/training.controller.cjs");' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo '// Adicionar novo material de treinamento' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo 'router.post("/materials", validateToken, addTrainingMaterial);' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo '// Obter materiais por categoria' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo 'router.get("/materials/category/:category", validateToken, getTrainingMaterialsByCategory);' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo '// Obter material por ID' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo 'router.get("/materials/:id", validateToken, getTrainingMaterialById);' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo '// Processar material' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo 'router.post("/materials/:id/process", validateToken, processMaterial);' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo '// Enriquecer análise com materiais de treinamento' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo 'router.post("/enhance-analysis", validateToken, enhanceAnalysis);' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo '// Exportar router' >> /app/src-cjs/routes/training.routes.cjs && \
+    echo 'module.exports = router;' >> /app/src-cjs/routes/training.routes.cjs
+
 # Comando para iniciar usando a versão CommonJS compatível
 CMD /bin/sh -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node index-compat.cjs" 
