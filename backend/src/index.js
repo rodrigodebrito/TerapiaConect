@@ -1097,12 +1097,25 @@ app.put('/api/therapists/:therapistId/tools', authMiddleware, async (req, res) =
     });
     
     // Mapear a resposta para incluir as ferramentas formatadas
-    const formattedTools = updatedTherapist.tools.map(t => ({
-      id: t.tool.id,
-      name: t.tool.name,
-      duration: t.duration,
-      price: t.price
-    }));
+    const formattedTools = updatedTherapist.tools.map(t => {
+      // Verificar se t.tool existe antes de acessar suas propriedades
+      if (!t.tool) {
+        console.warn(`Ferramenta sem detalhes encontrada: ${JSON.stringify(t)}`);
+        return {
+          id: t.toolId,
+          name: "Ferramenta desconhecida",
+          duration: t.duration,
+          price: t.price
+        };
+      }
+      
+      return {
+        id: t.tool.id,
+        name: t.tool.name,
+        duration: t.duration,
+        price: t.price
+      };
+    });
     
     console.log(`[Ferramentas] Ferramentas atualizadas:`, JSON.stringify(formattedTools));
     
