@@ -21,6 +21,7 @@ import { PrismaClient } from '@prisma/client';
 import OpenAI from 'openai';
 import { createRequire } from 'module';
 import cookieParser from 'cookie-parser';
+import bcrypt from 'bcryptjs';
 
 // Utilitários e configurações
 // Removendo a importação do prisma para evitar duplicação
@@ -231,104 +232,111 @@ app.get('/api/auth', (req, res) => {
   });
 });
 
-// Rota POST /api/auth que redireciona para /api/auth/login
+// Rota POST /api/auth
 app.post('/api/auth', (req, res) => {
   console.log('POST /api/auth recebido - redirecionando para /api/auth/login');
-  // Tenta reutilizar a mesma lógica do login
-  const loginHandler = app._router.stack
-    .filter(layer => layer.route?.path === '/api/auth/login' && layer.route?.methods.post)
-    .map(layer => layer.handle)[0];
+  
+  // Lógica inline de login
+  try {
+    const { email, password } = req.body;
+    console.log(`👤 Tentativa de login para: ${email} (via /api/auth)`);
+    console.log(`🔐 Senha fornecida: ${password ? '*'.repeat(password.length) : 'não fornecida'}`);
     
-  if (loginHandler) {
-    console.log('✅ Handler de login encontrado, redirecionando requisição');
-    return loginHandler(req, res);
-  } else {
-    console.log('❌ Handler de login não encontrado, processando localmente');
-    
-    // Lógica inline de login se o handler não for encontrado
-    try {
-      const { email, password } = req.body;
-      console.log(`👤 Tentativa de login para: ${email} (via /api/auth)`);
-      console.log(`🔐 Senha fornecida: ${password ? '*'.repeat(password.length) : 'não fornecida'}`);
-      
-      // Verificar credenciais e retornar resposta
-      prisma.user.findUnique({
-        where: { email }
-      }).then(user => {
-        if (!user) {
-          console.log(`❌ Usuário não encontrado: ${email}`);
-          return res.status(401).json({
-            success: false,
-            message: 'Credenciais inválidas'
-          });
-        }
-        
-        console.log(`✅ Usuário encontrado: ${user.name} (${user.id})`);
-        console.log(`🔑 Senha armazenada: ${user.password ? '*'.repeat(user.password.length) : 'não definida'}`);
-        
-        // Verificação mais tolerante da senha
-        let senhaCorreta = false;
-        
-        // Método 1: Comparação exata
-        if (password === user.password) {
-          console.log(`✅ Senha corresponde exatamente`);
-          senhaCorreta = true;
-        } 
-        // Método 2: Comparação case-insensitive
-        else if (password.toLowerCase() === user.password.toLowerCase()) {
-          console.log(`⚠️ Senha corresponde (case insensitive)`);
-          senhaCorreta = true;
-        } 
-        // Método 3: Para ambiente de testes
-        else if (process.env.NODE_ENV !== 'production') {
-          console.log(`⚠️ MODO TESTE: Aceitando qualquer senha em ambiente não-produção`);
-          senhaCorreta = true;
-        }
-        // Senha incorreta
-        else {
-          console.log(`❌ Senha incorreta para: ${email}`);
-          console.log(`   Senha esperada: ${user.password}`);
-          console.log(`   Senha recebida: ${password}`);
-        }
-        
-        if (!senhaCorreta) {
-          return res.status(401).json({
-            success: false,
-            message: 'Credenciais inválidas'
-          });
-        }
-        
-        // Gerar token JWT (implementação básica)
-        const token = 'jwt-token-simulado'; 
-        
-        return res.status(200).json({
-          success: true,
-          data: {
-            user: {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              role: user.role
-            },
-            token
-          }
-        });
-      }).catch(error => {
-        console.error('Erro ao processar login:', error);
-        return res.status(500).json({
+    // Verificar credenciais e retornar resposta
+    prisma.user.findUnique({
+      where: { email }
+    }).then(async user => {
+      if (!user) {
+        console.log(`❌ Usuário não encontrado: ${email}`);
+        return res.status(401).json({
           success: false,
-          message: 'Erro interno do servidor',
-          error: error.message
+          message: 'Credenciais inválidas'
         });
+      }
+      
+      console.log(`✅ Usuário encontrado: ${user.name} (${user.id})`);
+      console.log(`🔑 Senha armazenada (hash): ${user.password ? user.password.substring(0, 15) + '...' : 'não definida'}`);
+      
+      // Verificação da senha com múltiplos métodos
+      let senhaCorreta = false;
+      
+      // Verificar se estamos lidando com uma senha hashed
+      if (user.password && user.password.startsWith('$2a$')) {
+        try {
+          console.log(`🔐 Detectado hash bcrypt, comparando...`);
+          
+          // Verificação de hash com bcrypt
+          try {
+            const bcryptResult = await bcrypt.compare(password, user.password);
+            if (bcryptResult) {
+              console.log(`✅ Verificação bcrypt: senha correta`);
+              senhaCorreta = true;
+            } else {
+              console.log(`❌ Verificação bcrypt: senha incorreta`);
+            }
+          } catch (bcryptError) {
+            console.error(`❌ Erro na verificação bcrypt:`, bcryptError.message);
+          }
+        } catch (error) {
+          console.error(`❌ Erro ao verificar senha com bcrypt:`, error.message);
+        }
+      } 
+      // Método 1: Comparação exata para senhas não-hashed
+      else if (password === user.password) {
+        console.log(`✅ Senha corresponde exatamente`);
+        senhaCorreta = true;
+      }
+      // Método 2: Comparação case-insensitive
+      else if (password.toLowerCase() === (user.password || '').toLowerCase()) {
+        console.log(`⚠️ Senha corresponde (case insensitive)`);
+        senhaCorreta = true;
+      }
+      
+      // Método 3: Modo de desenvolvimento 
+      if (!senhaCorreta && process.env.NODE_ENV !== 'production') {
+        // Em ambiente de desenvolvimento, aceitar qualquer senha se o email for correto
+        console.log(`⚠️ MODO TESTE: Aceitando login em ambiente não-produção`);
+        senhaCorreta = true;
+      }
+      
+      if (!senhaCorreta) {
+        console.log(`❌ Senha incorreta para: ${email}`);
+        return res.status(401).json({
+          success: false,
+          message: 'Credenciais inválidas'
+        });
+      }
+      
+      // Gerar token JWT (implementação básica)
+      const token = 'jwt-token-simulado'; 
+      
+      return res.status(200).json({
+        success: true,
+        data: {
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role
+          },
+          token
+        }
       });
-    } catch (error) {
-      console.error('Erro na rota POST /api/auth:', error);
+    }).catch(error => {
+      console.error('Erro ao processar login:', error);
       return res.status(500).json({
         success: false,
         message: 'Erro interno do servidor',
         error: error.message
       });
-    }
+    });
+  } catch (error) {
+    console.error('Erro na rota POST /api/auth:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
   }
 });
 
@@ -355,35 +363,52 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
     console.log(`✅ Usuário encontrado: ${user.name} (${user.id})`);
-    console.log(`🔑 Senha armazenada: ${user.password ? '*'.repeat(user.password.length) : 'não definida'}`);
+    console.log(`🔑 Senha armazenada (hash): ${user.password ? user.password.substring(0, 15) + '...' : 'não definida'}`);
     
-    // Verificação mais tolerante da senha - para fins de debug 
-    // e garantir o funcionamento básico em ambiente de teste
+    // Verificação da senha com múltiplos métodos
     let senhaCorreta = false;
     
-    // Método 1: Comparação exata (case sensitive)
-    if (password === user.password) {
+    // Verificar se estamos lidando com uma senha hashed
+    if (user.password && user.password.startsWith('$2a$')) {
+      try {
+        console.log(`🔐 Detectado hash bcrypt, comparando...`);
+        
+        // Verificação de hash com bcrypt
+        try {
+          const bcryptResult = await bcrypt.compare(password, user.password);
+          if (bcryptResult) {
+            console.log(`✅ Verificação bcrypt: senha correta`);
+            senhaCorreta = true;
+          } else {
+            console.log(`❌ Verificação bcrypt: senha incorreta`);
+          }
+        } catch (bcryptError) {
+          console.error(`❌ Erro na verificação bcrypt:`, bcryptError.message);
+        }
+      } catch (error) {
+        console.error(`❌ Erro ao verificar senha com bcrypt:`, error.message);
+      }
+    } 
+    // Método 1: Comparação exata para senhas não-hashed
+    else if (password === user.password) {
       console.log(`✅ Senha corresponde exatamente`);
       senhaCorreta = true;
-    } 
+    }
     // Método 2: Comparação case-insensitive
-    else if (password.toLowerCase() === user.password.toLowerCase()) {
+    else if (password.toLowerCase() === (user.password || '').toLowerCase()) {
       console.log(`⚠️ Senha corresponde (case insensitive)`);
       senhaCorreta = true;
-    } 
-    // Método 3: Para ambiente de testes, aceitar qualquer senha
-    else if (process.env.NODE_ENV !== 'production') {
-      console.log(`⚠️ MODO TESTE: Aceitando qualquer senha em ambiente não-produção`);
-      senhaCorreta = true;
     }
-    // Senha incorreta
-    else {
-      console.log(`❌ Senha incorreta para: ${email}`);
-      console.log(`   Senha esperada: ${user.password}`);
-      console.log(`   Senha recebida: ${password}`);
+    
+    // Método 3: Modo de desenvolvimento 
+    if (!senhaCorreta && process.env.NODE_ENV !== 'production') {
+      // Em ambiente de desenvolvimento, aceitar qualquer senha se o email for correto
+      console.log(`⚠️ MODO TESTE: Aceitando login em ambiente não-produção`);
+      senhaCorreta = true;
     }
     
     if (!senhaCorreta) {
+      console.log(`❌ Senha incorreta para: ${email}`);
       return res.status(401).json({
         success: false,
         message: 'Credenciais inválidas'
