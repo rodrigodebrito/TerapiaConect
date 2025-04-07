@@ -101,10 +101,26 @@ function copyJsFiles() {
       const destFilePath = path.join(destPath, entry.name);
       
       if (entry.isDirectory()) {
-        copyDir(srcFilePath, destFilePath);
+        // Se for o diretório de rotas, tratamento especial
+        if (entry.name === 'routes') {
+          // Para a pasta routes, apenas copia os arquivos .cjs (que serão copiados depois)
+          // Cria a pasta de destino, mas não copia os arquivos agora
+          if (!fs.existsSync(path.join(destPath, entry.name))) {
+            fs.mkdirSync(path.join(destPath, entry.name), { recursive: true });
+          }
+          console.log(`${colors.blue}🔹 Diretório de rotas: arquivos .js ignorados, apenas .cjs serão copiados${colors.reset}`);
+        } else {
+          copyDir(srcFilePath, destFilePath);
+        }
       } else if (entry.name.endsWith('.js') && !entry.name.endsWith('.cjs')) {
-        fs.copyFileSync(srcFilePath, destFilePath);
-        console.log(`${colors.green}✅ Copiado:${colors.reset} ${srcFilePath} -> ${destFilePath}`);
+        // Não copiar arquivos .js que estão no diretório routes
+        const isInRoutesDir = srcFilePath.includes(path.join('src', 'routes'));
+        if (!isInRoutesDir) {
+          fs.copyFileSync(srcFilePath, destFilePath);
+          console.log(`${colors.green}✅ Copiado:${colors.reset} ${srcFilePath} -> ${destFilePath}`);
+        } else {
+          console.log(`${colors.yellow}⚠️ Ignorando arquivo .js em routes:${colors.reset} ${srcFilePath}`);
+        }
       }
     }
   };
