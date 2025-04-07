@@ -8,7 +8,9 @@ RUN apk add --no-cache python3 make g++ git
 # Copia arquivos de configuração do projeto
 COPY package*.json ./
 COPY prisma ./prisma/
-COPY .env .env.example ./
+COPY .env.example ./
+# Cria um .env vazio - será substituído pelo volume em runtime
+RUN cp .env.example .env || touch .env
 
 # Instala dependências
 RUN npm ci
