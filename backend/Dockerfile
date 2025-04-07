@@ -114,6 +114,36 @@ RUN find /app/src-cjs -name "*.cjs" -exec sed -i 's/require(".\//require(".\/src
 RUN sed -i 's/require("..\/middleware\/auth.middleware")/require("..\/src-cjs\/middleware\/auth.middleware.cjs")/g' /app/src-cjs/routes/auth.routes.cjs
 RUN sed -i 's/require("..\/controllers\/auth.controller")/require("..\/src-cjs\/controllers\/auth.controller.cjs")/g' /app/src-cjs/routes/auth.routes.cjs
 
+# Corrigir manualmente o arquivo auth.routes.cjs
+RUN echo 'const express = require("express");' > /app/src-cjs/routes/auth.routes.cjs && \
+    echo 'const { validateRefreshToken } = require("../src-cjs/middleware/auth.middleware.cjs");' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo 'const { login, refreshToken, register } = require("../src-cjs/controllers/auth.controller.cjs");' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo 'const router = express.Router();' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo '/**' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @route POST /login' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @desc Autenticar usuário e retornar token' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @access Público' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' */' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo 'router.post("/", login);' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo '/**' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @route POST /login/refresh' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @desc Atualizar token de acesso usando refresh token' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @access Público' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' */' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo 'router.post("/refresh", validateRefreshToken, refreshToken);' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo '/**' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @route POST /login/register' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @desc Registrar um novo usuário' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' * @access Público' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo ' */' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo 'router.post("/register", register);' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/auth.routes.cjs && \
+    echo 'module.exports = router;' >> /app/src-cjs/routes/auth.routes.cjs
+
 # Criar arquivo index-compat.cjs para compatibilidade
 RUN echo 'require("dotenv").config();' > index-compat.cjs && \
     echo '' >> index-compat.cjs && \
@@ -289,4 +319,182 @@ RUN npx prisma generate
 EXPOSE 3000
 
 # Comando para iniciar usando a versão CommonJS compatível
-CMD /bin/sh -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node index-compat.cjs" 
+CMD /bin/sh -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node index-compat.cjs"
+
+# Criar arquivos de middleware e controller para auth manualmente
+RUN mkdir -p /app/src-cjs/middleware /app/src-cjs/controllers
+
+# Criar auth.middleware.cjs
+RUN echo 'const jwt = require("jsonwebtoken");' > /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '// Função para validar token JWT' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo 'exports.validateToken = (req, res, next) => {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  const token = req.headers.authorization?.split(" ")[1];' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  if (!token) {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    return res.status(401).json({ message: "Token não fornecido" });' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  }' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  try {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    const decoded = jwt.verify(token, process.env.JWT_SECRET);' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    req.user = decoded;' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    next();' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    return res.status(401).json({ message: "Token inválido" });' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  }' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '};' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '// Função para validar refresh token' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo 'exports.validateRefreshToken = (req, res, next) => {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  const { refreshToken } = req.body;' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  if (!refreshToken) {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    return res.status(401).json({ message: "Refresh token não fornecido" });' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  }' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  try {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET);' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    req.user = decoded;' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    next();' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    return res.status(401).json({ message: "Refresh token inválido" });' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  }' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '};' >> /app/src-cjs/middleware/auth.middleware.cjs
+
+# Criar auth.controller.cjs
+RUN echo 'const jwt = require("jsonwebtoken");' > /app/src-cjs/controllers/auth.controller.cjs && \
+    echo 'const bcrypt = require("bcryptjs");' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '// Função para autenticar usuário e gerar token' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo 'exports.login = async (req, res) => {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const { email, password } = req.body;' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Validar entradas' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    if (!email || !password) {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      return res.status(400).json({ message: "Email e senha são obrigatórios" });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Buscar usuário no banco de dados' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const user = await prisma.user.findUnique({' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      where: { email },' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      include: {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '        therapist: true,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '        client: true' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    if (!user) {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      return res.status(401).json({ message: "Credenciais inválidas" });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Verificar senha' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const isPasswordValid = await bcrypt.compare(password, user.password);' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    if (!isPasswordValid) {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      return res.status(401).json({ message: "Credenciais inválidas" });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Gerar tokens' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const token = jwt.sign(' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      { id: user.id, email: user.email, role: user.role },' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      process.env.JWT_SECRET,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      { expiresIn: "1h" }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    );' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const refreshToken = jwt.sign(' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      { id: user.id, email: user.email, role: user.role },' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      { expiresIn: "7d" }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    );' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Remover senha do objeto de resposta' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const { password: _, ...userWithoutPassword } = user;' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Retornar dados do usuário e tokens' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    return res.status(200).json({' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      user: userWithoutPassword,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      token,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      refreshToken' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    console.error("Erro ao fazer login:", error);' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '// Função para renovar o token de acesso usando refresh token' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo 'exports.refreshToken = (req, res) => {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Gerar novo token de acesso' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const token = jwt.sign(' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      { id: req.user.id, email: req.user.email, role: req.user.role },' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      process.env.JWT_SECRET,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      { expiresIn: "1h" }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    );' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Retornar novo token' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    return res.status(200).json({ token });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    console.error("Erro ao renovar token:", error);' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '// Função para registrar novo usuário' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo 'exports.register = async (req, res) => {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const { name, email, password, role } = req.body;' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Validar entradas' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    if (!name || !email || !password || !role) {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      return res.status(400).json({ message: "Todos os campos são obrigatórios" });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Verificar se usuário já existe' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const existingUser = await prisma.user.findUnique({' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      where: { email }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    if (existingUser) {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      return res.status(400).json({ message: "Este email já está em uso" });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Criptografar senha' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const salt = await bcrypt.genSalt(10);' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const hashedPassword = await bcrypt.hash(password, salt);' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Criar usuário' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const newUser = await prisma.user.create({' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      data: {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '        name,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '        email,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '        password: hashedPassword,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '        role' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Remover senha do objeto de resposta' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const { password: _, ...userWithoutPassword } = newUser;' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Gerar tokens' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const token = jwt.sign(' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      { id: newUser.id, email: newUser.email, role: newUser.role },' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      process.env.JWT_SECRET,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      { expiresIn: "1h" }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    );' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const refreshToken = jwt.sign(' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      { id: newUser.id, email: newUser.email, role: newUser.role },' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      { expiresIn: "7d" }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    );' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Retornar dados do novo usuário e tokens' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    return res.status(201).json({' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      user: userWithoutPassword,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      token,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      refreshToken' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    console.error("Erro ao registrar usuário:", error);' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/auth.controller.cjs 
