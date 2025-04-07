@@ -11,12 +11,27 @@ export const getTherapistByUserId = async (userId) => {
     
     console.log('Resposta do perfil de terapeuta por userId:', response.data);
     
-    if (!response.data || !response.data.id) {
-      console.warn('O usuário não tem um perfil de terapeuta associado');
+    if (!response.data) {
+      console.warn('Resposta vazia ao buscar perfil de terapeuta');
       return null;
     }
     
-    return response.data;
+    // Verificar se há um objeto data na resposta (novo formato)
+    if (response.data.success && response.data.data) {
+      const therapistData = response.data.data;
+      console.log('Resposta do perfil de terapeuta:', therapistData);
+      return therapistData;
+    }
+    
+    // Formato antigo (direto)
+    if (response.data.id) {
+      console.log('Resposta do perfil de terapeuta (formato antigo):', response.data);
+      return response.data;
+    }
+    
+    // Se chegou aqui, não encontrou dados válidos
+    console.warn('O usuário não tem um perfil de terapeuta associado');
+    return null;
   } catch (error) {
     // Se for erro 404, significa que não existe perfil de terapeuta para este usuário
     if (error.response && error.response.status === 404) {
@@ -45,18 +60,24 @@ export const getTherapistById = async (therapistId) => {
     const response = await api.get(`/therapists/${therapistId}`);
     console.log('Resposta detalhada do perfil:', response.data);
     
+    // Verificar se a resposta está no novo formato com success e data
+    let therapistData = response.data;
+    if (response.data.success && response.data.data) {
+      therapistData = response.data.data;
+    }
+    
     // Assegurar que os campos JSON são corretamente processados
     const therapist = {
-      ...response.data,
-      niches: safeParseJSON(response.data.niches, []),
-      customNiches: safeParseJSON(response.data.customNiches, []),
-      customTools: safeParseJSON(response.data.customTools, []),
-      targetAudience: isJsonString(response.data.targetAudience) 
-        ? safeParseJSON(response.data.targetAudience, []) 
-        : response.data.targetAudience || '',
-      sessionDuration: parseInt(response.data.sessionDuration) || 60,
-      baseSessionPrice: parseFloat(response.data.baseSessionPrice) || 0,
-      tools: Array.isArray(response.data.tools) ? response.data.tools : []
+      ...therapistData,
+      niches: safeParseJSON(therapistData.niches, []),
+      customNiches: safeParseJSON(therapistData.customNiches, []),
+      customTools: safeParseJSON(therapistData.customTools, []),
+      targetAudience: isJsonString(therapistData.targetAudience) 
+        ? safeParseJSON(therapistData.targetAudience, []) 
+        : therapistData.targetAudience || '',
+      sessionDuration: parseInt(therapistData.sessionDuration) || 60,
+      baseSessionPrice: parseFloat(therapistData.baseSessionPrice) || 0,
+      tools: Array.isArray(therapistData.tools) ? therapistData.tools : []
     };
     
     console.log('Perfil processado e ferramentas:', {
