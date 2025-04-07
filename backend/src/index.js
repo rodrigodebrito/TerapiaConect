@@ -1026,6 +1026,101 @@ app.post('/api/therapists/:therapistId/availability', authMiddleware, async (req
   }
 });
 
+// Rota específica para atualizar as ferramentas do terapeuta
+app.put('/api/therapists/:therapistId/tools', authMiddleware, async (req, res) => {
+  try {
+    const { therapistId } = req.params;
+    const { tools } = req.body;
+    
+    if (!Array.isArray(tools)) {
+      return res.status(400).json({
+        success: false,
+        message: 'As ferramentas devem ser um array'
+      });
+    }
+    
+    console.log(`[Ferramentas] Atualizando ferramentas para terapeuta: ${therapistId}`);
+    console.log(`[Ferramentas] Ferramentas recebidas:`, JSON.stringify(tools));
+    
+    // Verificar se o terapeuta existe
+    const therapist = await prisma.therapist.findUnique({
+      where: { id: therapistId }
+    });
+    
+    if (!therapist) {
+      return res.status(404).json({
+        success: false,
+        message: 'Terapeuta não encontrado'
+      });
+    }
+    
+    // Verificar permissões - só o próprio terapeuta pode atualizar
+    if (therapist.userId !== req.user.id && req.user.role !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: 'Você não tem permissão para atualizar este perfil'
+      });
+    }
+    
+    // Preparar as conexões com ferramentas
+    const toolConnections = tools.map(tool => ({
+      toolId: tool.id,
+      // Garantir que a duração e o preço são números válidos, caso contrário usar valor padrão
+      duration: tool.duration ? parseInt(tool.duration) : (parseInt(therapist.sessionDuration) || 60),
+      price: tool.price ? parseFloat(tool.price) : (parseFloat(therapist.baseSessionPrice) || 0)
+    }));
+    
+    console.log(`[Ferramentas] Conexões a serem criadas:`, JSON.stringify(toolConnections));
+    
+    // Atualizar ferramentas do terapeuta: excluir todas e depois criar as novas
+    const updatedTherapist = await prisma.therapist.update({
+      where: { id: therapistId },
+      data: {
+        tools: {
+          deleteMany: {},  // Remove todas as relações existentes
+          create: toolConnections  // Cria as novas relações
+        }
+      },
+      include: {
+        tools: {
+          include: {
+            tool: true
+          }
+        },
+        user: {
+          select: {
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+    
+    // Mapear a resposta para incluir as ferramentas formatadas
+    const formattedTools = updatedTherapist.tools.map(t => ({
+      id: t.tool.id,
+      name: t.tool.name,
+      duration: t.duration,
+      price: t.price
+    }));
+    
+    console.log(`[Ferramentas] Ferramentas atualizadas:`, JSON.stringify(formattedTools));
+    
+    return res.status(200).json({
+      success: true,
+      message: `${formattedTools.length} ferramentas atualizadas com sucesso`,
+      data: formattedTools
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar ferramentas do terapeuta:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao atualizar ferramentas',
+      error: error.message
+    });
+  }
+});
+
 // Rota de fallback (404)
 app.use('*', (req, res) => {
   res.status(404).json({

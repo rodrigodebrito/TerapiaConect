@@ -301,4 +301,20 @@ export const uploadProfilePicture = async (therapistId, formData) => {
     // Erro genérico de upload
     throw new Error(error.response?.data?.message || 'Erro ao fazer upload da imagem. Por favor, tente novamente.');
   }
+};
+
+// Atualizar apenas as ferramentas do terapeuta
+export const updateTherapistTools = async (therapistId, tools) => {
+  try {
+    console.log('Atualizando ferramentas do terapeuta:', therapistId);
+    console.log('Ferramentas para atualização:', tools);
+    
+    const response = await api.put(`/api/therapists/${therapistId}/tools`, { tools });
+    
+    console.log('Resposta da atualização de ferramentas:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao atualizar ferramentas do terapeuta:', error);
+    throw error;
+  }
 }; 
