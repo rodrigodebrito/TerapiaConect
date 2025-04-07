@@ -4,133 +4,176 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
-import chalk from 'chalk';
-import * as rimraf from 'rimraf';
 
-// Obtém o diretório do script atual usando ES Modules
+// Cores para o terminal
+const colors = {
+  reset: '\x1b[0m',
+  green: '\x1b[32m',
+  blue: '\x1b[34m',
+  yellow: '\x1b[33m',
+  red: '\x1b[31m',
+  cyan: '\x1b[36m',
+  magenta: '\x1b[35m'
+};
+
+// Obtém o diretório atual 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Configurações
+// Configuração de diretórios
+const srcDir = path.join(__dirname, 'src');
 const distDir = path.join(__dirname, 'dist');
-const uploadsDir = path.join(distDir, 'uploads');
+const routesDir = path.join(srcDir, 'routes');
+const distRoutesDir = path.join(distDir, 'routes');
 
-console.log(chalk.blue('🚀 Iniciando o processo de build...'));
-
-// Limpa o diretório dist se existir
-if (fs.existsSync(distDir)) {
-  console.log(chalk.yellow('🧹 Limpando diretório de distribuição...'));
-  rimraf.sync(distDir);
+/**
+ * Função para criar um diretório se não existir
+ */
+function ensureDirectoryExists(dir) {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    console.log(`${colors.green}✅ Diretório criado:${colors.reset} ${dir}`);
+  }
 }
 
-// Cria o diretório dist
-fs.mkdirSync(distDir, { recursive: true });
-
-// Copia os arquivos diretamente para dist
-console.log(chalk.blue('📋 Copiando arquivos do projeto...'));
-
-// Função para copiar um diretório recursivamente
-function copyDir(src, dest) {
-  // Cria o diretório de destino se não existir
-  if (!fs.existsSync(dest)) {
-    fs.mkdirSync(dest, { recursive: true });
-  }
+/**
+ * Função para limpar o diretório de distribuição
+ */
+function cleanDistDirectory() {
+  console.log(`\n${colors.yellow}🧹 Limpando o diretório de distribuição...${colors.reset}`);
   
-  // Lê o conteúdo do diretório de origem
-  const entries = fs.readdirSync(src, { withFileTypes: true });
-  
-  // Processa cada item no diretório
-  for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
+  if (fs.existsSync(distDir)) {
+    const files = fs.readdirSync(distDir, { withFileTypes: true });
     
-    // Se for um diretório, copia recursivamente
-    if (entry.isDirectory()) {
-      // Se for o diretório de rotas, tratamento especial
-      if (entry.name === 'routes') {
-        copyRoutesDir(srcPath, destPath);
+    for (const file of files) {
+      const fullPath = path.join(distDir, file.name);
+      
+      if (file.isDirectory()) {
+        fs.rmSync(fullPath, { recursive: true, force: true });
       } else {
-        copyDir(srcPath, destPath);
+        fs.unlinkSync(fullPath);
       }
-    } 
-    // Se for um arquivo, copia diretamente
-    else {
-      fs.copyFileSync(srcPath, destPath);
-      console.log(chalk.green(`✅ Copiado: ${srcPath} -> ${destPath}`));
     }
-  }
-}
-
-// Função especial para copiar diretório de rotas
-function copyRoutesDir(src, dest) {
-  // Cria o diretório de destino se não existir
-  if (!fs.existsSync(dest)) {
-    fs.mkdirSync(dest, { recursive: true });
-  }
-  
-  // Lê o conteúdo do diretório de origem
-  const entries = fs.readdirSync(src, { withFileTypes: true });
-  
-  // Processa cada item no diretório
-  for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
     
-    // Se for um diretório, copia recursivamente
-    if (entry.isDirectory()) {
-      copyDir(srcPath, destPath);
-    } 
-    // Se for um arquivo .cjs, copia, mas ignora arquivos .js
-    else if (entry.name.endsWith('.cjs')) {
-      fs.copyFileSync(srcPath, destPath);
-      console.log(chalk.green(`✅ Copiado: ${srcPath} -> ${destPath}`));
-    } else if (entry.name.endsWith('.js')) {
-      console.log(chalk.yellow(`⚠️ Ignorando arquivo JS em routes: ${srcPath}`));
-    } else {
-      // Outros tipos de arquivos são copiados normalmente
-      fs.copyFileSync(srcPath, destPath);
-      console.log(chalk.green(`✅ Copiado: ${srcPath} -> ${destPath}`));
-    }
+    console.log(`${colors.green}✅ Diretório limpo:${colors.reset} ${distDir}`);
+  } else {
+    ensureDirectoryExists(distDir);
   }
 }
 
-// Copia o diretório src para dist
-copyDir(path.join(__dirname, 'src'), distDir);
-
-// Cria o diretório de uploads
-console.log(chalk.blue('📁 Criando diretório de uploads...'));
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// Copia arquivos estáticos adicionais (se necessário)
-console.log(chalk.blue('📋 Copiando arquivos estáticos...'));
-const staticFiles = [
-  { source: '.env', dest: 'dist/.env' },
-  { source: 'prisma/schema.prisma', dest: 'dist/prisma/schema.prisma' }
-];
-
-staticFiles.forEach(file => {
+/**
+ * Função para compilar o código com SWC
+ */
+function compileWithSWC() {
+  console.log(`\n${colors.yellow}🔄 Compilando o código com SWC...${colors.reset}`);
+  
   try {
-    const sourcePath = path.join(__dirname, file.source);
-    const destPath = path.join(__dirname, file.dest);
-    
-    // Certifica-se de que o diretório de destino existe
-    const destDir = path.dirname(destPath);
-    if (!fs.existsSync(destDir)) {
-      fs.mkdirSync(destDir, { recursive: true });
-    }
-    
-    if (fs.existsSync(sourcePath)) {
-      fs.copyFileSync(sourcePath, destPath);
-      console.log(chalk.green(`✅ Copiado: ${file.source} -> ${file.dest}`));
-    } else {
-      console.log(chalk.yellow(`⚠️ Arquivo não encontrado: ${file.source}`));
-    }
+    execSync('npx swc ./src -d ./dist --ignore "**/*.cjs"', { stdio: 'inherit' });
+    console.log(`${colors.green}✅ Código compilado com sucesso${colors.reset}`);
   } catch (error) {
-    console.error(chalk.red(`❌ Erro ao copiar ${file.source}:`), error);
+    console.error(`${colors.red}❌ Erro ao compilar o código:${colors.reset}`, error.message);
+    process.exit(1);
   }
-});
+}
 
-console.log(chalk.green('✨ Build concluído com sucesso!'));
-console.log(chalk.blue('📝 Para iniciar o servidor, execute: npm start')); 
+/**
+ * Função para copiar arquivos CJS diretamente para o diretório de distribuição
+ */
+function copyCJSFiles() {
+  console.log(`\n${colors.yellow}📂 Copiando arquivos .cjs para o diretório de distribuição...${colors.reset}`);
+  
+  if (!fs.existsSync(routesDir)) {
+    console.log(`${colors.red}⚠️ Diretório de rotas não encontrado:${colors.reset} ${routesDir}`);
+    return;
+  }
+  
+  ensureDirectoryExists(distRoutesDir);
+  
+  // Obtém todos os arquivos .cjs do diretório de rotas
+  const cjsFiles = fs.readdirSync(routesDir).filter(file => file.endsWith('.cjs'));
+  
+  if (cjsFiles.length === 0) {
+    console.log(`${colors.red}⚠️ Nenhum arquivo .cjs encontrado em:${colors.reset} ${routesDir}`);
+    return;
+  }
+  
+  console.log(`${colors.blue}🔍 Encontrados ${cjsFiles.length} arquivos .cjs para copiar${colors.reset}`);
+  
+  for (const file of cjsFiles) {
+    const srcFile = path.join(routesDir, file);
+    const destFile = path.join(distRoutesDir, file);
+    
+    try {
+      fs.copyFileSync(srcFile, destFile);
+      console.log(`${colors.green}✅ Copiado:${colors.reset} ${file}`);
+    } catch (error) {
+      console.error(`${colors.red}❌ Erro ao copiar ${file}:${colors.reset}`, error.message);
+    }
+  }
+}
+
+/**
+ * Função para copiar outros arquivos estáticos (se necessário)
+ */
+function copyStaticFiles() {
+  console.log(`\n${colors.yellow}📂 Copiando arquivos estáticos...${colors.reset}`);
+  
+  // Criar diretório de uploads
+  const uploadsDir = path.join(distDir, 'uploads');
+  ensureDirectoryExists(uploadsDir);
+  console.log(`${colors.green}✅ Diretório de uploads criado${colors.reset}`);
+  
+  // Arquivos estáticos a serem copiados
+  const staticFiles = [
+    { source: '.env', dest: path.join(distDir, '.env') },
+    { source: 'prisma/schema.prisma', dest: path.join(distDir, 'prisma/schema.prisma') }
+  ];
+  
+  for (const file of staticFiles) {
+    try {
+      const sourcePath = path.join(__dirname, file.source);
+      const destPath = file.dest;
+      
+      // Certifica-se de que o diretório de destino existe
+      const destDir = path.dirname(destPath);
+      if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true });
+      }
+      
+      if (fs.existsSync(sourcePath)) {
+        fs.copyFileSync(sourcePath, destPath);
+        console.log(`${colors.green}✅ Copiado:${colors.reset} ${file.source} -> ${destPath}`);
+      } else {
+        console.log(`${colors.yellow}⚠️ Arquivo não encontrado:${colors.reset} ${file.source}`);
+      }
+    } catch (error) {
+      console.error(`${colors.red}❌ Erro ao copiar ${file.source}:${colors.reset}`, error.message);
+    }
+  }
+  
+  console.log(`${colors.green}✅ Arquivos estáticos copiados${colors.reset}`);
+}
+
+/**
+ * Função principal
+ */
+function build() {
+  console.log(`\n${colors.magenta}🚀 Iniciando processo de build...${colors.reset}`);
+  
+  // Limpar diretório dist
+  cleanDistDirectory();
+  
+  // Compilar código com SWC
+  compileWithSWC();
+  
+  // Copiar arquivos CJS
+  copyCJSFiles();
+  
+  // Copiar outros arquivos estáticos
+  copyStaticFiles();
+  
+  console.log(`\n${colors.magenta}🎉 Build concluído com sucesso!${colors.reset}`);
+}
+
+// Executa o build
+build();
