@@ -124,6 +124,43 @@ RUN echo 'const { PrismaClient } = require("@prisma/client");' > /app/src-cjs/ut
     echo '' >> /app/src-cjs/utils/prisma.cjs && \
     echo 'module.exports = prisma;' >> /app/src-cjs/utils/prisma.cjs
 
+# Criar manualmente o arquivo middleware/auth.middleware.cjs com referências corretas
+RUN mkdir -p /app/src-cjs/middleware && \
+    echo 'const jwt = require("jsonwebtoken");' > /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo 'const prisma = require("../utils/prisma.cjs");' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '// Função para validar token JWT' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo 'exports.validateToken = (req, res, next) => {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  const token = req.headers.authorization?.split(" ")[1];' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  if (!token) {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    return res.status(401).json({ message: "Token não fornecido" });' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  }' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  try {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    const decoded = jwt.verify(token, process.env.JWT_SECRET);' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    req.user = decoded;' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    next();' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    return res.status(401).json({ message: "Token inválido" });' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  }' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '};' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '// Função para validar refresh token' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo 'exports.validateRefreshToken = (req, res, next) => {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  const { refreshToken } = req.body;' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  if (!refreshToken) {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    return res.status(401).json({ message: "Refresh token não fornecido" });' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  }' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  try {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET);' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    req.user = decoded;' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    next();' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    return res.status(401).json({ message: "Refresh token inválido" });' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  }' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '};' >> /app/src-cjs/middleware/auth.middleware.cjs
+
 # Corrigir referências ao módulo prisma em todos os arquivos
 RUN find /app/src-cjs -name "*.cjs" -exec sed -i 's/require("..\/utils\/prisma")/require("..\/utils\/prisma.cjs")/g' {} \;
 RUN find /app/src-cjs -name "*.cjs" -exec sed -i 's/require("..\/src-cjs\/utils\/prisma")/require("..\/utils\/prisma.cjs")/g' {} \;
