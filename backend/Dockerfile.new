@@ -1,0 +1,243 @@
+# Usar uma imagem mais leve do Node.js
+FROM node:18-alpine
+
+# Instalar dependências para processamento de arquivos
+RUN apk add --no-cache bash sed grep
+
+# Definir diretório de trabalho
+WORKDIR /app
+
+# Copiar arquivos de dependências
+COPY package*.json ./
+
+# Remover a configuração "type": "module" do package.json
+RUN sed -i '/"type": "module"/d' package.json
+
+# Instalar todas as dependências (incluindo de desenvolvimento para o Prisma)
+RUN npm install
+
+# Copiar os arquivos da aplicação
+COPY . .
+
+# Remover todos os arquivos package.json internos para garantir que não há "type": "module"
+RUN find ./src -name "package.json" -delete
+
+# Criar diretório para versões convertidas
+RUN mkdir -p /app/src-cjs/routes /app/src-cjs/controllers /app/src-cjs/middleware /app/src-cjs/utils /app/src-cjs/services
+
+# Converter arquivos de middleware primeiro
+RUN for file in $(find ./src/middleware -name "*.js"); do \
+        filename=$(basename "$file"); \
+        dirname=$(dirname "$file" | sed 's/\.\/src/\/app\/src-cjs/g'); \
+        mkdir -p "$dirname"; \
+        sed -e 's/export const/exports./' \
+            -e 's/export default/module.exports =/' \
+            -e 's/export {/module.exports = {/g' \
+            -e 's/import \(.*\) from \(.*\);/const \1 = require(\2);/g' \
+            -e 's/import {/const {/g' \
+            -e 's/} from \(.*\);/} = require(\1);/g' \
+            -e 's/\.js"/.cjs"/g' \
+            -e 's/\.js'"'"'/.cjs'"'"'/g' \
+            "$file" > "${dirname}/${filename%.js}.cjs"; \
+    done
+
+# Converter arquivos de utils 
+RUN for file in $(find ./src/utils -name "*.js"); do \
+        filename=$(basename "$file"); \
+        dirname=$(dirname "$file" | sed 's/\.\/src/\/app\/src-cjs/g'); \
+        mkdir -p "$dirname"; \
+        sed -e 's/export const/exports./' \
+            -e 's/export default/module.exports =/' \
+            -e 's/export {/module.exports = {/g' \
+            -e 's/import \(.*\) from \(.*\);/const \1 = require(\2);/g' \
+            -e 's/import {/const {/g' \
+            -e 's/} from \(.*\);/} = require(\1);/g' \
+            -e 's/\.js"/.cjs"/g' \
+            -e 's/\.js'"'"'/.cjs'"'"'/g' \
+            "$file" > "${dirname}/${filename%.js}.cjs"; \
+    done
+
+# Converter arquivos de services
+RUN for file in $(find ./src/services -name "*.js"); do \
+        filename=$(basename "$file"); \
+        dirname=$(dirname "$file" | sed 's/\.\/src/\/app\/src-cjs/g'); \
+        mkdir -p "$dirname"; \
+        sed -e 's/export const/exports./' \
+            -e 's/export default/module.exports =/' \
+            -e 's/export {/module.exports = {/g' \
+            -e 's/import \(.*\) from \(.*\);/const \1 = require(\2);/g' \
+            -e 's/import {/const {/g' \
+            -e 's/} from \(.*\);/} = require(\1);/g' \
+            -e 's/\.js"/.cjs"/g' \
+            -e 's/\.js'"'"'/.cjs'"'"'/g' \
+            "$file" > "${dirname}/${filename%.js}.cjs"; \
+    done
+
+# Converter arquivos de controllers
+RUN for file in $(find ./src/controllers -name "*.js"); do \
+        filename=$(basename "$file"); \
+        dirname=$(dirname "$file" | sed 's/\.\/src/\/app\/src-cjs/g'); \
+        mkdir -p "$dirname"; \
+        sed -e 's/export const/exports./' \
+            -e 's/export default/module.exports =/' \
+            -e 's/export {/module.exports = {/g' \
+            -e 's/import \(.*\) from \(.*\);/const \1 = require(\2);/g' \
+            -e 's/import {/const {/g' \
+            -e 's/} from \(.*\);/} = require(\1);/g' \
+            -e 's/\.js"/.cjs"/g' \
+            -e 's/\.js'"'"'/.cjs'"'"'/g' \
+            "$file" > "${dirname}/${filename%.js}.cjs"; \
+    done
+
+# Por último, converter arquivos de rotas quando tudo já estiver convertido
+RUN for file in $(find ./src/routes -name "*.js"); do \
+        filename=$(basename "$file"); \
+        dirname=$(dirname "$file" | sed 's/\.\/src/\/app\/src-cjs/g'); \
+        mkdir -p "$dirname"; \
+        sed -e 's/export default/module.exports =/' \
+            -e 's/export {/module.exports = {/g' \
+            -e 's/import \(.*\) from \(.*\);/const \1 = require(\2);/g' \
+            -e 's/import {/const {/g' \
+            -e 's/} from \(.*\);/} = require(\1);/g' \
+            -e 's/\.js"/.cjs"/g' \
+            -e 's/\.js'"'"'/.cjs'"'"'/g' \
+            "$file" > "${dirname}/${filename%.js}.cjs"; \
+    done
+
+# Ajustar caminhos relativos para todos os arquivos CommonJS
+RUN find /app/src-cjs -name "*.cjs" -exec sed -i 's/from ".\.\//from "..\/src-cjs\//g' {} \;
+RUN find /app/src-cjs -name "*.cjs" -exec sed -i 's/from ".\//from ".\/src-cjs\//g' {} \;
+RUN find /app/src-cjs -name "*.cjs" -exec sed -i 's/require(".\.\//require("..\/src-cjs\//g' {} \;
+RUN find /app/src-cjs -name "*.cjs" -exec sed -i 's/require(".\//require(".\/src-cjs\//g' {} \;
+
+# Corrija específicamente importações de auth.middleware em todos os arquivos de rota
+RUN find /app/src-cjs/routes -name "*.cjs" -exec sed -i 's/require("..\/middleware\/auth.middleware")/require("..\/middleware\/auth.middleware.cjs")/g' {} \;
+RUN find /app/src-cjs/routes -name "*.cjs" -exec sed -i 's/require("..\/src-cjs\/middleware\/auth.middleware")/require("..\/middleware\/auth.middleware.cjs")/g' {} \;
+RUN find /app/src-cjs/routes -name "*.cjs" -exec sed -i 's/require("..\/controllers\/[^"]*")/require("..\/controllers\/\$2.cjs")/g' {} \;
+
+# Criar manually auth.middleware.cjs
+RUN echo 'const jwt = require("jsonwebtoken");' > /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '// Função para validar token JWT' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo 'exports.validateToken = (req, res, next) => {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  const token = req.headers.authorization?.split(" ")[1];' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  if (!token) {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    return res.status(401).json({ message: "Token não fornecido" });' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  }' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  try {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    const decoded = jwt.verify(token, process.env.JWT_SECRET);' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    req.user = decoded;' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    next();' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    return res.status(401).json({ message: "Token inválido" });' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  }' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '};' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '// Função para validar refresh token' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo 'exports.validateRefreshToken = (req, res, next) => {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  const { refreshToken } = req.body;' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  if (!refreshToken) {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    return res.status(401).json({ message: "Refresh token não fornecido" });' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  }' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  try {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET);' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    req.user = decoded;' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    next();' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '    return res.status(401).json({ message: "Refresh token inválido" });' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '  }' >> /app/src-cjs/middleware/auth.middleware.cjs && \
+    echo '};' >> /app/src-cjs/middleware/auth.middleware.cjs
+
+# Criar auth.controller.cjs manualmente
+RUN echo 'const jwt = require("jsonwebtoken");' > /app/src-cjs/controllers/auth.controller.cjs && \
+    echo 'const bcrypt = require("bcryptjs");' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '// Função para autenticar usuário e gerar token' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo 'exports.login = async (req, res) => {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const { email, password } = req.body;' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Validar entradas' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    if (!email || !password) {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      return res.status(400).json({ message: "Email e senha são obrigatórios" });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Buscar usuário no banco de dados' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const user = await prisma.user.findUnique({' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      where: { email },' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      include: {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '        therapist: true,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '        client: true' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    if (!user) {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      return res.status(401).json({ message: "Credenciais inválidas" });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Verificar senha' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const isPasswordValid = await bcrypt.compare(password, user.password);' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    if (!isPasswordValid) {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      return res.status(401).json({ message: "Credenciais inválidas" });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Gerar tokens' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const token = jwt.sign(' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      { id: user.id, email: user.email, role: user.role },' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      process.env.JWT_SECRET,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      { expiresIn: "1h" }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    );' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const refreshToken = jwt.sign(' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      { id: user.id, email: user.email, role: user.role },' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      { expiresIn: "7d" }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    );' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Remover senha do objeto de resposta' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    const { password: _, ...userWithoutPassword } = user;' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    // Retornar dados do usuário e tokens' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    return res.status(200).json({' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      user: userWithoutPassword,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      token,' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '      refreshToken' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    console.error("Erro ao fazer login:", error);' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    return res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/auth.controller.cjs
+
+# Criar arquivo index-compat.cjs para compatibilidade
+RUN echo 'require("dotenv").config();' > index-compat.cjs && \
+    echo '' >> index-compat.cjs && \
+    echo 'const express = require("express");' >> index-compat.cjs && \
+    echo 'const cors = require("cors");' >> index-compat.cjs && \
+    echo 'const bodyParser = require("body-parser");' >> index-compat.cjs && \
+    echo 'const morgan = require("morgan");' >> index-compat.cjs && \
+    echo 'const path = require("path");' >> index-compat.cjs && \
+    echo 'const http = require("http");' >> index-compat.cjs && \
+    echo 'const { Server: SocketIO } = require("socket.io");' >> index-compat.cjs
+
+# Adicionar configuração do banco de dados
+RUN echo 'const { PrismaClient } = require("@prisma/client");' >> index-compat.cjs && \
+    echo 'const prisma = new PrismaClient({' >> index-compat.cjs && \
+    echo '  log: process.env.NODE_ENV === "development" ? ["query", "info", "warn", "error"] : ["error"]' >> index-compat.cjs && \
+    echo '});' >> index-compat.cjs && \
+    echo 'global.prisma = prisma;' >> index-compat.cjs && \
+    echo '' >> index-compat.cjs
+
+# Copiar arquivo de ambiente Docker para .env
+COPY .env.docker .env
+
+# Gerar Prisma Client
+RUN npx prisma generate
+
+# Expor porta
+EXPOSE 3000
+
+# Comando para iniciar usando a versão CommonJS compatível
+CMD /bin/sh -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node index-compat.cjs" 
