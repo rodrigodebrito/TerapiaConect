@@ -1493,7 +1493,6 @@ RUN mkdir -p /app/src-cjs/controllers && \
 # Create transcription.routes.cjs
 RUN mkdir -p /app/src-cjs/routes && \
     echo 'const express = require("express");' > /app/src-cjs/routes/transcription.routes.cjs && \
-    echo 'const router = express.Router();' >> /app/src-cjs/routes/transcription.routes.cjs && \
     echo 'const { validateToken } = require("../middleware/auth.middleware.cjs");' >> /app/src-cjs/routes/transcription.routes.cjs && \
     echo 'const {' >> /app/src-cjs/routes/transcription.routes.cjs && \
     echo '  createTranscription,' >> /app/src-cjs/routes/transcription.routes.cjs && \
