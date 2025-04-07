@@ -106,17 +106,10 @@ app.use(express.static(path.join(__dirname, '../public')));
 console.log('\nCarregando rotas da API:');
 
 // Função para carregar um router usando require (para arquivos .cjs)
-function loadCjsRouter(routePath) {
+async function loadCjsRouter(routePath) {
   try {
     // Na produção, os arquivos estão em dist
-    const isProduction = process.env.NODE_ENV === 'production';
-    let fullPath;
-    
-    if (isProduction) {
-      fullPath = path.join(__dirname, routePath);
-    } else {
-      fullPath = path.join(__dirname, routePath);
-    }
+    const fullPath = path.resolve(__dirname, routePath);
     
     // Verificar se o arquivo existe antes de tentar carregá-lo
     if (!fs.existsSync(fullPath)) {
@@ -127,6 +120,12 @@ function loadCjsRouter(routePath) {
     // Usando require dinâmico (CommonJS)
     let router;
     try {
+      // No Node.js, quando se usa o 'import' como palavra-chave do ESM,
+      // você ainda pode usar require() como uma função, mas isso gera um erro
+      // em tempo de execução no ambiente ESM, então precisamos usar 'createRequire'
+      const { createRequire } = await import('module');
+      const require = createRequire(import.meta.url);
+      
       router = require(fullPath);
       
       // Verificar se router é um objeto (pode ser o caso de module.exports = router)
@@ -137,21 +136,6 @@ function loadCjsRouter(routePath) {
       return router;
     } catch (error) {
       console.error(`❌ Erro ao carregar ${routePath}:`, error.message);
-      
-      // Tentar alternativa sem a extensão .cjs
-      const alternativePath = fullPath.replace('.cjs', '');
-      if (fs.existsSync(alternativePath)) {
-        try {
-          router = require(alternativePath);
-          if (typeof router === 'object' && router.default) {
-            router = router.default;
-          }
-          return router;
-        } catch (err) {
-          console.error(`❌ Também falhou ao carregar alternativa ${alternativePath}:`, err.message);
-        }
-      }
-      
       return null;
     }
   } catch (error) {
@@ -160,44 +144,49 @@ function loadCjsRouter(routePath) {
   }
 }
 
-// Mapeamento de rotas para seus arquivos
-const routes = [
-  { path: '/api/auth', file: './routes/auth.routes.cjs' },
-  { path: '/api/users', file: './routes/user.route.cjs' },
-  { path: '/api/admin', file: './routes/admin.route.cjs' },
-  { path: '/api/therapists', file: './routes/therapist.route.cjs' },
-  { path: '/api/clients', file: './routes/client.route.cjs' },
-  { path: '/api/subscriptions', file: './routes/subscription.route.cjs' },
-  { path: '/api/sessions', file: './routes/session.route.cjs' },
-  { path: '/api/meeting', file: './routes/meeting.routes.cjs' },
-  { path: '/api/payments', file: './routes/payment.route.cjs' },
-  { path: '/api/ai', file: './routes/ai.routes.cjs' },
-  { path: '/api/embed', file: './routes/embedding.route.cjs' },
-  { path: '/api/chat', file: './routes/chat.route.cjs' },
-  { path: '/api/insights', file: './routes/insight.routes.cjs' },
-  { path: '/api/training', file: './routes/training.routes.cjs' },
-  { path: '/api/transcription', file: './routes/transcription.routes.cjs' },
-  { path: '/api/upload', file: './routes/upload.routes.cjs' }
-];
-
-// Registrar cada rota
-let routesRegistered = 0;
-routes.forEach(route => {
+// Carregar rotas dinamicamente
+(async function loadRoutes() {
   try {
-    const router = loadCjsRouter(route.file);
-    if (router) {
-      app.use(route.path, router);
-      console.log(`✅ Rota registrada: ${route.path}`);
-      routesRegistered++;
-    } else {
-      console.log(`❌ Rota não carregada: ${route.path}`);
+    // Definir o diretório de rotas (baseado no ambiente)
+    const routesPath = process.env.NODE_ENV === 'production' 
+      ? path.join(__dirname, 'routes')
+      : path.join(__dirname, '../dist/routes');
+    
+    console.log(`📂 Buscando rotas em: ${routesPath}`);
+    
+    // Verificar se o diretório existe
+    if (!fs.existsSync(routesPath)) {
+      console.error(`❌ Diretório de rotas não encontrado: ${routesPath}`);
+      return;
     }
+    
+    // Listar todos os arquivos no diretório de rotas
+    const routeFiles = fs.readdirSync(routesPath);
+    console.log(`🔍 Arquivos encontrados: ${routeFiles.length}`);
+    
+    // Filtrar apenas arquivos .cjs
+    const cjsRouteFiles = routeFiles.filter(file => file.endsWith('.cjs'));
+    console.log(`🔍 Arquivos .cjs encontrados: ${cjsRouteFiles.length}`);
+    
+    // Carregar e registrar cada rota
+    let loadedCount = 0;
+    for (const file of cjsRouteFiles) {
+      const routePath = path.join(routesPath, file);
+      console.log(`⏳ Carregando rota: ${file}`);
+      
+      const router = await loadCjsRouter(routePath);
+      if (router) {
+        app.use('/api', router);
+        console.log(`✅ Rota carregada: ${file}`);
+        loadedCount++;
+      }
+    }
+    
+    console.log(`📊 Rotas carregadas: ${loadedCount}/${cjsRouteFiles.length}`);
   } catch (error) {
-    console.log(`❌ Erro ao registrar rota ${route.path}:`, error.message);
+    console.error('❌ Erro ao carregar rotas:', error.message);
   }
-});
-
-console.log(`\n📊 Rotas registradas: ${routesRegistered}/${routes.length}`);
+})();
 
 // Rota padrão da API
 app.get('/', (req, res) => {
