@@ -13,7 +13,7 @@ COPY .env.example ./
 RUN cp .env.example .env || touch .env
 
 # Instala dependências
-RUN npm ci
+RUN npm install
 
 # Copia scripts de build e transformação
 COPY scripts ./scripts/
