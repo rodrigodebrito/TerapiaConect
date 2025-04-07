@@ -277,17 +277,36 @@ export const getAllTherapists = async (filters = {}) => {
 // Função auxiliar para fazer parse seguro de JSON
 function safeParseJSON(value, defaultValue) {
   if (!value) return defaultValue;
+  
+  // Se já for um objeto (não string), retorna diretamente
+  if (typeof value !== 'string') return value;
+  
   try {
-    return typeof value === 'string' ? JSON.parse(value) : value;
+    // Verifica se a string parece um JSON válido antes de tentar parsear
+    // Um JSON válido começa com { (objeto) ou [ (array)
+    const trimmed = value.trim();
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+      console.warn(`JSON inválido detectado: "${value.substring(0, 20)}..." não começa com { ou [, usando valor original`);
+      return value;
+    }
+    
+    return JSON.parse(value);
   } catch (error) {
-    console.warn('Erro ao fazer parse de JSON:', error);
+    console.warn(`Erro ao fazer parse de JSON: ${error.message}, usando valor padrão`);
     return defaultValue;
   }
 }
 
-// Função para verificar se uma string é um JSON válido
+// Função melhorada para verificar se uma string é um JSON válido
 function isJsonString(str) {
   if (!str || typeof str !== 'string') return false;
+  
+  // Verificação rápida: um JSON válido deve começar com { ou [
+  const trimmed = str.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+    return false;
+  }
+  
   try {
     JSON.parse(str);
     return true;

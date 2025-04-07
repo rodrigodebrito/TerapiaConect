@@ -99,6 +99,45 @@ const TherapistProfileView = () => {
     return tool ? tool.label : toolId;
   };
 
+  const isValidJsonOrArray = (value) => {
+    // Se já for um array, retorna true
+    if (Array.isArray(value)) return true;
+    
+    // Se não for string, não pode ser JSON válido
+    if (typeof value !== 'string') return false;
+    
+    // Verificação rápida: um JSON válido deve começar com { ou [
+    const trimmed = value.trim();
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+      return false;
+    }
+    
+    try {
+      JSON.parse(value);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+  
+  const processJsonOrArray = (value) => {
+    // Se já for um array, retorna diretamente
+    if (Array.isArray(value)) return value;
+    
+    // Se for string e JSON válido, faz o parse
+    if (typeof value === 'string' && isValidJsonOrArray(value)) {
+      try {
+        return JSON.parse(value);
+      } catch (e) {
+        console.warn('Erro ao processar JSON:', e.message);
+        return [];
+      }
+    }
+    
+    // Para outros casos, retorna um array vazio
+    return [];
+  };
+
   return (
     <div className="therapist-profile-view-container">
       <header className="profile-view-header">
@@ -168,24 +207,18 @@ const TherapistProfileView = () => {
             <p className="therapist-bio">{therapist.shortBio}</p>
           </div>
 
-          {((therapist.niches && (typeof therapist.niches === 'string' ? JSON.parse(therapist.niches || '[]') : therapist.niches).length > 0) || 
-           (therapist.customNiches && (typeof therapist.customNiches === 'string' ? JSON.parse(therapist.customNiches || '[]') : therapist.customNiches).length > 0)) && (
+          {((therapist.niches && isValidJsonOrArray(therapist.niches)) || 
+           (therapist.customNiches && isValidJsonOrArray(therapist.customNiches))) && (
             <div className="profile-section">
               <h2 className="section-title">Especialidades</h2>
               <div className="tags-container">
-                {therapist.niches && (typeof therapist.niches === 'string' ? 
-                  JSON.parse(therapist.niches || '[]') : 
-                  therapist.niches
-                ).map(nicheId => (
+                {therapist.niches && processJsonOrArray(therapist.niches).map(nicheId => (
                   <span key={nicheId} className="tag">
                     {getNicheLabel(nicheId)}
                   </span>
                 ))}
                 
-                {therapist.customNiches && (typeof therapist.customNiches === 'string' ? 
-                  JSON.parse(therapist.customNiches || '[]') : 
-                  therapist.customNiches
-                ).map((niche, index) => (
+                {therapist.customNiches && processJsonOrArray(therapist.customNiches).map((niche, index) => (
                   niche && <span key={`custom-niche-${index}`} className="tag">{niche}</span>
                 ))}
               </div>
@@ -261,15 +294,14 @@ const TherapistProfileView = () => {
                 <div className="pricing-cell">{therapist.sessionDuration} minutos</div>
               </div>
               
-              {therapist.servicePrices && (typeof therapist.servicePrices === 'string' ? 
-                JSON.parse(therapist.servicePrices || '[]') : 
-                therapist.servicePrices
-              ).map((service, index) => (
-                <div key={`service-${index}`} className="pricing-row">
-                  <div className="pricing-cell">{service.name}</div>
-                  <div className="pricing-cell">{formatCurrency(service.price)}</div>
-                  <div className="pricing-cell">{service.duration || therapist.sessionDuration} minutos</div>
-                </div>
+              {therapist.servicePrices && processJsonOrArray(therapist.servicePrices).map((service, index) => (
+                service && service.name && (
+                  <div key={`service-${index}`} className="pricing-row">
+                    <div className="pricing-cell">{service.name}</div>
+                    <div className="pricing-cell">{formatCurrency(service.price || 0)}</div>
+                    <div className="pricing-cell">{service.duration || therapist.sessionDuration || 60} minutos</div>
+                  </div>
+                )
               ))}
             </div>
           </div>
