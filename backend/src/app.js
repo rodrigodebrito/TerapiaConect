@@ -1,6 +1,12 @@
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
+const morgan = require('morgan');
+const fs = require('fs');
 const path = require('path');
+const OpenAI = require('openai');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 const routes = require('./routes');
 
 // Importar rotas
@@ -17,46 +23,78 @@ const aiRoutes = require('./routes/ai.routes');
 const embedRoutes = require('./routes/embedding.route');
 const chatRoutes = require('./routes/chat.route');
 const insightRoutes = require('./routes/insight.routes');
+const trainingRoutes = require('./routes/training.routes');
+const transcriptionRoutes = require('./routes/transcription.routes');
 
 const app = express();
 
-// Configuração de CORS
+// Middleware para parsear JSON
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Configurar OpenAI se a chave de API estiver disponível
+let openai;
+if (process.env.OPENAI_API_KEY) {
+  openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+  console.log('OpenAI configurada com sucesso');
+} else {
+  console.log('Chave da API OpenAI não encontrada');
+}
+
+// Middleware para CORS (Cross-Origin Resource Sharing)
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:5173',
+  'https://terapia-conect-frontend.vercel.app',
+  'https://terapiaconect.vercel.app',
+  'https://terapiaconect.com.br'
+];
+
+// Configuração unificada de CORS
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'null', '*'],
+  origin: function (origin, callback) {
+    // Permitir requisições sem origin (como mobile apps ou Postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('CORS bloqueou requisição de:', origin);
+      callback(new Error('Não permitido por CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Test-Auth']
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
 }));
 
-// Configuração de CORS para testes
-app.use(cors({
-  origin: true, // Permitir qualquer origem
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-requested-with', 'X-Test-Auth']
-}));
+// Adicionar headers para garantir compatibilidade
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Credentials', true);
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  // Log para debug
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url} - Origin: ${req.headers.origin || 'No origin'}`);
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
-// Para garantir que OPTIONS preflight funcione corretamente
-app.options('*', cors());
+// Middleware para logs de requisições HTTP
+app.use(morgan('dev'));
 
-// Configuração de CORS otimizada
-app.use(cors({
-  origin: true, // Permitir qualquer origem
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-requested-with', 'X-Test-Auth', '*']
-}));
-
-// Para garantir que OPTIONS preflight funcione corretamente
-app.options('*', cors());
-
-// Middleware para JSON com limite aumentado
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Cookie parser
+app.use(cookieParser());
 
 // Middleware para debugging
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url} - Origin: ${req.headers.origin || 'No Origin'}`);
   next();
 });
 
@@ -80,5 +118,5 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/embed', embedRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/insights', insightRoutes);
-
-// ... existing code ... 
+app.use('/api/training', trainingRoutes);
+app.use('/api/transcription', transcriptionRoutes); 
