@@ -1,39 +1,31 @@
 FROM node:20-alpine
 
+# Configuração do diretório de trabalho
 WORKDIR /usr/src/app
 
-# Instala pacotes essenciais e ferramentas de build
-# Adicionamos as bibliotecas necessárias para o Prisma (libssl e openssl)
-RUN apk add --no-cache python3 make g++ git openssl openssl-dev
+# Instalação das dependências necessárias para o Prisma e compilação
+RUN apk add --no-cache openssl1.1-compat
 
-# Copia arquivos de configuração do projeto
+# Copia package.json e package-lock.json
 COPY package*.json ./
-COPY prisma ./prisma/
-COPY .env.example ./
-# Cria um .env vazio - será substituído pelo volume em runtime
-RUN cp .env.example .env || touch .env
 
-# Instala dependências
-RUN npm install
+# Instala as dependências do projeto
+RUN npm ci
 
-# Copia scripts de build e transformação
-COPY scripts ./scripts/
-COPY build.js ./
+# Copia os arquivos do projeto
+COPY . .
 
-# Copia código fonte
-COPY src ./src/
+# Define a variável de ambiente para produção
+ENV NODE_ENV=production
 
-# Executa o build completo que inclui a preparação das rotas
+# Executa o script de build que agora tem fallback quando SWC não estiver disponível
 RUN npm run build
 
 # Gera o cliente Prisma
-RUN npm run prisma:generate
+RUN npx prisma generate
 
-# Verifica os arquivos na pasta dist/routes para depuração
-RUN ls -la dist/routes
-
-# Porta que o servidor vai escutar
+# Expõe a porta que a API irá utilizar
 EXPOSE 3000
 
-# Comando para iniciar o servidor
+# Comando para iniciar a aplicação quando o container for executado
 CMD ["npm", "start"]
