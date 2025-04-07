@@ -809,7 +809,7 @@ app.put('/api/therapists/:id', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: 'Terapeuta não encontrado' });
     }
     
-    // Preparar dados para atualização
+    // Preparar dados para atualização - extraindo apenas os campos que existem no modelo
     const {
       shortBio,
       niches,
@@ -823,17 +823,13 @@ app.put('/api/therapists/:id', authMiddleware, async (req, res) => {
       baseSessionPrice,
       sessionDuration,
       attendanceMode,
-      address,
-      complement,
-      neighborhood,
       city,
       state,
-      zipCode,
       offersFreeSession,
       freeSessionDuration
     } = profileData;
     
-    // Atualizar o terapeuta no banco de dados
+    // Atualizar o terapeuta no banco de dados com apenas os campos válidos
     const updatedTherapist = await prisma.therapist.update({
       where: { id },
       data: {
@@ -848,12 +844,8 @@ app.put('/api/therapists/:id', authMiddleware, async (req, res) => {
         baseSessionPrice: parseFloat(baseSessionPrice) || 0,
         sessionDuration: parseInt(sessionDuration) || 60,
         attendanceMode,
-        address,
-        complement,
-        neighborhood,
         city,
         state,
-        zipCode,
         offersFreeSession: Boolean(offersFreeSession),
         freeSessionDuration: parseInt(freeSessionDuration) || 0
       },
