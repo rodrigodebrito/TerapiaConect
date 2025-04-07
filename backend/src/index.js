@@ -620,9 +620,7 @@ app.get('/api/therapists', async (req, res) => {
   try {
     const therapists = await prisma.therapist.findMany({
       include: {
-        user: true,
-        specialty: true,
-        approach: true,
+        user: true
       },
     });
 
@@ -648,9 +646,7 @@ app.get('/api/therapists/:id', async (req, res) => {
     const therapist = await prisma.therapist.findUnique({
       where: { id },
       include: {
-        user: true,
-        specialty: true,
-        approach: true,
+        user: true
       },
     });
 
@@ -680,12 +676,10 @@ app.get('/api/approved-therapists', async (req, res) => {
   try {
     const therapists = await prisma.therapist.findMany({
       where: {
-        approved: true,
+        isApproved: true,
       },
       include: {
-        user: true,
-        specialty: true,
-        approach: true,
+        user: true
       },
     });
 
@@ -710,12 +704,7 @@ app.get('/api/user/:userId', async (req, res) => {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
-        therapist: {
-          include: {
-            specialty: true,
-            approach: true
-          }
-        }
+        therapist: true
       }
     });
     
