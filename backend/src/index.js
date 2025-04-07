@@ -659,8 +659,13 @@ app.get('/api/therapists/:id', async (req, res) => {
     const therapist = await prisma.therapist.findUnique({
       where: { id },
       include: {
-        user: true
-      },
+        user: true,
+        tools: {
+          include: {
+            tool: true
+          }
+        }
+      }
     });
 
     if (!therapist) {
@@ -676,7 +681,14 @@ app.get('/api/therapists/:id', async (req, res) => {
       niches: safeParseJSON(therapist.niches, []),
       customNiches: safeParseJSON(therapist.customNiches, []),
       customTools: safeParseJSON(therapist.customTools, []),
-      targetAudience: safeParseJSON(therapist.targetAudience, therapist.targetAudience || '')
+      targetAudience: safeParseJSON(therapist.targetAudience, therapist.targetAudience || ''),
+      // Mapear ferramentas para o formato esperado pelo frontend
+      tools: therapist.tools.map(t => ({
+        id: t.tool.id,
+        name: t.tool.name,
+        duration: t.duration,
+        price: t.price
+      }))
     };
 
     return res.status(200).json({
@@ -767,6 +779,11 @@ app.get('/api/therapists/user/:userId', authMiddleware, async (req, res) => {
             name: true,
             email: true
           }
+        },
+        tools: {
+          include: {
+            tool: true
+          }
         }
       }
     });
@@ -784,7 +801,14 @@ app.get('/api/therapists/user/:userId', authMiddleware, async (req, res) => {
       niches: safeParseJSON(therapist.niches, []),
       customNiches: safeParseJSON(therapist.customNiches, []),
       customTools: safeParseJSON(therapist.customTools, []),
-      targetAudience: safeParseJSON(therapist.targetAudience, therapist.targetAudience || '')
+      targetAudience: safeParseJSON(therapist.targetAudience, therapist.targetAudience || ''),
+      // Mapear ferramentas para o formato esperado pelo frontend
+      tools: therapist.tools.map(t => ({
+        id: t.tool.id,
+        name: t.tool.name,
+        duration: t.duration,
+        price: t.price
+      }))
     };
     
     return res.status(200).json({
