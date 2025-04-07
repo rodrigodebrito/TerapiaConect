@@ -987,6 +987,17 @@ app.post('/api/therapists/:therapistId/availability', authMiddleware, async (req
     // Depois, criar os novos slots
     const createdSlots = [];
     for (const slot of availability) {
+      console.log(`Processando slot:`, slot);
+      // Transformar date em string se existir
+      let dateValue = null;
+      if (slot.date) {
+        // Se já for string, usa direto, senão converte para string ISO
+        dateValue = typeof slot.date === 'string' 
+          ? slot.date 
+          : new Date(slot.date).toISOString().split('T')[0]; // Formato YYYY-MM-DD
+        console.log(`Data convertida: ${dateValue}`);
+      }
+      
       const newSlot = await prisma.availability.create({
         data: {
           therapistId,
@@ -994,7 +1005,7 @@ app.post('/api/therapists/:therapistId/availability', authMiddleware, async (req
           startTime: slot.startTime,
           endTime: slot.endTime,
           isRecurring: slot.isRecurring || false,
-          date: slot.date ? new Date(slot.date) : null
+          date: dateValue
         }
       });
       createdSlots.push(newSlot);

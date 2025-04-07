@@ -238,7 +238,7 @@ const TherapistAvailabilitySimple = () => {
         console.log(`Buscando disponibilidade para terapeuta ID: ${therapistId}`);
         
         // Fazer requisição para a API
-        const response = await api.get(`/therapists/${therapistId}/availability`);
+        const response = await api.get(`/api/therapists/${therapistId}/availability`);
         
         console.log('Resposta da API:', response.data);
         
