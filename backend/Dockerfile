@@ -25,42 +25,14 @@ RUN find ./src -name "package.json" -delete
 # Criar diretório para versões convertidas
 RUN mkdir -p /app/src-cjs/routes /app/src-cjs/controllers /app/src-cjs/middleware /app/src-cjs/utils /app/src-cjs/services
 
-# Converter arquivos de rotas de ESM para CommonJS
-RUN for file in $(find ./src/routes -name "*.js"); do \
-        filename=$(basename "$file"); \
-        dirname=$(dirname "$file" | sed 's/\.\/src/\/app\/src-cjs/g'); \
-        mkdir -p "$dirname"; \
-        sed -e 's/export default/module.exports =/' \
-            -e 's/import \(.*\) from \(.*\);/const \1 = require(\2);/g' \
-            -e 's/import {/const {/g' \
-            -e 's/} from \(.*\);/} = require(\1);/g' \
-            -e 's/\.js"/.js"/g' \
-            -e 's/\.js'"'"'/.js'"'"'/g' \
-            "$file" > "${dirname}/${filename%.js}.cjs"; \
-    done
-
-# Converter arquivos de controllers de ESM para CommonJS
-RUN for file in $(find ./src/controllers -name "*.js"); do \
-        filename=$(basename "$file"); \
-        dirname=$(dirname "$file" | sed 's/\.\/src/\/app\/src-cjs/g'); \
-        mkdir -p "$dirname"; \
-        sed -e 's/export const/exports./' \
-            -e 's/export default/module.exports =/' \
-            -e 's/import \(.*\) from \(.*\);/const \1 = require(\2);/g' \
-            -e 's/import {/const {/g' \
-            -e 's/} from \(.*\);/} = require(\1);/g' \
-            -e 's/\.js"/.cjs"/g' \
-            -e 's/\.js'"'"'/.cjs'"'"'/g' \
-            "$file" > "${dirname}/${filename%.js}.cjs"; \
-    done
-
-# Converter arquivos de middleware de ESM para CommonJS
+# Converter arquivos de middleware primeiro
 RUN for file in $(find ./src/middleware -name "*.js"); do \
         filename=$(basename "$file"); \
         dirname=$(dirname "$file" | sed 's/\.\/src/\/app\/src-cjs/g'); \
         mkdir -p "$dirname"; \
         sed -e 's/export const/exports./' \
             -e 's/export default/module.exports =/' \
+            -e 's/export {/module.exports = {/g' \
             -e 's/import \(.*\) from \(.*\);/const \1 = require(\2);/g' \
             -e 's/import {/const {/g' \
             -e 's/} from \(.*\);/} = require(\1);/g' \
@@ -69,13 +41,14 @@ RUN for file in $(find ./src/middleware -name "*.js"); do \
             "$file" > "${dirname}/${filename%.js}.cjs"; \
     done
 
-# Converter arquivos de utils de ESM para CommonJS
+# Converter arquivos de utils 
 RUN for file in $(find ./src/utils -name "*.js"); do \
         filename=$(basename "$file"); \
         dirname=$(dirname "$file" | sed 's/\.\/src/\/app\/src-cjs/g'); \
         mkdir -p "$dirname"; \
         sed -e 's/export const/exports./' \
             -e 's/export default/module.exports =/' \
+            -e 's/export {/module.exports = {/g' \
             -e 's/import \(.*\) from \(.*\);/const \1 = require(\2);/g' \
             -e 's/import {/const {/g' \
             -e 's/} from \(.*\);/} = require(\1);/g' \
@@ -84,13 +57,14 @@ RUN for file in $(find ./src/utils -name "*.js"); do \
             "$file" > "${dirname}/${filename%.js}.cjs"; \
     done
 
-# Converter arquivos de services de ESM para CommonJS
+# Converter arquivos de services
 RUN for file in $(find ./src/services -name "*.js"); do \
         filename=$(basename "$file"); \
         dirname=$(dirname "$file" | sed 's/\.\/src/\/app\/src-cjs/g'); \
         mkdir -p "$dirname"; \
         sed -e 's/export const/exports./' \
             -e 's/export default/module.exports =/' \
+            -e 's/export {/module.exports = {/g' \
             -e 's/import \(.*\) from \(.*\);/const \1 = require(\2);/g' \
             -e 's/import {/const {/g' \
             -e 's/} from \(.*\);/} = require(\1);/g' \
@@ -99,10 +73,46 @@ RUN for file in $(find ./src/services -name "*.js"); do \
             "$file" > "${dirname}/${filename%.js}.cjs"; \
     done
 
-# Verificar e corrigir manualmente alguns arquivos CommonJS críticos
-RUN sed -i 's/\.js"/.cjs"/g' /app/src-cjs/routes/*.cjs && \
-    sed -i 's/\.js'"'"'/.cjs'"'"'/g' /app/src-cjs/routes/*.cjs && \
-    sed -i 's/import/const/g' /app/src-cjs/routes/*.cjs || true
+# Converter arquivos de controllers
+RUN for file in $(find ./src/controllers -name "*.js"); do \
+        filename=$(basename "$file"); \
+        dirname=$(dirname "$file" | sed 's/\.\/src/\/app\/src-cjs/g'); \
+        mkdir -p "$dirname"; \
+        sed -e 's/export const/exports./' \
+            -e 's/export default/module.exports =/' \
+            -e 's/export {/module.exports = {/g' \
+            -e 's/import \(.*\) from \(.*\);/const \1 = require(\2);/g' \
+            -e 's/import {/const {/g' \
+            -e 's/} from \(.*\);/} = require(\1);/g' \
+            -e 's/\.js"/.cjs"/g' \
+            -e 's/\.js'"'"'/.cjs'"'"'/g' \
+            "$file" > "${dirname}/${filename%.js}.cjs"; \
+    done
+
+# Por último, converter arquivos de rotas quando tudo já estiver convertido
+RUN for file in $(find ./src/routes -name "*.js"); do \
+        filename=$(basename "$file"); \
+        dirname=$(dirname "$file" | sed 's/\.\/src/\/app\/src-cjs/g'); \
+        mkdir -p "$dirname"; \
+        sed -e 's/export default/module.exports =/' \
+            -e 's/export {/module.exports = {/g' \
+            -e 's/import \(.*\) from \(.*\);/const \1 = require(\2);/g' \
+            -e 's/import {/const {/g' \
+            -e 's/} from \(.*\);/} = require(\1);/g' \
+            -e 's/\.js"/.cjs"/g' \
+            -e 's/\.js'"'"'/.cjs'"'"'/g' \
+            "$file" > "${dirname}/${filename%.js}.cjs"; \
+    done
+
+# Ajustar caminhos relativos para todos os arquivos CommonJS
+RUN find /app/src-cjs -name "*.cjs" -exec sed -i 's/from ".\.\//from "..\/src-cjs\//g' {} \;
+RUN find /app/src-cjs -name "*.cjs" -exec sed -i 's/from ".\//from ".\/src-cjs\//g' {} \;
+RUN find /app/src-cjs -name "*.cjs" -exec sed -i 's/require(".\.\//require("..\/src-cjs\//g' {} \;
+RUN find /app/src-cjs -name "*.cjs" -exec sed -i 's/require(".\//require(".\/src-cjs\//g' {} \;
+
+# Corrija especificamente o problema de caminhos em auth.routes.cjs
+RUN sed -i 's/require("..\/middleware\/auth.middleware")/require("..\/src-cjs\/middleware\/auth.middleware.cjs")/g' /app/src-cjs/routes/auth.routes.cjs
+RUN sed -i 's/require("..\/controllers\/auth.controller")/require("..\/src-cjs\/controllers\/auth.controller.cjs")/g' /app/src-cjs/routes/auth.routes.cjs
 
 # Criar arquivo index-compat.cjs para compatibilidade
 RUN echo 'require("dotenv").config();' > index-compat.cjs && \
