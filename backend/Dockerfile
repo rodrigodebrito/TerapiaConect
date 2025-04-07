@@ -612,5 +612,68 @@ RUN echo 'const express = require("express");' > /app/src-cjs/routes/tool.routes
     echo '// Exportar router' >> /app/src-cjs/routes/tool.routes.cjs && \
     echo 'module.exports = router;' >> /app/src-cjs/routes/tool.routes.cjs
 
+# Criar session.controller.cjs para garantir compatibilidade
+RUN echo 'const prisma = require("../utils/prisma.cjs");' > /app/src-cjs/controllers/session.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '// Função para listar sessões' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo 'exports.getSessions = async (req, res) => {' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    const sessions = await prisma.session.findMany();' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    res.status(200).json(sessions);' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    console.error("Erro ao buscar sessões:", error);' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '// Função para obter detalhes de uma sessão' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo 'exports.getSessionById = async (req, res) => {' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    const { id } = req.params;' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    const session = await prisma.session.findUnique({' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '      where: { id }' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    if (!session) {' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '      return res.status(404).json({ message: "Sessão não encontrada" });' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    }' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    res.status(200).json(session);' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    console.error("Erro ao buscar sessão:", error);' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '// Função para criar sessão' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo 'exports.createSession = async (req, res) => {' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '  try {' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    const { title, date, clientId, therapistId } = req.body;' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    const session = await prisma.session.create({' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '      data: { title, date, clientId, therapistId }' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    });' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    res.status(201).json(session);' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '  } catch (error) {' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    console.error("Erro ao criar sessão:", error);' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '    res.status(500).json({ message: "Erro interno do servidor" });' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '  }' >> /app/src-cjs/controllers/session.controller.cjs && \
+    echo '};' >> /app/src-cjs/controllers/session.controller.cjs
+
+# Criar session.routes.cjs para garantir compatibilidade
+RUN echo 'const express = require("express");' > /app/src-cjs/routes/session.routes.cjs && \
+    echo 'const router = express.Router();' >> /app/src-cjs/routes/session.routes.cjs && \
+    echo 'const { validateToken } = require("../middleware/auth.middleware.cjs");' >> /app/src-cjs/routes/session.routes.cjs && \
+    echo 'const { getSessions, getSessionById, createSession } = require("../controllers/session.controller.cjs");' >> /app/src-cjs/routes/session.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/session.routes.cjs && \
+    echo '// Listar todas as sessões' >> /app/src-cjs/routes/session.routes.cjs && \
+    echo 'router.get("/", validateToken, getSessions);' >> /app/src-cjs/routes/session.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/session.routes.cjs && \
+    echo '// Obter detalhes de uma sessão' >> /app/src-cjs/routes/session.routes.cjs && \
+    echo 'router.get("/:id", validateToken, getSessionById);' >> /app/src-cjs/routes/session.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/session.routes.cjs && \
+    echo '// Criar nova sessão' >> /app/src-cjs/routes/session.routes.cjs && \
+    echo 'router.post("/", validateToken, createSession);' >> /app/src-cjs/routes/session.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/session.routes.cjs && \
+    echo '// Exportar router' >> /app/src-cjs/routes/session.routes.cjs && \
+    echo 'module.exports = router;' >> /app/src-cjs/routes/session.routes.cjs
+
 # Comando para iniciar usando a versão CommonJS compatível
 CMD /bin/sh -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node index-compat.cjs" 
