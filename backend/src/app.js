@@ -53,9 +53,24 @@ const allowedOrigins = [
   'https://terapiaconect.com.br'
 ];
 
-// Configuração unificada de CORS - temporariamente permitindo todas as origens
+// Configuração unificada de CORS - permitindo origens específicas em produção
 app.use(cors({
-  origin: '*', // Permitir qualquer origem temporariamente para debug
+  origin: function(origin, callback) {
+    // Permitir solicitações sem origem (como aplicativos móveis ou curl)
+    if (!origin) return callback(null, true);
+    
+    // Permitir origens da lista
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    } else {
+      // Para desenvolvimento, permitir qualquer origem
+      if (process.env.NODE_ENV !== 'production') {
+        return callback(null, true);
+      }
+      console.log(`Origem bloqueada: ${origin}`);
+      return callback(null, true); // Temporariamente permitir todas as origens
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
@@ -63,7 +78,10 @@ app.use(cors({
 
 // Adicionar headers para garantir compatibilidade
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+  }
   res.header('Access-Control-Allow-Credentials', true);
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');

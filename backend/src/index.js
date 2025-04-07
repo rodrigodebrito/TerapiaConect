@@ -48,12 +48,24 @@ const PORT = process.env.PORT || 3000;
 // Criar servidor HTTP com Express
 const server = http.createServer(app);
 
+// Definir as origens permitidas
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001', 
+  'http://localhost:5173',
+  'https://terapiaconect.com', 
+  'https://www.terapiaconect.com',
+  'https://terapiaconect.vercel.app', 
+  'https://terapia-conect-frontend.vercel.app',
+  'https://terapiaconect.com.br'
+];
+
 // Configurar Socket.IO com configurações otimizadas
 const io = new SocketIO(server, {
   cors: {
     origin: process.env.NODE_ENV === 'production' 
-      ? ['https://terapiaconect.com', 'https://www.terapiaconect.com'] 
-      : ['http://localhost:3001', 'http://localhost:5173', '*'],
+      ? allowedOrigins 
+      : (origin, callback) => callback(null, true),
     methods: ['GET', 'POST', 'OPTIONS'],
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
@@ -71,8 +83,8 @@ io.engine.on('connection_error', (err) => {
 // Middleware
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://terapiaconect.com', 'https://www.terapiaconect.com'] 
-    : ['http://localhost:3001', 'http://localhost:5173', '*'],
+    ? allowedOrigins
+    : (origin, callback) => callback(null, true),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept']

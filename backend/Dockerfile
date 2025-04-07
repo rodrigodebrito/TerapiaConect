@@ -232,7 +232,7 @@ RUN echo '// Configurar Socket.IO com configurações otimizadas' >> index-compa
     echo 'const io = new SocketIO(server, {' >> index-compat.cjs && \
     echo '  cors: {' >> index-compat.cjs && \
     echo '    origin: process.env.NODE_ENV === "production"' >> index-compat.cjs && \
-    echo '      ? ["https://terapiaconect.com", "https://www.terapiaconect.com"]' >> index-compat.cjs && \
+    echo '      ? ["https://terapiaconect.com", "https://www.terapiaconect.com", "https://terapiaconect.vercel.app", "https://terapia-conect-frontend.vercel.app", "https://terapiaconect.com.br"]' >> index-compat.cjs && \
     echo '      : ["http://localhost:3001", "http://localhost:5173", "*"],' >> index-compat.cjs && \
     echo '    methods: ["GET", "POST", "OPTIONS"],' >> index-compat.cjs && \
     echo '    credentials: true,' >> index-compat.cjs && \
@@ -249,7 +249,7 @@ RUN echo '// Configurar Socket.IO com configurações otimizadas' >> index-compa
 RUN echo '// Middleware' >> index-compat.cjs && \
     echo 'app.use(cors({' >> index-compat.cjs && \
     echo '  origin: process.env.NODE_ENV === "production"' >> index-compat.cjs && \
-    echo '    ? ["https://terapiaconect.com", "https://www.terapiaconect.com"]' >> index-compat.cjs && \
+    echo '    ? ["https://terapiaconect.com", "https://www.terapiaconect.com", "https://terapiaconect.vercel.app", "https://terapia-conect-frontend.vercel.app", "https://terapiaconect.com.br"]' >> index-compat.cjs && \
     echo '    : ["http://localhost:3001", "http://localhost:5173", "*"],' >> index-compat.cjs && \
     echo '  credentials: true,' >> index-compat.cjs && \
     echo '  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],' >> index-compat.cjs && \
