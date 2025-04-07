@@ -3,8 +3,8 @@ FROM node:20-alpine
 # Configuração do diretório de trabalho
 WORKDIR /usr/src/app
 
-# Instalação das dependências necessárias para o Prisma e compilação
-RUN apk add --no-cache openssl1.1-compat
+# Instalação das dependências necessárias para o Prisma
+RUN apk add --no-cache openssl
 
 # Copia package.json e package-lock.json
 COPY package*.json ./
