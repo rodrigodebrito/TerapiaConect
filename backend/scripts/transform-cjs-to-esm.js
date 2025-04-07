@@ -12,7 +12,6 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import * as glob from 'glob';
-import { transformFileSync } from '@babel/core';
 import chalk from 'chalk';
 
 // Obtém o diretório do script atual usando ES Modules
@@ -56,36 +55,41 @@ async function transform() {
       }
       
       try {
-        // Transforma o código com Babel para ES Modules
-        const result = transformFileSync(srcPath, {
-          presets: [
-            ['@babel/preset-env', {
-              targets: {
-                node: 'current'
-              },
-              modules: false
-            }]
-          ],
-          plugins: [
-            '@babel/plugin-transform-modules-commonjs',
-            '@babel/plugin-proposal-class-properties',
-            '@babel/plugin-proposal-object-rest-spread'
-          ],
-          sourceType: 'module'
+        // Lê o conteúdo do arquivo
+        let code = fs.readFileSync(srcPath, 'utf8');
+        
+        // Transformações de CommonJS para ESM
+        
+        // 1. Transforma require para import - variável única
+        code = code.replace(/const\s+(\w+)\s*=\s*require\(['"]([@\w\d\-\/.]+)['"]\);?/g, 'import $1 from "$2.js";');
+        
+        // 2. Transforma require para import - múltiplas variáveis
+        code = code.replace(/const\s+{\s*([^}]+)\s*}\s*=\s*require\(['"]([@\w\d\-\/.]+)['"]\);?/g, 'import { $1 } from "$2.js";');
+        
+        // 3. Ajusta imports especiais sem extensão
+        const specialModules = ['express', 'cors', 'dotenv', 'path', 'fs', 'axios', 'http', 'socket.io', 
+          'jsonwebtoken', 'bcryptjs', 'multer', 'morgan', 'cookie-parser', 'helmet', 'compression', 
+          '@prisma/client', 'openai', 'crypto', 'util', 'url'];
+        
+        specialModules.forEach(module => {
+          const moduleRegex = new RegExp(`from ['"](${module})\.js['"]`, 'g');
+          code = code.replace(moduleRegex, `from "${module}"`);
         });
         
-        // Aplica transformações adicionais para ESM
-        let code = result.code;
-        
-        // Substitui require por import
-        code = code.replace(/const\s+(\w+)\s*=\s*require\(['"](.+?)['"]\);?/g, 'import $1 from "$2";');
-        code = code.replace(/const\s+{\s*(.+?)\s*}\s*=\s*require\(['"](.+?)['"]\);?/g, 'import { $1 } from "$2";');
-        
-        // Substitui module.exports por export default
+        // 4. Transforma module.exports para export default
         code = code.replace(/module\.exports\s*=\s*/g, 'export default ');
         
-        // Substitui exports.X por export const X
+        // 5. Transforma exports.X para export const X
         code = code.replace(/exports\.(\w+)\s*=\s*/g, 'export const $1 = ');
+        
+        // 6. Transformar importações relativas locais para incluir .js
+        code = code.replace(/from\s+['"](\.[^'"]+)['"]/g, (match, path) => {
+          // Adicionar .js apenas se o caminho não tiver já uma extensão
+          if (!path.match(/\.\w+$/)) {
+            return `from "${path}.js"`;
+          }
+          return match;
+        });
         
         // Escreve o arquivo transformado
         fs.writeFileSync(distPath, code);
