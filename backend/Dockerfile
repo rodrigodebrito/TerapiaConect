@@ -568,5 +568,18 @@ RUN echo 'const express = require("express");' > /app/src-cjs/routes/client.rout
     echo '// Exportar router' >> /app/src-cjs/routes/client.routes.cjs && \
     echo 'module.exports = router;' >> /app/src-cjs/routes/client.routes.cjs
 
+# Criar appointment.routes.cjs para garantir compatibilidade
+RUN echo 'const express = require("express");' > /app/src-cjs/routes/appointment.routes.cjs && \
+    echo 'const router = express.Router();' >> /app/src-cjs/routes/appointment.routes.cjs && \
+    echo 'const { validateToken } = require("../middleware/auth.middleware.cjs");' >> /app/src-cjs/routes/appointment.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/appointment.routes.cjs && \
+    echo '// Rota básica para agendamentos' >> /app/src-cjs/routes/appointment.routes.cjs && \
+    echo 'router.get("/", validateToken, (req, res) => {' >> /app/src-cjs/routes/appointment.routes.cjs && \
+    echo '  res.json({ message: "Lista de agendamentos - rota funcionando" });' >> /app/src-cjs/routes/appointment.routes.cjs && \
+    echo '});' >> /app/src-cjs/routes/appointment.routes.cjs && \
+    echo '' >> /app/src-cjs/routes/appointment.routes.cjs && \
+    echo '// Exportar router' >> /app/src-cjs/routes/appointment.routes.cjs && \
+    echo 'module.exports = router;' >> /app/src-cjs/routes/appointment.routes.cjs
+
 # Comando para iniciar usando a versão CommonJS compatível
 CMD /bin/sh -c "echo 'Aguardando conexão com o banco de dados...' && npx prisma migrate deploy && echo 'Iniciando o servidor...' && node index-compat.cjs" 
