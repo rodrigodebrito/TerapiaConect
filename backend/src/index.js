@@ -312,14 +312,12 @@ app.post('/api/auth', (req, res) => {
       
       return res.status(200).json({
         success: true,
-        data: {
-          user: {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role
-          },
-          token
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role
         }
       });
     }).catch(error => {
@@ -422,14 +420,12 @@ app.post('/api/auth/login', async (req, res) => {
     
     return res.status(200).json({
       success: true,
-      data: {
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role
-        },
-        token
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
       }
     });
   } catch (error) {
