@@ -199,6 +199,7 @@ RUN echo 'const jwt = require("jsonwebtoken");' > /app/src-cjs/controllers/auth.
     echo '      { id: user.id, email: user.email, role: user.role },' >> /app/src-cjs/controllers/auth.controller.cjs && \
     echo '      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,' >> /app/src-cjs/controllers/auth.controller.cjs && \
     echo '      { expiresIn: "7d" }' >> /app/src-cjs/controllers/auth.controller.cjs && \
+    echo '    );' >> /app/src-cjs/controllers/auth.controller.cjs && \
     echo '' >> /app/src-cjs/controllers/auth.controller.cjs && \
     echo '    // Remover senha do objeto de resposta' >> /app/src-cjs/controllers/auth.controller.cjs && \
     echo '    const { password: _, ...userWithoutPassword } = user;' >> /app/src-cjs/controllers/auth.controller.cjs && \
