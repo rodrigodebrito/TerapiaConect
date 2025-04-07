@@ -62,8 +62,42 @@ export const getTherapistById = async (therapistId) => {
     
     // Verificar se a resposta está no novo formato com success e data
     let therapistData = response.data;
-    if (response.data.success && response.data.data) {
+    if (response.data.success === true && response.data.data) {
       therapistData = response.data.data;
+    }
+    
+    console.log('Dados do terapeuta para processamento:', therapistData);
+    
+    // Garantir que tools sempre seja um array
+    let tools = [];
+    if (Array.isArray(therapistData.tools)) {
+      tools = therapistData.tools;
+    } else if (therapistData.tools && typeof therapistData.tools === 'object') {
+      // Se for um objeto mas não um array, converter para array se possível
+      console.warn('tools não é um array, tentando converter:', therapistData.tools);
+      try {
+        tools = Object.values(therapistData.tools);
+      } catch (e) {
+        console.error('Erro ao converter tools para array:', e);
+        tools = [];
+      }
+    }
+    
+    // Garantir que customTools seja processado corretamente
+    let customTools = [];
+    try {
+      if (therapistData.customTools) {
+        if (Array.isArray(therapistData.customTools)) {
+          customTools = therapistData.customTools;
+        } else if (typeof therapistData.customTools === 'string') {
+          customTools = JSON.parse(therapistData.customTools) || [];
+        } else if (typeof therapistData.customTools === 'object') {
+          customTools = Object.values(therapistData.customTools);
+        }
+      }
+    } catch (error) {
+      console.warn('Erro ao processar customTools:', error);
+      customTools = [];
     }
     
     // Assegurar que os campos JSON são corretamente processados
@@ -71,13 +105,13 @@ export const getTherapistById = async (therapistId) => {
       ...therapistData,
       niches: safeParseJSON(therapistData.niches, []),
       customNiches: safeParseJSON(therapistData.customNiches, []),
-      customTools: safeParseJSON(therapistData.customTools, []),
+      customTools,
       targetAudience: isJsonString(therapistData.targetAudience) 
         ? safeParseJSON(therapistData.targetAudience, []) 
         : therapistData.targetAudience || '',
       sessionDuration: parseInt(therapistData.sessionDuration) || 60,
       baseSessionPrice: parseFloat(therapistData.baseSessionPrice) || 0,
-      tools: Array.isArray(therapistData.tools) ? therapistData.tools : []
+      tools
     };
     
     console.log('Perfil processado e ferramentas:', {
