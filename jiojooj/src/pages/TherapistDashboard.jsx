@@ -21,7 +21,7 @@ const TherapistDashboard = () => {
     const fetchTherapistData = async () => {
       try {
         if (user?.id) {
-          const response = await api.get(`/api/therapists/user/${user.id}`);
+          const response = await api.get(`/therapists/user/${user.id}`);
           setTherapistData(response.data);
         }
       } catch (err) {

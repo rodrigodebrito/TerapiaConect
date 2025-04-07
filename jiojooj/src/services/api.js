@@ -26,10 +26,16 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   
-  // Adicionar prefixo /api a todas as URLs
+  // Adicionar prefixo /api a todas as URLs que não o tenham
+  const originalUrl = config.url;
   if (config.url && !config.url.startsWith('/api')) {
     config.url = `/api${config.url}`;
+    console.log(`API Request: URL modificada de ${originalUrl} para ${config.url}`);
+  } else {
+    console.log(`API Request: Usando URL original ${config.url}`);
   }
+  
+  console.log(`Enviando requisição para: ${config.method} ${config.baseURL}${config.url}`);
   
   return config;
 });
