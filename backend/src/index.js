@@ -32,6 +32,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const require = createRequire(import.meta.url);
 
+// Função auxiliar para processar JSON com segurança
+function safeParseJSON(jsonString, defaultValue) {
+  if (!jsonString) return defaultValue;
+  
+  try {
+    if (typeof jsonString === 'object') return jsonString;
+    return JSON.parse(jsonString);
+  } catch (e) {
+    console.log(`Erro ao processar JSON: ${e.message}, usando valor original`);
+    return jsonString;
+  }
+}
+
 // Verificar ambiente
 console.log('\n==================== DIAGNÓSTICO DE AMBIENTE ====================');
 console.log(`📝 Node.js versão: ${process.version}`);
@@ -656,10 +669,19 @@ app.get('/api/therapists/:id', async (req, res) => {
         message: 'Terapeuta não encontrado'
       });
     }
+    
+    // Processar campos JSON
+    const processedTherapist = {
+      ...therapist,
+      niches: safeParseJSON(therapist.niches, []),
+      customNiches: safeParseJSON(therapist.customNiches, []),
+      customTools: safeParseJSON(therapist.customTools, []),
+      targetAudience: safeParseJSON(therapist.targetAudience, therapist.targetAudience || '')
+    };
 
     return res.status(200).json({
       success: true,
-      data: therapist,
+      data: processedTherapist,
     });
   } catch (error) {
     console.error(`Erro na rota /api/therapists/${req.params.id}:`, error);
@@ -760,8 +782,8 @@ app.get('/api/therapists/user/:userId', authMiddleware, async (req, res) => {
       name: therapist.user.name,
       email: therapist.user.email,
       shortBio: therapist.shortBio || '',
-      niches: therapist.niches || '',
-      customNiches: therapist.customNiches || '',
+      niches: safeParseJSON(therapist.niches, []),
+      customNiches: safeParseJSON(therapist.customNiches, []),
       education: therapist.education || '',
       experience: therapist.experience || '',
       targetAudience: therapist.targetAudience || '',
@@ -774,7 +796,7 @@ app.get('/api/therapists/user/:userId', authMiddleware, async (req, res) => {
       attendanceMode: therapist.attendanceMode || 'BOTH',
       city: therapist.city || '',
       state: therapist.state || '',
-      tools: []
+      tools: safeParseJSON(therapist.customTools, []) // Usa customTools para as ferramentas
     };
     
     return res.json(mappedTherapist);
