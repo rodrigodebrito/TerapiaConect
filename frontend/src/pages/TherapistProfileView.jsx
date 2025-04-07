@@ -226,34 +226,45 @@ const TherapistProfileView = () => {
           )}
           
           {/* Seção de Ferramentas e Técnicas */}
-          {(Array.isArray(therapist.tools) && therapist.tools.length > 0) || 
-           (Array.isArray(therapist.customTools) && therapist.customTools.length > 0) ? (
-            <div className="profile-section">
-              <h2 className="section-title">Ferramentas e Técnicas</h2>
-              <div className="tags-container">
-                {/* Ferramentas predefinidas */}
-                {Array.isArray(therapist.tools) && therapist.tools.map(tool => {
-                  if (!tool || !tool.id) return null;
-                  const toolInfo = THERAPY_TOOLS.find(t => t.id === tool.id);
+          <div className="profile-section">
+            <h2 className="section-title">Ferramentas e Técnicas</h2>
+            {console.log('Ferramentas do terapeuta:', therapist.tools, typeof therapist.tools)}
+            <div className="tags-container">
+              {/* Ferramentas predefinidas */}
+              {therapist.tools && Array.isArray(therapist.tools) && therapist.tools.length > 0 ? (
+                therapist.tools.map(tool => {
+                  if (!tool) return null;
+                  const toolId = tool.id || (typeof tool === 'string' ? tool : null);
+                  if (!toolId) return null;
+                  
+                  const toolInfo = THERAPY_TOOLS.find(t => t.id === toolId);
                   return toolInfo ? (
-                    <span key={`tool-${tool.id}`} className="tag">
-                      {toolInfo.label} ({tool.duration || 60}min - {formatCurrency(tool.price || 0)})
+                    <span key={`tool-${toolId}`} className="tag">
+                      {toolInfo.label} 
+                      {tool.duration ? ` (${tool.duration}min)` : ''}
+                      {tool.price ? ` - ${formatCurrency(tool.price)}` : ''}
                     </span>
                   ) : null;
-                })}
-                
-                {/* Ferramentas personalizadas */}
-                {Array.isArray(therapist.customTools) && therapist.customTools.map((tool, index) => {
-                  if (!tool || !tool.name) return null;
+                })
+              ) : (
+                <span className="no-tools-message">Nenhuma ferramenta padrão cadastrada</span>
+              )}
+              
+              {/* Ferramentas personalizadas */}
+              {therapist.customTools && Array.isArray(therapist.customTools) && therapist.customTools.length > 0 ? (
+                therapist.customTools.map((tool, index) => {
+                  if (!tool || typeof tool !== 'object' || !tool.name) return null;
                   return (
                     <span key={`custom-tool-${index}`} className="tag">
-                      {tool.name} ({tool.duration || 60}min - {formatCurrency(tool.price || 0)})
+                      {tool.name}
+                      {tool.duration ? ` (${tool.duration}min)` : ''}
+                      {tool.price ? ` - ${formatCurrency(tool.price)}` : ''}
                     </span>
                   );
-                })}
-              </div>
+                })
+              ) : null}
             </div>
-          ) : null}
+          </div>
           
           <div className="profile-section">
             <h2 className="section-title">Formação e Experiência</h2>

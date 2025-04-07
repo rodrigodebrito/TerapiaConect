@@ -62,42 +62,88 @@ export const getTherapistById = async (therapistId) => {
     
     // Verificar se a resposta está no novo formato com success e data
     let therapistData = response.data;
-    if (response.data.success === true && response.data.data) {
+    if (response.data && response.data.success === true && response.data.data) {
       therapistData = response.data.data;
+      console.log('Dados extraídos do formato success/data:', therapistData);
     }
     
     console.log('Dados do terapeuta para processamento:', therapistData);
     
-    // Garantir que tools sempre seja um array
+    // Se não temos dados, retornar objeto vazio com arrays padrão
+    if (!therapistData) {
+      console.warn('Dados do terapeuta não encontrados');
+      return {
+        tools: [],
+        customTools: [],
+        niches: [],
+        customNiches: []
+      };
+    }
+    
+    // Garantir que tools sempre seja um array válido
     let tools = [];
-    if (Array.isArray(therapistData.tools)) {
-      tools = therapistData.tools;
-    } else if (therapistData.tools && typeof therapistData.tools === 'object') {
-      // Se for um objeto mas não um array, converter para array se possível
-      console.warn('tools não é um array, tentando converter:', therapistData.tools);
+    
+    if (therapistData.tools === null || therapistData.tools === undefined) {
+      console.log('tools não definido, usando array vazio');
+    } else if (Array.isArray(therapistData.tools)) {
+      tools = therapistData.tools.filter(t => t !== null && t !== undefined);
+      console.log(`tools é um array com ${tools.length} itens`);
+    } else if (typeof therapistData.tools === 'string') {
       try {
-        tools = Object.values(therapistData.tools);
+        // Verificar se é um JSON válido
+        if (isJsonString(therapistData.tools)) {
+          tools = JSON.parse(therapistData.tools);
+          console.log('tools convertido de string JSON para array:', tools);
+        } else {
+          console.warn('tools é uma string não-JSON:', therapistData.tools);
+          tools = [];
+        }
       } catch (e) {
-        console.error('Erro ao converter tools para array:', e);
+        console.error('Erro ao converter tools de string para array:', e);
+        tools = [];
+      }
+    } else if (typeof therapistData.tools === 'object') {
+      // Se for um objeto mas não um array, converter para array
+      console.warn('tools é um objeto não-array, tentando converter:', therapistData.tools);
+      try {
+        tools = Object.values(therapistData.tools).filter(t => t !== null && t !== undefined);
+      } catch (e) {
+        console.error('Erro ao converter tools objeto para array:', e);
         tools = [];
       }
     }
     
-    // Garantir que customTools seja processado corretamente
+    // Garantir que customTools sempre seja um array válido
     let customTools = [];
-    try {
-      if (therapistData.customTools) {
-        if (Array.isArray(therapistData.customTools)) {
-          customTools = therapistData.customTools;
-        } else if (typeof therapistData.customTools === 'string') {
-          customTools = JSON.parse(therapistData.customTools) || [];
-        } else if (typeof therapistData.customTools === 'object') {
-          customTools = Object.values(therapistData.customTools);
+    
+    if (therapistData.customTools === null || therapistData.customTools === undefined) {
+      console.log('customTools não definido, usando array vazio');
+    } else if (Array.isArray(therapistData.customTools)) {
+      customTools = therapistData.customTools.filter(t => t !== null && t !== undefined);
+      console.log(`customTools é um array com ${customTools.length} itens`);
+    } else if (typeof therapistData.customTools === 'string') {
+      try {
+        // Verificar se é um JSON válido
+        if (isJsonString(therapistData.customTools)) {
+          customTools = JSON.parse(therapistData.customTools);
+          console.log('customTools convertido de string JSON para array:', customTools);
+        } else {
+          console.warn('customTools é uma string não-JSON:', therapistData.customTools);
+          customTools = [];
         }
+      } catch (e) {
+        console.error('Erro ao converter customTools de string para array:', e);
+        customTools = [];
       }
-    } catch (error) {
-      console.warn('Erro ao processar customTools:', error);
-      customTools = [];
+    } else if (typeof therapistData.customTools === 'object') {
+      // Se for um objeto mas não um array, converter para array
+      console.warn('customTools é um objeto não-array, tentando converter:', therapistData.customTools);
+      try {
+        customTools = Object.values(therapistData.customTools).filter(t => t !== null && t !== undefined);
+      } catch (e) {
+        console.error('Erro ao converter customTools objeto para array:', e);
+        customTools = [];
+      }
     }
     
     // Assegurar que os campos JSON são corretamente processados
@@ -114,16 +160,21 @@ export const getTherapistById = async (therapistId) => {
       tools
     };
     
-    console.log('Perfil processado e ferramentas:', {
-      ...therapist,
-      toolCount: therapist.tools.length,
-      tools: therapist.tools
-    });
+    console.log('Ferramentas do terapeuta:', therapist.tools);
+    console.log('Ferramentas customizadas do terapeuta:', therapist.customTools);
+    console.log('Perfil processado:', therapist);
     
     return therapist;
   } catch (error) {
     console.error('Erro ao buscar terapeuta por ID:', error);
-    throw error;
+    // Em caso de erro, retornar objeto vazio com arrays
+    return {
+      tools: [],
+      customTools: [],
+      niches: [],
+      customNiches: [],
+      error: error.message
+    };
   }
 };
 
