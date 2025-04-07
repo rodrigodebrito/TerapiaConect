@@ -1,11 +1,16 @@
 import axios from 'axios';
 import config from '../environments';
 
-const baseURL = process.env.NODE_ENV === 'production' 
-  ? config.apiUrl 
-  : 'http://localhost:3000';
+// Verificar explicitamente se estamos em ambiente de produção (Vercel)
+const isVercel = typeof window !== 'undefined' && 
+                 window.location.hostname.includes('vercel.app');
 
-console.log('API Base URL:', baseURL);
+// Forçar a URL completa do backend no Vercel
+const baseURL = isVercel 
+  ? 'https://terapiaconect.onrender.com/api'
+  : (process.env.NODE_ENV === 'production' ? config.apiUrl : 'http://localhost:3000');
+
+console.log('API Base URL:', baseURL, 'Is Vercel:', isVercel);
 
 const api = axios.create({
   baseURL,
@@ -35,7 +40,21 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log('Requisição sendo enviada para:', config.url);
+    
+    // Log detalhado da requisição
+    const fullUrl = config.baseURL ? 
+      (config.baseURL.endsWith('/') && config.url.startsWith('/') 
+        ? config.baseURL + config.url.substring(1) 
+        : config.baseURL + config.url)
+      : config.url;
+    
+    console.log('Requisição completa:', {
+      método: config.method,
+      url: fullUrl,
+      baseURL: config.baseURL,
+      urlPath: config.url
+    });
+    
     return config;
   },
   error => Promise.reject(error)
@@ -57,6 +76,15 @@ uploadApi.interceptors.request.use(
 api.interceptors.response.use(
   response => response,
   error => {
+    // Log detalhado do erro
+    console.error('Erro na requisição:', {
+      url: error.config?.url,
+      baseURL: error.config?.baseURL,
+      status: error.response?.status,
+      message: error.message,
+      data: error.response?.data
+    });
+    
     // Tratamento de erro 401 (não autorizado)
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('token');
@@ -74,6 +102,12 @@ api.interceptors.response.use(
 uploadApi.interceptors.response.use(
   response => response,
   error => {
+    console.error('Erro na requisição de upload:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      message: error.message
+    });
+    
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
