@@ -1030,7 +1030,16 @@ app.post('/api/therapists/:therapistId/availability', authMiddleware, async (req
 app.put('/api/therapists/:therapistId/tools', authMiddleware, async (req, res) => {
   try {
     const { therapistId } = req.params;
-    const { tools } = req.body;
+    const { tools, customTools = [] } = req.body;
+    
+    console.log(`[Ferramentas] Dados completos recebidos:`, JSON.stringify(req.body));
+    
+    if (!tools) {
+      return res.status(400).json({
+        success: false,
+        message: 'O campo tools é obrigatório'
+      });
+    }
     
     if (!Array.isArray(tools)) {
       return res.status(400).json({
@@ -1062,15 +1071,40 @@ app.put('/api/therapists/:therapistId/tools', authMiddleware, async (req, res) =
       });
     }
     
-    // Preparar as conexões com ferramentas
-    const toolConnections = tools.map(tool => ({
-      toolId: tool.id,
-      // Garantir que a duração e o preço são números válidos, caso contrário usar valor padrão
-      duration: tool.duration ? parseInt(tool.duration) : (parseInt(therapist.sessionDuration) || 60),
-      price: tool.price ? parseFloat(tool.price) : (parseFloat(therapist.baseSessionPrice) || 0)
-    }));
+    // Preparar as conexões com ferramentas com verificação de segurança
+    const toolConnections = tools
+      .filter(tool => tool && (tool.id || tool.toolId)) // Filtrar ferramentas inválidas
+      .map(tool => {
+        // Verificar se a ferramenta tem id ou toolId (compatibilidade)
+        const toolId = tool.id || tool.toolId;
+        
+        if (!toolId) {
+          console.warn(`Ferramenta sem ID encontrada: ${JSON.stringify(tool)}`);
+          return null;
+        }
+        
+        return {
+          toolId,
+          // Garantir que a duração e o preço são números válidos, caso contrário usar valor padrão
+          duration: tool.duration ? parseInt(tool.duration) : (parseInt(therapist.sessionDuration) || 60),
+          price: tool.price ? parseFloat(tool.price) : (parseFloat(therapist.baseSessionPrice) || 0)
+        };
+      })
+      .filter(Boolean); // Remover ferramentas nulas
     
     console.log(`[Ferramentas] Conexões a serem criadas:`, JSON.stringify(toolConnections));
+    
+    // Processar ferramentas customizadas (se existirem)
+    let processedCustomTools = [];
+    if (Array.isArray(customTools) && customTools.length > 0) {
+      processedCustomTools = customTools
+        .filter(tool => tool && tool.name) // Filtrar ferramentas inválidas
+        .map(tool => ({
+          name: tool.name,
+          duration: tool.duration ? parseInt(tool.duration) : (parseInt(therapist.sessionDuration) || 60),
+          price: tool.price ? parseFloat(tool.price) : (parseFloat(therapist.baseSessionPrice) || 0)
+        }));
+    }
     
     // Atualizar ferramentas do terapeuta: excluir todas e depois criar as novas
     const updatedTherapist = await prisma.therapist.update({
@@ -1079,7 +1113,11 @@ app.put('/api/therapists/:therapistId/tools', authMiddleware, async (req, res) =
         tools: {
           deleteMany: {},  // Remove todas as relações existentes
           create: toolConnections  // Cria as novas relações
-        }
+        },
+        // Atualizar ferramentas customizadas se existirem
+        customTools: Array.isArray(processedCustomTools) && processedCustomTools.length > 0 
+          ? JSON.stringify(processedCustomTools) 
+          : therapist.customTools // Manter as existentes se não recebeu novas
       },
       include: {
         tools: {
@@ -1117,12 +1155,22 @@ app.put('/api/therapists/:therapistId/tools', authMiddleware, async (req, res) =
       };
     });
     
+    // Processar ferramentas customizadas para a resposta
+    const customToolsResponse = 
+      (typeof updatedTherapist.customTools === 'string' && updatedTherapist.customTools)
+        ? safeParseJSON(updatedTherapist.customTools, [])
+        : [];
+    
     console.log(`[Ferramentas] Ferramentas atualizadas:`, JSON.stringify(formattedTools));
+    console.log(`[Ferramentas] Ferramentas customizadas:`, JSON.stringify(customToolsResponse));
     
     return res.status(200).json({
       success: true,
-      message: `${formattedTools.length} ferramentas atualizadas com sucesso`,
-      data: formattedTools
+      message: `${formattedTools.length} ferramentas padrão e ${customToolsResponse.length} ferramentas customizadas atualizadas com sucesso`,
+      data: {
+        tools: formattedTools,
+        customTools: customToolsResponse
+      }
     });
   } catch (error) {
     console.error('Erro ao atualizar ferramentas do terapeuta:', error);
