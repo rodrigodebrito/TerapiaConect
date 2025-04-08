@@ -64,7 +64,7 @@ function TherapistPublicProfile() {
         console.log('URL base da API:', api.defaults.baseURL);
         
         // Corrigir a chamada para a API - usar o endpoint correto
-        const response = await api.get(`/therapists/${id}`, {
+        const response = await api.get(`/api/therapists/${id}`, {
           params: {
             includeDetails: true
           }
@@ -72,33 +72,38 @@ function TherapistPublicProfile() {
         
         console.log('Dados do terapeuta recebidos:', response.data);
         
-        if (response.data) {
+        if (response.data && response.data.success && response.data.data) {
+          // Usar o formato correto da resposta
+          const therapistData = response.data.data;
+          
           // Log detalhado de todos os campos importantes
           console.log('Detalhes do terapeuta recebido:');
-          console.log('- ID:', response.data.id);
-          console.log('- Nome:', response.data.name);
-          console.log('- Bio Curta:', response.data.shortBio);
-          console.log('- Bio Completa:', response.data.bio);
-          console.log('- Nichos:', response.data.niches);
-          console.log('- Experiência:', response.data.experience);
-          console.log('- Ferramentas:', response.data.tools?.length || 0, 'ferramentas encontradas');
+          console.log('- ID:', therapistData.id);
+          console.log('- Nome:', therapistData.name || therapistData.user?.name);
+          console.log('- Bio Curta:', therapistData.shortBio);
+          console.log('- Bio Completa:', therapistData.bio);
+          console.log('- Nichos:', therapistData.niches);
+          console.log('- Experiência:', therapistData.experience);
+          console.log('- Ferramentas:', therapistData.tools?.length || 0, 'ferramentas encontradas');
           
           // Processar os dados recebidos da API
           const processedData = {
-            ...response.data,
+            ...therapistData,
+            // Garantir que o nome esteja definido
+            name: therapistData.name || therapistData.user?.name || 'Terapeuta',
             // Processar os nichos se forem uma string JSON
-            niches: parseJsonField(response.data.niches, []),
+            niches: Array.isArray(therapistData.niches) ? therapistData.niches : [],
             // Processar ferramentas
-            tools: Array.isArray(response.data.tools) ? response.data.tools : [],
+            tools: Array.isArray(therapistData.tools) ? therapistData.tools : [],
             // Processar outros campos
-            bio: response.data.bio || '',
-            shortBio: response.data.shortBio || '',
-            education: response.data.education || '',
-            experience: response.data.experience || '',
-            targetAudience: response.data.targetAudience || '',
-            baseSessionPrice: Number(response.data.baseSessionPrice) || 0,
-            sessionDuration: Number(response.data.sessionDuration) || 60,
-            profilePicture: response.data.profilePicture || ''
+            bio: therapistData.bio || '',
+            shortBio: therapistData.shortBio || '',
+            education: therapistData.education || '',
+            experience: therapistData.experience || '',
+            targetAudience: therapistData.targetAudience || '',
+            baseSessionPrice: Number(therapistData.baseSessionPrice) || 0,
+            sessionDuration: Number(therapistData.sessionDuration) || 60,
+            profilePicture: therapistData.profilePicture || ''
           };
           
           console.log('Dados processados para exibição:', processedData);
@@ -126,7 +131,7 @@ function TherapistPublicProfile() {
     };
 
     if (id) {
-    fetchTherapistData();
+      fetchTherapistData();
     }
   }, [id, retryCount]);
 
@@ -783,8 +788,8 @@ function TherapistPublicProfile() {
                       <div className="bio">
                         {therapist.bio.split('\n').map((paragraph, idx) => (
                           <p key={idx}>{paragraph}</p>
-                    ))}
-                  </div>
+                        ))}
+                      </div>
                     ) : therapist.shortBio ? (
                       <div className="bio">
                         <p>{therapist.shortBio}</p>
@@ -798,140 +803,137 @@ function TherapistPublicProfile() {
                 )}
               </div>
               
-              {!loading && (
-                <div className="section-content">
-                  <h3>Experiência Profissional</h3>
-                  {therapist.experience ? (
-                    <div className="experience">
-                      {therapist.experience.split('\n').map((paragraph, idx) => (
-                        <p key={idx}>{paragraph}</p>
-                    ))}
-                  </div>
-                  ) : (
-                    <div className="empty-content">
-                      Este terapeuta ainda não adicionou informações sobre sua experiência profissional.
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Experiência Profissional */}
+              <div className="section-content">
+                <h3>Experiência Profissional</h3>
+                {loading ? (
+                  <div className="loading-placeholder">Carregando informações...</div>
+                ) : (
+                  <>
+                    {therapist.experience ? (
+                      <div className="experience">
+                        {therapist.experience.split('\n').map((paragraph, idx) => (
+                          <p key={idx}>{paragraph}</p>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="empty-content">
+                        Este terapeuta ainda não adicionou informações sobre sua experiência profissional.
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
               
-              {!loading && (
-                <div className="section-content">
-                  <h3>Formação</h3>
-                  {therapist.education ? (
-                    <div className="education">
-                      {therapist.education.split('\n').map((paragraph, idx) => (
-                        <p key={idx}>{paragraph}</p>
-                    ))}
-                  </div>
-                  ) : (
-                    <div className="empty-content">
-                      Este terapeuta ainda não adicionou informações sobre sua formação.
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {!loading && therapist.targetAudience && (
-                <div className="section-content">
-                  <h3>Público-Alvo</h3>
-                  <div className="target-audience">
-                    <p>{therapist.targetAudience}</p>
-                  </div>
-                </div>
-              )}
+              {/* Formação */}
+              <div className="section-content">
+                <h3>Formação e Credenciais</h3>
+                {loading ? (
+                  <div className="loading-placeholder">Carregando informações...</div>
+                ) : (
+                  <>
+                    {therapist.education ? (
+                      <div className="education">
+                        {therapist.education.split('\n').map((paragraph, idx) => (
+                          <p key={idx}>{paragraph}</p>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="empty-content">
+                        Este terapeuta ainda não adicionou informações sobre sua formação acadêmica.
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           )}
           
           {/* Serviços e Preços */}
           {activeTab === 'services' && (
-            <div className="services-tab">
-              <h3>Serviços e Preços</h3>
-              
-              {loading ? (
-                <div className="loading-placeholder">Carregando serviços...</div>
-              ) : (
-                <>
-                <div className="services-list">
-                    {/* Sessão Base */}
-                    <div className="service-item">
-                      <div className="service-header">
-                        <div className="service-name">Terapia Individual</div>
-                        <div className="service-price">
-                          R$ {therapist.baseSessionPrice || 0}
-                          <span className="price-duration">/{therapist.sessionDuration || 50} min</span>
-                        </div>
-                      </div>
-                      <div className="service-description">
-                        Sessão de terapia individual padrão, baseada na abordagem do terapeuta.
-                      </div>
-                    </div>
-                    
-                    {/* Ferramentas Terapêuticas */}
-                    {therapist.tools && Array.isArray(therapist.tools) && therapist.tools.length > 0 ? (
-                      therapist.tools.map((tool, index) => (
-                        <div key={index} className="service-item">
-                          <div className="service-header">
-                            <div className="service-name">{tool.name}</div>
-                            <div className="service-price">
-                              R$ {tool.price || therapist.baseSessionPrice || 0}
-                              <span className="price-duration">/{tool.duration || therapist.sessionDuration || 50} min</span>
-                            </div>
-                          </div>
-                          {tool.description && (
-                            <div className="service-description">{tool.description}</div>
-                          )}
-                        </div>
-                      ))
-                    ) : (
-                      <div className="empty-content">
-                        Este terapeuta ainda não adicionou ferramentas terapêuticas específicas.
-                      </div>
-                    )}
+            <div className="services-pricing-tab">
+              <div className="section-content">
+                <h3>Preços e Serviços</h3>
+                
+                <div className="pricing-table">
+                  <div className="pricing-header">
+                    <div className="service-name">Serviço</div>
+                    <div className="service-duration">Duração</div>
+                    <div className="service-price">Valor</div>
+                    <div className="service-action"></div>
                   </div>
-
-                  {therapist.offersFreeSession && (
-                    <div className="free-session-info">
-                      <div className="info-icon">🎁</div>
-                      <div className="info-content">
-                        <h4>Sessão Experimental Gratuita</h4>
-                        <p>Este terapeuta oferece uma primeira sessão gratuita de {therapist.freeSessionDuration || 30} minutos para novos clientes.</p>
+                  
+                  {/* Sessão padrão */}
+                  <div className="pricing-row">
+                    <div className="service-name">Sessão Padrão</div>
+                    <div className="service-duration">{therapist.sessionDuration || 60} minutos</div>
+                    <div className="service-price">R$ {(therapist.baseSessionPrice || 0).toFixed(2).replace('.', ',')}</div>
+                    <div className="service-action">
+                      <button 
+                        className="book-button"
+                        onClick={() => setActiveTab('booking')}
+                      >
+                        Agendar
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Ferramentas e técnicas específicas */}
+                  {therapist.tools && Array.isArray(therapist.tools) && therapist.tools.length > 0 ? (
+                    therapist.tools.map((tool, index) => (
+                      <div className="pricing-row" key={`tool-${index}`}>
+                        <div className="service-name">{tool.name}</div>
+                        <div className="service-duration">{tool.duration || therapist.sessionDuration || 60} minutos</div>
+                        <div className="service-price">R$ {(tool.price || 0).toFixed(2).replace('.', ',')}</div>
+                        <div className="service-action">
+                          <button 
+                            className="book-button"
+                            onClick={() => {
+                              setSelectedTool(tool);
+                              setActiveTab('booking');
+                            }}
+                          >
+                            Agendar
+                          </button>
+                        </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="empty-tools-message">
+                      Este terapeuta ainda não cadastrou serviços adicionais. Você pode agendar uma sessão padrão.
                     </div>
                   )}
-
-                  <div className="additional-info">
-                    <h4>Informações Adicionais</h4>
-                    <div className="info-grid">
-                      <div className="info-item">
-                        <div className="info-icon">🏠</div>
-                        <div className="info-content">
-                          <h5>Modalidade de Atendimento</h5>
-                          <p>{translateAttendanceMode(therapist.attendanceMode)}</p>
-                        </div>
-                  </div>
-
-                      {therapist.city && therapist.state && (
-                        <div className="info-item">
-                          <div className="info-icon">📍</div>
-                          <div className="info-content">
-                            <h5>Localização</h5>
-                            <p>{therapist.city}, {therapist.state}</p>
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div className="info-item">
-                        <div className="info-icon">⏱️</div>
-                        <div className="info-content">
-                          <h5>Duração Padrão das Sessões</h5>
-                          <p>{therapist.sessionDuration || 60} minutos</p>
-                        </div>
-                      </div>
                 </div>
+              </div>
+              
+              {/* Especialidades */}
+              <div className="section-content">
+                <h3>Especialidades</h3>
+                
+                <div className="specialties-grid">
+                  {therapist.niches && therapist.niches.length > 0 ? (
+                    therapist.niches.map((niche, index) => (
+                      <div className="specialty-item" key={`niche-${index}`}>
+                        <span className="specialty-name">{niche}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="empty-content">
+                      Este terapeuta ainda não adicionou especialidades específicas.
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Público-alvo */}
+              {therapist.targetAudience && (
+                <div className="section-content">
+                  <h3>Público-alvo</h3>
+                  <div className="target-audience">
+                    <p>{therapist.targetAudience}</p>
                   </div>
-                </>
-                )}
+                </div>
+              )}
             </div>
           )}
           
@@ -1155,17 +1157,34 @@ function TherapistPublicProfile() {
             <div className="location-tab">
               <h3>Localização</h3>
               
-              <div className="address-container">
-                <p>
-                  <i className="fas fa-map-marker-alt"></i> 
-                  {therapist.street}, {therapist.number} - {therapist.neighborhood}
-                </p>
-                <p>{therapist.city}, {therapist.state} - CEP {therapist.zipcode}</p>
-                  </div>
-                  
-              <div className="map-container">
-                <img src="/assets/map-placeholder.png" alt="Mapa do local" className="map-image" />
+              {therapist.address ? (
+                <div className="address-container">
+                  <p>
+                    <i className="fas fa-map-marker-alt"></i> 
+                    {therapist.address}
+                    {therapist.complement && `, ${therapist.complement}`}
+                  </p>
+                  <p>
+                    {therapist.neighborhood && `${therapist.neighborhood}, `}
+                    {therapist.city || ''}{therapist.city && therapist.state ? ', ' : ''}{therapist.state || ''}
+                    {therapist.zipCode && ` - CEP ${therapist.zipCode}`}
+                  </p>
                 </div>
+              ) : (
+                <div className="empty-content">
+                  {therapist.attendanceMode === 'ONLINE' ? (
+                    <p>Este terapeuta realiza apenas atendimentos online.</p>
+                  ) : (
+                    <p>Este terapeuta ainda não adicionou informações sobre o endereço do consultório.</p>
+                  )}
+                </div>
+              )}
+              
+              {therapist.address && (
+                <div className="map-container">
+                  <img src="/assets/map-placeholder.png" alt="Mapa do local" className="map-image" />
+                </div>
+              )}
             </div>
           )}
         </div>
