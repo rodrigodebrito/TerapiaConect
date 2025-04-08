@@ -70,21 +70,25 @@ function TherapistPublicProfile() {
           }
         });
         
-        console.log('Dados do terapeuta recebidos:', response.data);
+        console.log('Dados do terapeuta recebidos (resposta completa):', response.data);
         
         if (response.data && response.data.success && response.data.data) {
           // Usar o formato correto da resposta
           const therapistData = response.data.data;
           
           // Log detalhado de todos os campos importantes
-          console.log('Detalhes do terapeuta recebido:');
+          console.log('================== DADOS DO TERAPEUTA ==================');
           console.log('- ID:', therapistData.id);
           console.log('- Nome:', therapistData.name || therapistData.user?.name);
           console.log('- Bio Curta:', therapistData.shortBio);
           console.log('- Bio Completa:', therapistData.bio);
           console.log('- Nichos:', therapistData.niches);
           console.log('- Experiência:', therapistData.experience);
-          console.log('- Ferramentas:', therapistData.tools?.length || 0, 'ferramentas encontradas');
+          console.log('- Ferramentas:', therapistData.tools);
+          console.log('- Preço Base:', therapistData.baseSessionPrice, 'tipo:', typeof therapistData.baseSessionPrice);
+          console.log('- Duração da Sessão:', therapistData.sessionDuration);
+          console.log('- Modo de Atendimento:', therapistData.attendanceMode);
+          console.log('=======================================================');
           
           // Processar os dados recebidos da API
           const processedData = {
@@ -107,6 +111,7 @@ function TherapistPublicProfile() {
           };
           
           console.log('Dados processados para exibição:', processedData);
+          console.log('- Preço processado:', processedData.baseSessionPrice, 'tipo:', typeof processedData.baseSessionPrice);
           setTherapist(processedData);
         } else {
           console.error('Resposta da API não contém dados do terapeuta');
@@ -706,7 +711,7 @@ function TherapistPublicProfile() {
             
           <div className="profile-info">
             <div className="profile-name-container">
-              <h2 className="profile-name">{`${therapist.firstName || ''} ${therapist.lastName || ''}`}</h2>
+              <h2 className="profile-name">{therapist.name || `${therapist.firstName || ''} ${therapist.lastName || ''}`}</h2>
                 <button 
                   className={`favorite-button ${isFavorite ? 'favorited' : ''}`}
                   onClick={toggleFavorite}
@@ -867,7 +872,7 @@ function TherapistPublicProfile() {
                   <div className="pricing-row">
                     <div className="service-name">Sessão Padrão</div>
                     <div className="service-duration">{therapist.sessionDuration || 60} minutos</div>
-                    <div className="service-price">R$ {(therapist.baseSessionPrice || 0).toFixed(2).replace('.', ',')}</div>
+                    <div className="service-price">R$ {(parseFloat(therapist.baseSessionPrice) || 0).toFixed(2).replace('.', ',')}</div>
                     <div className="service-action">
                       <button 
                         className="book-button"
@@ -884,7 +889,7 @@ function TherapistPublicProfile() {
                       <div className="pricing-row" key={`tool-${index}`}>
                         <div className="service-name">{tool.name}</div>
                         <div className="service-duration">{tool.duration || therapist.sessionDuration || 60} minutos</div>
-                        <div className="service-price">R$ {(tool.price || 0).toFixed(2).replace('.', ',')}</div>
+                        <div className="service-price">R$ {(parseFloat(tool.price) || parseFloat(therapist.baseSessionPrice) || 0).toFixed(2).replace('.', ',')}</div>
                         <div className="service-action">
                           <button 
                             className="book-button"
