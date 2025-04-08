@@ -2068,6 +2068,438 @@ app.put('/api/sessions/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// Rota para criar agendamentos diretamente pelo ID do terapeuta
+app.post('/api/therapists/:therapistId/appointments', authMiddleware, async (req, res) => {
+  try {
+    const { therapistId } = req.params;
+    const { 
+      clientId, 
+      date,
+      time,
+      toolId,
+      duration = 60, 
+      status = 'PENDING',
+      mode = 'ONLINE',
+      notes
+    } = req.body;
+    
+    console.log(`[Agendamentos] Criando novo agendamento via rota terapeuta: Terapeuta ${therapistId}, Data ${date}, Hora ${time}`);
+    console.log('Dados recebidos:', JSON.stringify(req.body, null, 2));
+    
+    // Verificar se o terapeuta existe
+    const therapist = await prisma.therapist.findUnique({
+      where: { id: therapistId }
+    });
+    
+    if (!therapist) {
+      return res.status(404).json({
+        success: false,
+        message: 'Terapeuta não encontrado'
+      });
+    }
+    
+    // Verificar se o cliente existe (ou criar um cliente temporário)
+    let client = null;
+    
+    if (clientId) {
+      client = await prisma.client.findUnique({
+        where: { id: clientId }
+      });
+      
+      if (!client) {
+        // Tentar encontrar por userId se for enviado um userId em vez de clientId
+        client = await prisma.client.findFirst({
+          where: { userId: clientId }
+        });
+      }
+    }
+    
+    if (!client && req.user) {
+      // Usar o usuário autenticado como referência para criar um cliente
+      const existingClient = await prisma.client.findFirst({
+        where: { userId: req.user.id }
+      });
+      
+      if (existingClient) {
+        client = existingClient;
+      } else {
+        // Criar um novo cliente associado ao usuário atual
+        client = await prisma.client.create({
+          data: {
+            user: {
+              connect: { id: req.user.id }
+            }
+          }
+        });
+      }
+    }
+    
+    if (!client) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cliente não encontrado e não foi possível criar um cliente'
+      });
+    }
+    
+    // Preparar a data e hora do agendamento
+    const appointmentDate = new Date(`${date}T${time}`);
+    
+    // Calcular a data de término com base na duração
+    const endDate = new Date(appointmentDate);
+    endDate.setMinutes(endDate.getMinutes() + parseInt(duration));
+    
+    // Criar o agendamento no banco de dados
+    const appointment = await prisma.appointment.create({
+      data: {
+        therapist: {
+          connect: { id: therapistId }
+        },
+        client: {
+          connect: { id: client.id }
+        },
+        date: appointmentDate,
+        endDate: endDate,
+        duration: parseInt(duration),
+        status,
+        mode,
+        notes,
+        tool: toolId ? {
+          connect: { id: toolId }
+        } : undefined
+      },
+      include: {
+        therapist: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true
+              }
+            }
+          }
+        },
+        client: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true
+              }
+            }
+          }
+        },
+        tool: true
+      }
+    });
+    
+    console.log(`[Agendamentos] Agendamento criado com sucesso: ID ${appointment.id}`);
+    
+    return res.status(201).json({
+      success: true,
+      message: 'Agendamento criado com sucesso',
+      data: appointment
+    });
+  } catch (error) {
+    console.error('Erro ao criar agendamento:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao criar agendamento',
+      error: error.message
+    });
+  }
+});
+
+// Buscar os agendamentos de um terapeuta específico
+app.get('/api/therapists/:therapistId/appointments', authMiddleware, async (req, res) => {
+  try {
+    const { therapistId } = req.params;
+    const { date, status } = req.query;
+    
+    console.log(`[Agendamentos] Buscando agendamentos para o terapeuta: ${therapistId}`);
+    
+    // Construir filtro de busca
+    const filter = {
+      therapistId
+    };
+    
+    // Adicionar filtro de data se fornecido
+    if (date) {
+      const searchDate = new Date(date);
+      const startOfDayDate = new Date(searchDate.setHours(0, 0, 0, 0));
+      const endOfDayDate = new Date(searchDate.setHours(23, 59, 59, 999));
+      
+      filter.date = {
+        gte: startOfDayDate,
+        lte: endOfDayDate
+      };
+    }
+    
+    // Adicionar filtro de status se fornecido
+    if (status) {
+      filter.status = status;
+    }
+    
+    // Buscar agendamentos
+    const appointments = await prisma.appointment.findMany({
+      where: filter,
+      include: {
+        client: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true
+              }
+            }
+          }
+        },
+        tool: true
+      },
+      orderBy: {
+        date: 'asc'
+      }
+    });
+    
+    return res.status(200).json({
+      success: true,
+      data: appointments
+    });
+  } catch (error) {
+    console.error('Erro ao buscar agendamentos do terapeuta:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar agendamentos',
+      error: error.message
+    });
+  }
+});
+
+// Buscar os agendamentos de um cliente específico
+app.get('/api/clients/:clientId/appointments', authMiddleware, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const { status } = req.query;
+    
+    console.log(`[Agendamentos] Buscando agendamentos para o cliente: ${clientId}`);
+    
+    // Construir filtro de busca
+    const filter = {
+      clientId
+    };
+    
+    // Adicionar filtro de status se fornecido
+    if (status) {
+      filter.status = status;
+    }
+    
+    // Buscar agendamentos
+    const appointments = await prisma.appointment.findMany({
+      where: filter,
+      include: {
+        therapist: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true
+              }
+            }
+          }
+        },
+        tool: true
+      },
+      orderBy: {
+        date: 'asc'
+      }
+    });
+    
+    return res.status(200).json({
+      success: true,
+      data: appointments
+    });
+  } catch (error) {
+    console.error('Erro ao buscar agendamentos do cliente:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar agendamentos',
+      error: error.message
+    });
+  }
+});
+
+// Atualizar o status de um agendamento
+app.patch('/api/appointments/:appointmentId/status', authMiddleware, async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    const { status } = req.body;
+    
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status não fornecido'
+      });
+    }
+    
+    // Verificar se o agendamento existe
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId }
+    });
+    
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agendamento não encontrado'
+      });
+    }
+    
+    // Atualizar o status
+    const updatedAppointment = await prisma.appointment.update({
+      where: { id: appointmentId },
+      data: { status },
+      include: {
+        therapist: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true
+              }
+            }
+          }
+        },
+        client: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true
+              }
+            }
+          }
+        },
+        tool: true
+      }
+    });
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Status do agendamento atualizado com sucesso',
+      data: updatedAppointment
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar status do agendamento:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao atualizar status',
+      error: error.message
+    });
+  }
+});
+
+// Gerar dados para sala de reunião virtual
+app.get('/api/meetings/:appointmentId', authMiddleware, async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    
+    // Verificar se o agendamento existe
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      include: {
+        therapist: {
+          include: {
+            user: true
+          }
+        },
+        client: {
+          include: {
+            user: true
+          }
+        }
+      }
+    });
+    
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agendamento não encontrado'
+      });
+    }
+    
+    // Verificar se o usuário tem permissão para acessar esta sala
+    const userId = req.user?.id;
+    const isTherapist = appointment.therapist.userId === userId;
+    const isClient = appointment.client.userId === userId;
+    
+    if (!isTherapist && !isClient) {
+      return res.status(403).json({
+        success: false,
+        message: 'Você não tem permissão para acessar esta sala'
+      });
+    }
+    
+    // Gerar dados da sala
+    const roomName = `appointment-${appointmentId}`;
+    const isHost = isTherapist; // O terapeuta é o host da reunião
+    
+    // Gerar nome de exibição baseado no papel do usuário
+    let displayName = '';
+    if (isTherapist) {
+      displayName = `${appointment.therapist.user.name} (Terapeuta)`;
+    } else {
+      displayName = `${appointment.client.user.name} (Cliente)`;
+    }
+    
+    // Em um sistema real, aqui você geraria tokens para serviços como Jitsi, Zoom, etc.
+    // Para este exemplo, vamos apenas fornecer as informações básicas
+    const meetingInfo = {
+      appointmentId,
+      roomName,
+      displayName,
+      isHost,
+      fallbackMeeting: {
+        type: 'jitsi',
+        url: `https://meet.jit.si/${roomName}`,
+        options: {
+          subject: `Sessão de Terapia - ${new Date(appointment.date).toLocaleString('pt-BR')}`,
+          width: '100%',
+          height: '100%',
+          parentNode: 'meeting-container',
+          configOverwrite: {
+            startWithAudioMuted: !isHost,
+            startWithVideoMuted: false,
+            enableWelcomePage: false,
+            enableClosePage: false,
+            disableDeepLinking: true,
+            prejoinPageEnabled: false,
+          },
+          interfaceConfigOverwrite: {
+            SHOW_JITSI_WATERMARK: false,
+            SHOW_WATERMARK_FOR_GUESTS: false,
+            TOOLBAR_BUTTONS: [
+              'microphone', 'camera', 'closedcaptions', 'desktop', 'fullscreen',
+              'fodeviceselection', 'hangup', 'profile', 'chat', 'recording',
+              'livestreaming', 'etherpad', 'settings', 'raisehand', 'videoquality', 
+              'filmstrip', 'tileview', 'security'
+            ],
+          }
+        }
+      }
+    };
+    
+    return res.status(200).json({
+      success: true,
+      data: meetingInfo
+    });
+  } catch (error) {
+    console.error('Erro ao gerar dados da sala de reunião:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao preparar sala de reunião',
+      error: error.message
+    });
+  }
+});
+
 // Conectar ao banco de dados antes de iniciar o servidor
 prisma.$connect()
   .then(() => {
