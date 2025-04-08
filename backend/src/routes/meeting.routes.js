@@ -51,7 +51,7 @@ router.post('/daily-room', async (req, res) => {
     const dailyService = require('../services/daily.service');
     
     // Criar sala via API do Daily
-    const result = await dailyService.createDailyRoomWithAPI(roomName);
+    const result = await dailyService.createRoom(roomName);
     
     res.status(200).json({
       success: true,

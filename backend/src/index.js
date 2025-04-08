@@ -23,6 +23,9 @@ import { createRequire } from 'module';
 import cookieParser from 'cookie-parser';
 import bcrypt from 'bcryptjs';
 
+// Importar serviço Daily.co
+import dailyService from './services/daily.service.js';
+
 // Utilitários e configurações
 // Removendo a importação do prisma para evitar duplicação
 // import prisma from './utils/prisma.js';
@@ -159,6 +162,10 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 // Adicionar o OpenAI e Prisma como propriedades globais do app para uso nos controladores
 app.locals.openai = openai;
 app.locals.prisma = prisma;
+
+// Inicializar e expor o serviço Daily.co
+app.locals.dailyService = dailyService;
+console.log('Serviço Daily.co inicializado e disponibilizado globalmente');
 
 // =================== REGISTRO DE ROTAS DIRETO NO APP ===================
 

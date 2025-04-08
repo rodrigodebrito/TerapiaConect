@@ -5,8 +5,10 @@
  * de videoconferências utilizando a plataforma Daily.co
  */
 
-const axios = require('axios');
-require('dotenv').config();
+import axios from 'axios';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 // Constantes
 const DAILY_API_KEY = process.env.DAILY_API_KEY || 'seu_api_key_aqui';
@@ -226,4 +228,4 @@ class DailyService {
 const dailyService = new DailyService();
 
 // Exportar o serviço
-module.exports = dailyService; 
+export default dailyService; 
