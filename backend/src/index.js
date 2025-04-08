@@ -683,23 +683,6 @@ app.get('/api/therapists/:id', async (req, res) => {
       }
     };
     
-    // Adicionar specialties se disponível e solicitado
-    try {
-      // Verificar se specialties é uma relação válida tentando incluí-la em uma consulta de teste
-      const testTherapist = await prisma.therapist.findFirst({
-        where: { id: req.params.id },
-        include: { specialties: true },
-        take: 0 // Limitar a 0 resultados para tornar a consulta mais rápida
-      });
-      
-      // Se chegou aqui sem erro, specialties é uma relação válida
-      includeObject.specialties = true;
-      console.log('Campo de especialidades validado com sucesso');
-    } catch (specError) {
-      console.log('Aviso: Campo de especialidades não é uma relação válida', specError.message);
-      // Continuamos sem incluir specialties
-    }
-    
     // Tentar buscar o terapeuta com as inclusões configuradas
     const therapist = await prisma.therapist.findUnique({
       where: {
