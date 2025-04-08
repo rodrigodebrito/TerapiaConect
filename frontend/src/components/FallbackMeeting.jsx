@@ -5,6 +5,9 @@ import './FallbackMeeting.css';
 import config from '../environments';
 import axios from 'axios';
 
+// API Key do Daily.co
+const DAILY_API_KEY = import.meta.env.VITE_DAILY_API_KEY;
+
 // Componente de erro para capturar falhas na renderização do vídeo
 class VideoErrorBoundary extends React.Component {
   constructor(props) {
@@ -111,16 +114,79 @@ const FallbackMeeting = ({
   const [isPipMode, setIsPipMode] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(videoEnabled);
   
+  // Função para verificar/criar sala no Daily.co
+  const ensureRoomExists = useCallback(async (roomId) => {
+    if (!DAILY_API_KEY) {
+      console.warn('Daily API Key não encontrada nas variáveis de ambiente');
+      // Se não temos API key, apenas retornamos a URL direta
+      return `https://teraconect.daily.co/${roomId}`;
+    }
+    
+    try {
+      console.log('Verificando/criando sala Daily.co:', roomId);
+      
+      // Primeiro tentar obter a sala existente
+      try {
+        const checkResponse = await fetch(`https://api.daily.co/v1/rooms/${roomId}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${DAILY_API_KEY}`
+          }
+        });
+        
+        if (checkResponse.ok) {
+          const data = await checkResponse.json();
+          console.log('Sala existente encontrada:', data);
+          return `https://teraconect.daily.co/${roomId}`;
+        }
+      } catch (checkError) {
+        console.log('Sala não encontrada, criando nova:', checkError);
+      }
+      
+      // Se chegou aqui, a sala não existe ou houve erro ao verificar
+      // Criamos uma nova sala
+      const createResponse = await fetch('https://api.daily.co/v1/rooms', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${DAILY_API_KEY}`
+        },
+        body: JSON.stringify({
+          name: roomId,
+          properties: {
+            enable_chat: true,
+            enable_screenshare: true,
+            start_video_off: !videoEnabled,
+            start_audio_off: !audioEnabled,
+            exp: Math.floor(Date.now() / 1000) + 3600 // 1 hora de expiração
+          }
+        })
+      });
+      
+      if (!createResponse.ok) {
+        throw new Error(`Erro ao criar sala: ${createResponse.status}`);
+      }
+      
+      const data = await createResponse.json();
+      console.log('Sala criada com sucesso:', data);
+      
+      return `https://teraconect.daily.co/${roomId}`;
+    } catch (error) {
+      console.error('Erro ao verificar/criar sala Daily.co:', error);
+      // Em caso de erro, retornar URL direta como fallback
+      return `https://teraconect.daily.co/${roomId}`;
+    }
+  }, [audioEnabled, videoEnabled]);
+  
   // Função para obter a URL da sala
-  const getRoomUrl = useCallback(() => {
-    // Usar o roomName exatamente como está, sem modificações
-    console.log('Usando roomName original:', roomName);
+  const getRoomUrl = useCallback(async () => {
+    // Limpar o roomName para garantir compatibilidade
+    const cleanRoomName = roomName.replace(/[^a-zA-Z0-9-_]/g, '');
+    console.log('Room name limpo para Daily.co:', cleanRoomName);
     
-    // Construir URL base do Daily.co
-    const dailyUrl = 'https://teraconect.daily.co';
-    
-    // Usar o roomName sem modificação
-    const url = `${dailyUrl}/${roomName}`;
+    // Verificar/criar sala no Daily.co
+    const baseUrl = await ensureRoomExists(cleanRoomName);
     
     // Construir parâmetros da URL simplificados
     const params = new URLSearchParams();
@@ -139,11 +205,11 @@ const FallbackMeeting = ({
     params.append('startVideoOff', !videoEnabled);
     
     // Construir URL final
-    const finalUrl = `${url}?${params.toString()}`;
+    const finalUrl = `${baseUrl}?${params.toString()}`;
     console.log('URL final da sala:', finalUrl);
     
     return finalUrl;
-  }, [roomName, userName, audioEnabled, videoEnabled]);
+  }, [roomName, userName, audioEnabled, videoEnabled, ensureRoomExists]);
 
   // Carregar dados da sessão e inicializar a chamada
   useEffect(() => {
@@ -151,8 +217,8 @@ const FallbackMeeting = ({
       try {
         setIsLoading(true);
         
-        // Obter URL da sala diretamente sem verificações
-        const roomUrl = getRoomUrl();
+        // Obter URL da sala com verificação/criação
+        const roomUrl = await getRoomUrl();
         
         // Configurar detalhes da sessão
         setSessionDetails({
@@ -161,7 +227,7 @@ const FallbackMeeting = ({
           userName
         });
         
-          setIsLoading(false);
+        setIsLoading(false);
       } catch (err) {
         console.error('Erro ao inicializar sessão:', err);
         setError('Não foi possível inicializar a sessão de vídeo. Por favor, recarregue a página.');
