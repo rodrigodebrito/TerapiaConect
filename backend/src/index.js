@@ -658,57 +658,141 @@ app.get('/api/therapists', async (req, res) => {
   }
 });
 
-// Rota para buscar terapeuta por ID
+// Obter terapeuta por ID
 app.get('/api/therapists/:id', async (req, res) => {
   try {
-    const { id } = req.params;
+    console.log(`[GET] /api/therapists/${req.params.id} - Buscando terapeuta por ID`);
     
     const therapist = await prisma.therapist.findUnique({
-      where: { id },
+      where: {
+        id: req.params.id,
+      },
       include: {
-        user: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+          },
+        },
+        specialties: true,
         tools: {
           include: {
             tool: true
           }
-        }
-      }
+        },
+        customTools: true,
+        schedule: true,
+      },
     });
 
     if (!therapist) {
-      return res.status(404).json({
-        success: false,
-        message: 'Terapeuta não encontrado'
-      });
+      console.log(`Terapeuta com ID ${req.params.id} não encontrado`);
+      return res.status(404).json({ message: 'Terapeuta não encontrado' });
     }
-    
-    // Processar campos JSON
-    const processedTherapist = {
-      ...therapist,
-      niches: safeParseJSON(therapist.niches, []),
-      customNiches: safeParseJSON(therapist.customNiches, []),
-      customTools: safeParseJSON(therapist.customTools, []),
-      targetAudience: safeParseJSON(therapist.targetAudience, therapist.targetAudience || ''),
-      // Mapear ferramentas para o formato esperado pelo frontend
-      tools: therapist.tools.map(t => ({
-        id: t.tool.id,
-        name: t.tool.name,
-        duration: t.duration,
-        price: t.price
-      }))
+
+    // Processar niches e customNiches para garantir que sejam arrays
+    let niches = [];
+    let customNiches = [];
+
+    if (therapist.niches) {
+      try {
+        niches = JSON.parse(therapist.niches);
+      } catch (error) {
+        console.warn('Erro ao parsear niches:', error.message);
+        // Se não for um JSON válido, tentar usar como string ou array
+        if (typeof therapist.niches === 'string') {
+          // Se for uma string simples, converter para array
+          niches = therapist.niches.split(',').map(n => n.trim());
+        } else if (Array.isArray(therapist.niches)) {
+          // Se já for um array, usar diretamente
+          niches = therapist.niches;
+        }
+      }
+    }
+
+    if (therapist.customNiches) {
+      try {
+        customNiches = JSON.parse(therapist.customNiches);
+      } catch (error) {
+        console.warn('Erro ao parsear customNiches:', error.message);
+        // Se não for um JSON válido, tentar usar como string ou array
+        if (typeof therapist.customNiches === 'string') {
+          // Se for uma string simples, converter para array
+          customNiches = therapist.customNiches.split(',').map(n => n.trim());
+        } else if (Array.isArray(therapist.customNiches)) {
+          // Se já for um array, usar diretamente
+          customNiches = therapist.customNiches;
+        }
+      }
+    }
+
+    // Processar as ferramentas do terapeuta para o formato esperado pelo frontend
+    let processedTools = [];
+    if (therapist.tools && Array.isArray(therapist.tools)) {
+      processedTools = therapist.tools.map(toolRelation => {
+        if (toolRelation && toolRelation.tool) {
+          return {
+            id: toolRelation.tool.id,
+            name: toolRelation.tool.name,
+            duration: toolRelation.duration,
+            price: toolRelation.price
+          };
+        }
+        return null;
+      }).filter(Boolean); // Remove itens nulos
+    }
+
+    // Processar ferramentas customizadas
+    let processedCustomTools = [];
+    if (therapist.customTools && Array.isArray(therapist.customTools)) {
+      processedCustomTools = therapist.customTools.map(customTool => {
+        if (customTool) {
+          return {
+            id: customTool.id,
+            name: customTool.name,
+            duration: customTool.duration,
+            price: customTool.price,
+            isCustom: true
+          };
+        }
+        return null;
+      }).filter(Boolean); // Remove itens nulos
+    }
+
+    console.log(`Ferramentas padrão processadas: ${processedTools.length}`);
+    console.log(`Ferramentas customizadas processadas: ${processedCustomTools.length}`);
+
+    // Criar um objeto terapeuta limpo com os dados formatados
+    const formattedTherapist = {
+      id: therapist.id,
+      userId: therapist.userId,
+      user: therapist.user,
+      bio: therapist.bio,
+      profilePicture: therapist.profilePicture,
+      pricingDetails: therapist.pricingDetails,
+      phone: therapist.phone,
+      address: therapist.address,
+      latitude: therapist.latitude,
+      longitude: therapist.longitude,
+      specialties: therapist.specialties,
+      niches: niches,
+      customNiches: customNiches,
+      tools: processedTools,
+      customTools: processedCustomTools,
+      schedule: therapist.schedule
     };
 
-    return res.status(200).json({
+    console.log(`Terapeuta com ID ${req.params.id} encontrado e formatado com sucesso`);
+    // Retornar no formato esperado pelo frontend
+    return res.json({
       success: true,
-      data: processedTherapist,
+      data: formattedTherapist
     });
   } catch (error) {
-    console.error(`Erro na rota /api/therapists/${req.params.id}:`, error);
-    return res.status(500).json({
-      success: false,
-      message: 'Erro interno do servidor',
-      error: error.message
-    });
+    console.error('Erro ao buscar terapeuta por ID:', error);
+    return res.status(500).json({ message: 'Erro ao buscar terapeuta', error: error.message });
   }
 });
 
