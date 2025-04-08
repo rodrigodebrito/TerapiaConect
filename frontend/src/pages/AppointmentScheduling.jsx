@@ -487,8 +487,39 @@ const AppointmentScheduling = () => {
   };
 
   const handleToolChange = (e) => {
-    setSelectedTool(e.target.value);
+    const toolId = e.target.value;
+    console.log(`Ferramenta selecionada: ${toolId}`);
+    setSelectedTool(toolId);
     setError('');
+    
+    // Atualizar resumo com a ferramenta selecionada
+    if (toolId) {
+      let toolInfo;
+      
+      if (toolId === 'default') {
+        // Usar dados da sessão base se for Terapia Individual
+        toolInfo = {
+          name: 'Terapia Individual',
+          price: therapist?.baseSessionPrice || 0,
+          duration: therapist?.sessionDuration || 50
+        };
+      } else {
+        // Buscar a ferramenta específica
+        toolInfo = therapist?.tools?.find(t => t.id === toolId);
+      }
+      
+      if (toolInfo) {
+        const price = isFreeSession ? 0 : (toolInfo.price || therapist?.baseSessionPrice || 0);
+        const duration = toolInfo.duration || therapist?.sessionDuration || 50;
+        
+        setSummary(prev => ({
+          ...(prev || {}),
+          tool: toolInfo.name,
+          price: price,
+          duration: duration
+        }));
+      }
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -508,9 +539,36 @@ const AppointmentScheduling = () => {
 
     try {
       setLoading(true);
-      const selectedToolData = therapist.tools.find(t => t.id === selectedTool);
       
-      // Criar dados do agendamento (sem clientId forçado)
+      // Obter dados da ferramenta selecionada
+      let selectedToolData;
+      
+      if (selectedTool === 'default') {
+        // Usar dados da sessão padrão/Terapia Individual
+        selectedToolData = {
+          id: 'default',
+          name: 'Terapia Individual',
+          duration: therapist.sessionDuration || 50,
+          price: therapist.baseSessionPrice || 0
+        };
+      } else {
+        // Buscar ferramenta específica
+        selectedToolData = therapist.tools.find(t => t.id === selectedTool);
+        
+        // Preencher valores padrão se algum estiver faltando
+        if (selectedToolData) {
+          selectedToolData.duration = selectedToolData.duration || therapist.sessionDuration || 50;
+          selectedToolData.price = selectedToolData.price || therapist.baseSessionPrice || 0;
+        }
+      }
+      
+      if (!selectedToolData) {
+        setError('Ferramenta selecionada não encontrada. Por favor, escolha outra opção.');
+        setLoading(false);
+        return;
+      }
+      
+      // Criar dados do agendamento
       const appointmentData = {
         therapistId,
         date: selectedDate,
@@ -846,9 +904,15 @@ const AppointmentScheduling = () => {
                   className="form-control"
                 >
                   <option value="">Selecione o tipo de consulta</option>
-                  {therapist?.tools?.map((tool) => (
+                  {/* Sessão base/padrão (Terapia Individual) */}
+                  <option value="default">
+                    Terapia Individual ({therapist?.sessionDuration || 50}min) - {isFreeSession ? 'Gratuito' : `R$ ${(therapist?.baseSessionPrice || 0).toFixed(2)}`}
+                  </option>
+                  
+                  {/* Ferramentas específicas do terapeuta */}
+                  {therapist?.tools && Array.isArray(therapist.tools) && therapist.tools.map((tool) => (
                     <option key={tool.id} value={tool.id}>
-                      {tool.name} ({tool.duration}min) - {isFreeSession ? 'Gratuito' : `R$ ${tool.price.toFixed(2)}`}
+                      {tool.name} ({tool.duration || therapist?.sessionDuration || 50}min) - {isFreeSession ? 'Gratuito' : `R$ ${(tool.price || therapist?.baseSessionPrice || 0).toFixed(2)}`}
                     </option>
                   ))}
                 </select>

@@ -868,7 +868,7 @@ function TherapistPublicProfile() {
                     </div>
                     
                     {/* Ferramentas Terapêuticas */}
-                    {therapist.tools && therapist.tools.length > 0 ? (
+                    {therapist.tools && Array.isArray(therapist.tools) && therapist.tools.length > 0 ? (
                       therapist.tools.map((tool, index) => (
                         <div key={index} className="service-item">
                           <div className="service-header">
@@ -1065,7 +1065,7 @@ function TherapistPublicProfile() {
                                       <p>Sessão de terapia individual padrão.</p>
                                       <div className="tool-details">
                                         <span className="tool-duration"><i className="far fa-clock"></i> {therapist.sessionDuration || 50} minutos</span>
-                                        <span className="tool-price">R$ {therapist.baseSessionPrice || 150}</span>
+                                        <span className="tool-price">R$ {therapist.baseSessionPrice || 0}</span>
                                       </div>
                                     </div>
                                     {!canSelectTool('default') && (
@@ -1076,29 +1076,39 @@ function TherapistPublicProfile() {
                                   </div>
                                   
                                   {/* Ferramentas do terapeuta */}
-                                  {therapist.tools && therapist.tools.map((tool, index) => (
-                                    <div 
-                                      key={index}
-                                      className={`tool-card ${selectedTool === tool.id ? 'selected' : ''} ${!canSelectTool(tool.id) ? 'disabled' : ''}`}
-                                      onClick={() => handleToolSelect(tool.id)}
-                                      role="button"
-                                      tabIndex={0}
-                                    >
-                                      <div className="tool-info">
-                                        <h5>{tool.name}</h5>
-                                        <p>{tool.description || 'Sessão de terapia utilizando essa abordagem específica.'}</p>
-                                        <div className="tool-details">
-                                          <span className="tool-duration"><i className="far fa-clock"></i> {tool.duration || therapist.sessionDuration || 50} minutos</span>
-                                          <span className="tool-price">R$ {tool.price || therapist.baseSessionPrice || 150}</span>
+                                  {therapist.tools && Array.isArray(therapist.tools) && therapist.tools.length > 0 ? (
+                                    therapist.tools.map((tool, index) => (
+                                      <div 
+                                        key={index}
+                                        className={`tool-card ${selectedTool === tool.id ? 'selected' : ''} ${!canSelectTool(tool.id) ? 'disabled' : ''}`}
+                                        onClick={() => handleToolSelect(tool.id)}
+                                        role="button"
+                                        tabIndex={0}
+                                      >
+                                        <div className="tool-info">
+                                          <h5>{tool.name}</h5>
+                                          <p>{tool.description || 'Sessão especializada com esta ferramenta terapêutica.'}</p>
+                                          <div className="tool-details">
+                                            <span className="tool-duration">
+                                              <i className="far fa-clock"></i> {tool.duration || therapist.sessionDuration || 50} minutos
+                                            </span>
+                                            <span className="tool-price">
+                                              R$ {tool.price || therapist.baseSessionPrice || 0}
+                                            </span>
+                                          </div>
                                         </div>
+                                        {!canSelectTool(tool.id) && (
+                                          <div className="tool-unavailable-badge">
+                                            <i className="fas fa-exclamation-circle"></i> Duração não disponível
+                                          </div>
+                                        )}
                                       </div>
-                                      {!canSelectTool(tool.id) && (
-                                        <div className="tool-unavailable-badge">
-                                          <i className="fas fa-exclamation-circle"></i> Duração não disponível
-                                        </div>
-                                      )}
+                                    ))
+                                  ) : (
+                                    <div className="no-tools-message">
+                                      <p>O terapeuta não definiu ferramentas terapêuticas específicas.</p>
                                     </div>
-                                  ))}
+                                  )}
                                 </div>
                               </div>
                             )}
